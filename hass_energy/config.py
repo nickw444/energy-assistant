@@ -33,8 +33,51 @@ class HomeAssistantConfig(BaseModel):
         return _resolve_token(v.strip())
 
 
+class MapperConfig(BaseModel):
+    module: str = Field(..., min_length=1, description="Module or file path to mapper.")
+    attribute: str | None = Field(
+        default=None,
+        description="Attribute to load from module (defaults: get_mapper, mapper, Mapper).",
+    )
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("module")
+    @classmethod
+    def _normalize_module(cls, v: str) -> str:
+        cleaned = v.strip()
+        if not cleaned:
+            raise ValueError("mapper.module must be a non-empty string")
+        return cleaned
+
+
+class DataLoggerConfig(BaseModel):
+    triggers: list[str] = Field(
+        default_factory=list,
+        description="Entities whose state changes should trigger logging.",
+    )
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("triggers")
+    @classmethod
+    def _validate_triggers(cls, v: list[str]) -> list[str]:
+        cleaned = [item.strip() for item in v if item and item.strip()]
+        # Preserve order while deduping
+        seen: set[str] = set()
+        unique = []
+        for item in cleaned:
+            if item in seen:
+                continue
+            unique.append(item)
+            seen.add(item)
+        return unique
+
+
 class Config(BaseModel):
     home_assistant: HomeAssistantConfig
+    mapper: MapperConfig
+    datalogger: DataLoggerConfig | None = None
 
     model_config = ConfigDict(extra="forbid")
 

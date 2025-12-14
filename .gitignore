@@ -15,6 +15,7 @@ wheels/
 
 # Local configs
 hass-energy.config.yaml
+mapper.py
 
 # Editors and OS
 .DS_Store

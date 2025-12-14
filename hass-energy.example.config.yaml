@@ -10,3 +10,15 @@ home_assistant:
 
   # Maximum websocket frame size in bytes (default 8 MiB). Set to null for no limit.
   ws_max_size: 8388608
+
+mapper:
+  # Importable Python module (dotted) for the mapper implementation.
+  module: "./example_mapper.py:ExampleMapper"
+  # Optional attribute to load from the module (defaults: get_mapper, mapper, Mapper).
+  # attribute: "get_mapper"
+
+datalogger:
+  # Optional: list of trigger entities for the datalogger command when --trigger is omitted.
+  triggers:
+    - "sensor.amber_general_price"
+    - "sensor.amber_feed_in_price"

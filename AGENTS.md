@@ -14,11 +14,14 @@
 - Example config lives at `hass-energy.example.config.yaml` for reference.
 - Root-level `--config` is required and shared by subcommands; CLI loads the config at startup and makes it available via `ctx.obj["config"]`.
 - When adding new config fields, update `hass-energy.example.config.yaml`, `hass-energy.config.yaml` (if present), and README/cli guidance as needed so users and agents stay aligned.
+- `datalogger.triggers` (list) can be set in config; the `datalogger` CLI defaults to these when `--trigger` is omitted.
 
 ## Debugging helpers (Home Assistant)
 - Commands are namespaced under `hass`: `hass list-entities` (all entity IDs) and `hass get-states <entity_id...>` (print states).
 - Use root `--config` to point at the HA YAML; commands rely on the stateful websocket client.
 - `ws_max_size` defaults to 8 MiB; set to a larger value or `null` in config for very large instances to avoid payload limits.
+- `datalogger` is a root command (not under `hass`): listens for state changes on `--trigger` entities and, after an optional `--debounce` (default 2s), writes JSON snapshots of the specified `--entity` list into an `--output-dir` directory (`captured_at`, `entities`, `trigger`, `states`). If `--entity` is omitted and a mapper is configured, it uses the mapper's `required_entities`. The logic lives in `hass_energy.datalogger.DataLogger` for reuse.
+- Config requires a `mapper` section: `module` (importable/dotted; assumes module is on PYTHONPATH/CWD; `.py` file paths also allowed) and optional `attribute` (defaults to `get_mapper`/`mapper`/`Mapper`). The mapper must implement `HassEnergyMapper` (`required_entities`, `map`). Loader helper: `hass_energy.mapper.load_mapper(mapper_config)`. Example implementation: `example_mapper.py` at repo root. The `run-mapper` CLI command loads the configured mapper, fetches the required entities once, maps them, and prints JSON.
 
 ## Continuous learning
 - When you learn new project knowledge, coding style, or preferences during a session, update `AGENTS.md` (and `README.md` if it affects users) before finishing so the next agent benefits.
