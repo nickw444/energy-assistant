@@ -13,6 +13,9 @@ wheels/
 # Virtual environments
 .venv
 
+# Local configs
+hass-energy.config.yaml
+
 # Editors and OS
 .DS_Store
 .idea/

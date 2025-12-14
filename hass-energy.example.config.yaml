@@ -1,0 +1,12 @@
+home_assistant:
+  # Base URL of your Home Assistant instance
+  base_url: "https://homeassistant.local"
+
+  # Long-lived access token; use env:VAR_NAME to pull from environment
+  token: "env:HASS_TOKEN"
+
+  # Whether to verify SSL certificates when connecting
+  verify_ssl: true
+
+  # Maximum websocket frame size in bytes (default 8 MiB). Set to null for no limit.
+  ws_max_size: 8388608
