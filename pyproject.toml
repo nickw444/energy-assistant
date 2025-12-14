@@ -13,3 +13,22 @@ hass-energy = "hass_energy.cli:main"
 
 [tool.uv]
 package = true
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+src = ["hass_energy"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "W", "B"]
+
+[tool.pyright]
+pythonVersion = "3.13"
+typeCheckingMode = "standard"
+include = ["hass_energy"]
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.407",
+    "ruff>=0.14.9",
+]
