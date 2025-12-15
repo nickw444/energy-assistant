@@ -17,6 +17,13 @@ mapper:
   # Optional attribute to load from the module (defaults: get_mapper, mapper, Mapper).
   # attribute: "get_mapper"
 
+optimizer:
+  # Importable Python module (dotted) for the optimizer implementation.
+  module: "./example_optimizer.py:ExampleOptimizer"
+  # Optional attribute to load from the module (defaults: get_optimizer, optimizer, Optimizer).
+  # attribute: "get_optimizer"
+  # Optimizer implementations define their own knob entities via required_entities().
+
 datalogger:
   # Optional: list of trigger entities for the datalogger command when --trigger is omitted.
   triggers:

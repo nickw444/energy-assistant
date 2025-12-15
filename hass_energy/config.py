@@ -51,6 +51,24 @@ class MapperConfig(BaseModel):
         return cleaned
 
 
+class OptimizerConfig(BaseModel):
+    module: str = Field(..., min_length=1, description="Module or file path to optimizer.")
+    attribute: str | None = Field(
+        default=None,
+        description="Attribute to load (defaults: get_optimizer, optimizer, Optimizer).",
+    )
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("module")
+    @classmethod
+    def _normalize_module(cls, v: str) -> str:
+        cleaned = v.strip()
+        if not cleaned:
+            raise ValueError("optimizer.module must be a non-empty string")
+        return cleaned
+
+
 class DataLoggerConfig(BaseModel):
     triggers: list[str] = Field(
         default_factory=list,
@@ -77,6 +95,7 @@ class DataLoggerConfig(BaseModel):
 class Config(BaseModel):
     home_assistant: HomeAssistantConfig
     mapper: MapperConfig
+    optimizer: OptimizerConfig | None = None
     datalogger: DataLoggerConfig | None = None
 
     model_config = ConfigDict(extra="forbid")

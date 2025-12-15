@@ -9,6 +9,8 @@ uv sync
 uv run hass-energy --help
 uv run hass-energy --config path/to/config.yaml validate-config
 uv run hass-energy --config path/to/config.yaml test-connection
+uv run hass-energy --config path/to/config.yaml run-mapper
+uv run hass-energy --config path/to/config.yaml run-optimizer
 uv run hass-energy --config path/to/config.yaml hass list-entities
 uv run hass-energy --config path/to/config.yaml hass get-states sensor.power_lounge light.kitchen
 ```
@@ -26,6 +28,9 @@ home_assistant:
 mapper:
   module: "example_mapper:ExampleMapper"  # importable module on PYTHONPATH/current dir
   # attribute: "get_mapper"  # optional attribute name (defaults: get_mapper, mapper, Mapper)
+optimizer:
+  module: "example_optimizer:ExampleOptimizer"  # importable module on PYTHONPATH/current dir
+  # attribute: "get_optimizer"  # optional attribute name (defaults: get_optimizer, optimizer, Optimizer)
 datalogger:
   triggers:
     - "sensor.inverter_meter_power"
@@ -66,6 +71,7 @@ uv run hass-energy --config path/to/config.yaml datalogger \
 - Set `--debounce 0` to log immediately on the first trigger event.
 - If `--trigger` is omitted, the datalogger falls back to `datalogger.triggers` in the config.
 - If `--entity` is omitted and a mapper is configured, the datalogger will default to the mapper's `required_entities`.
+- The websocket client auto-reconnects with backoff and re-subscribes to triggers if the connection drops.
 
 ### Mapper
 
@@ -86,4 +92,27 @@ Run the configured mapper once and print the output:
 
 ```bash
 uv run hass-energy --config path/to/config.yaml run-mapper
+```
+
+### Optimizer
+
+Optimizers consume mapped output and emit a decision payload (e.g., a mode from `SCRATCH.md`). They can also read additional Home Assistant entities (knobs/settings) directly. Configure the optimizer module in your YAML (relative paths resolve from the config file directory). The optimizer module must expose an object (instance, class, or factory) implementing the `HassEnergyOptimizer` protocol (`required_entities() -> list[str]`, `decide(mapped: dict, entities: dict) -> dict`).
+
+Example optimizer reference in config:
+
+```yaml
+optimizer:
+  module: "example_optimizer:ExampleOptimizer"
+  # attribute: "get_optimizer"  # optional; defaults to get_optimizer, optimizer, or Optimizer
+```
+
+For the provided `mapper.py`, a rule-based optimizer is available at
+`./optimizer.py:MapperAlignedOptimizer`.
+
+An example implementation lives at `example_optimizer.py` and outputs a simple mode decision (see `SCRATCH.md` for the mode catalogue) based solely on mapped data (no knobs).
+
+Run the configured optimizer once (fetches mapper inputs, maps them, then evaluates the optimizer) and print the decision:
+
+```bash
+uv run hass-energy --config path/to/config.yaml run-optimizer
 ```

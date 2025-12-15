@@ -50,16 +50,162 @@ class HomeAssistantWebSocketClient:
     _subscriptions: dict[int, Callable[[dict[str, Any]], Awaitable[None] | None]] = field(
         init=False, default_factory=dict
     )
+    _subscription_specs: list[tuple[list[str], Callable[[dict[str, Any]], Awaitable[None] | None]]] = field(  # noqa: E501
+        init=False, default_factory=list
+    )
     _pending: dict[int, asyncio.Future[dict[str, Any]]] = field(
         init=False, default_factory=dict
     )
     _receiver_task: asyncio.Task[None] | None = field(init=False, default=None)
+    _closing: bool = field(init=False, default=False)
+    _conn_lock: asyncio.Lock = field(init=False, default_factory=asyncio.Lock)
 
     async def connect(self, timeout: float = 10.0) -> str:
         """Establish and authenticate a websocket connection."""
-        if self._websocket:
-            return self._ha_version or "already-connected"
+        self._closing = False
+        async with self._conn_lock:
+            if self._is_connected():
+                return self._ha_version or "already-connected"
+            version = await self._open_connection(timeout=timeout, start_receiver=True)
+            return version
 
+    async def disconnect(self) -> None:
+        """Close the websocket connection if open."""
+        self._closing = True
+        if self._receiver_task:
+            self._receiver_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._receiver_task
+            self._receiver_task = None
+
+        self._subscriptions.clear()
+        self._subscription_specs.clear()
+
+        for fut in self._pending.values():
+            if not fut.done():
+                fut.cancel()
+        self._pending.clear()
+        if self._websocket is not None:
+            await self._websocket.close()
+            self._websocket = None
+
+    def _next_id(self) -> int:
+        self._msg_id += 1
+        return self._msg_id
+
+    async def _send(self, message: dict[str, Any]) -> None:
+        if not self._websocket:
+            raise RuntimeError("Websocket is not connected")
+        await self._websocket.send(json.dumps(message))
+
+    async def _receiver_loop(self) -> None:
+        if not self._websocket:
+            return
+        while not self._closing:
+            try:
+                if not self._websocket:
+                    await asyncio.sleep(1.0)
+                    continue
+
+                raw = await self._websocket.recv()
+                data = json.loads(raw)
+                msg_id = data.get("id")
+
+                if msg_id in self._pending:
+                    fut = self._pending.pop(msg_id)
+                    if not fut.done():
+                        fut.set_result(data)
+                    continue
+
+                subscription_handler = self._subscriptions.get(msg_id)
+                if subscription_handler:
+                    change = data.get("event") or {}
+                    result = subscription_handler(change)
+                    if asyncio.iscoroutine(result):
+                        asyncio.create_task(result)
+                    continue
+            except asyncio.CancelledError:
+                return
+            except Exception as exc:
+                if self._closing:
+                    return
+                await self._handle_connection_lost(exc)
+
+    async def _handle_connection_lost(self, exc: Exception) -> None:
+        self._set_pending_exception(exc)
+        await self._close_websocket()
+        await self._reconnect_with_backoff()
+
+    def _set_pending_exception(self, exc: Exception) -> None:
+        for fut in self._pending.values():
+            if not fut.done():
+                fut.set_exception(exc)
+        self._pending.clear()
+
+    async def _request(self, message: dict[str, Any]) -> dict[str, Any]:
+        await self._ensure_connected()
+        if not self._websocket:
+            raise RuntimeError("Websocket is not connected")
+
+        request_id = int(message.get("id") or self._next_id())
+        message["id"] = request_id
+
+        fut: asyncio.Future[dict[str, Any]] = asyncio.get_running_loop().create_future()
+        self._pending[request_id] = fut
+        await self._send(message)
+        return await fut
+
+    async def ping(self) -> None:
+        """Send ping/pong to verify connection is alive."""
+        response = await self._request({"type": "ping"})
+        if response.get("type") != "pong":
+            raise ValueError("Expected pong after ping")
+
+    async def subscribe_states(
+        self,
+        entity_ids: list[str],
+        handler: Callable[[dict[str, Any]], Coroutine[Any, Any, None] | None],
+    ) -> int:
+        """Subscribe to state changes for specific entities."""
+        await self._ensure_connected()
+        spec = (list(entity_ids), handler)
+        subscription_id = await self._register_subscription(spec)
+        self._subscription_specs.append(spec)
+        return subscription_id
+
+    async def get_states(self, entity_ids: list[str] | None = None) -> dict[str, Any]:
+        """Fetch states for specified entity IDs (or all if None/empty)."""
+        response = await self._request(
+            {
+                "type": "get_states",
+            }
+        )
+
+        if response.get("type") != "result":
+            raise ValueError(f"Unexpected response to get_states: {response}")
+        if not response.get("success"):
+            raise ValueError(f"get_states failed: {response}")
+
+        states = response.get("result") or []
+        if not entity_ids:
+            return {state["entity_id"]: state for state in states if state.get("entity_id")}
+
+        filtered = {
+            state["entity_id"]: state
+            for state in states
+            if state.get("entity_id") in entity_ids
+        }
+        return filtered
+
+    async def _ensure_connected(self) -> None:
+        if self._is_connected():
+            return
+        async with self._conn_lock:
+            if self._is_connected():
+                return
+            await self._open_connection(start_receiver=True)
+
+    async def _open_connection(self, timeout: float = 10.0, start_receiver: bool = True) -> str:
         ws_url = _build_websocket_url(self.base_url)
         ssl_context = _ssl_context(self.verify_ssl) if ws_url.startswith("wss://") else None
 
@@ -90,87 +236,41 @@ class HomeAssistantWebSocketClient:
             self._websocket = websocket
             version = initial_data.get("ha_version") or "unknown"
             self._ha_version = version
-            self._receiver_task = asyncio.create_task(self._receiver_loop())
+            if start_receiver:
+                self._receiver_task = asyncio.create_task(self._receiver_loop())
             return version
 
-    async def disconnect(self) -> None:
-        """Close the websocket connection if open."""
-        if self._receiver_task:
-            self._receiver_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._receiver_task
-            self._receiver_task = None
-
-        self._subscriptions.clear()
-
-        for fut in self._pending.values():
-            if not fut.done():
-                fut.cancel()
-        self._pending.clear()
+    async def _close_websocket(self) -> None:
         if self._websocket is not None:
-            await self._websocket.close()
+            try:
+                await self._websocket.close()
+            except Exception:
+                pass
             self._websocket = None
 
-    def _next_id(self) -> int:
-        self._msg_id += 1
-        return self._msg_id
+    async def _reconnect_with_backoff(self) -> None:
+        delay = 1.0
+        while not self._closing:
+            try:
+                async with self._conn_lock:
+                    if self._is_connected():
+                        return
+                    await self._open_connection(start_receiver=False)
+                    await self._resubscribe_all()
+                    return
+            except Exception:
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, 30.0)
 
-    async def _send(self, message: dict[str, Any]) -> None:
-        if not self._websocket:
-            raise RuntimeError("Websocket is not connected")
-        await self._websocket.send(json.dumps(message))
+    async def _resubscribe_all(self) -> None:
+        self._subscriptions.clear()
+        for spec in self._subscription_specs:
+            await self._register_subscription(spec)
 
-    async def _receiver_loop(self) -> None:
-        if not self._websocket:
-            return
-        try:
-            while True:
-                raw = await self._websocket.recv()
-                data = json.loads(raw)
-                msg_id = data.get("id")
-
-                if msg_id in self._pending:
-                    fut = self._pending.pop(msg_id)
-                    if not fut.done():
-                        fut.set_result(data)
-                    continue
-
-                subscription_handler = self._subscriptions.get(msg_id)
-                if subscription_handler:
-                    change = data.get("event") or {}
-                    result = subscription_handler(change)
-                    if asyncio.iscoroutine(result):
-                        asyncio.create_task(result)
-                    continue
-        except asyncio.CancelledError:
-            return
-        except Exception:
-            return
-
-    async def _request(self, message: dict[str, Any]) -> dict[str, Any]:
-        if not self._websocket:
-            raise RuntimeError("Websocket is not connected")
-
-        request_id = int(message.get("id") or self._next_id())
-        message["id"] = request_id
-
-        fut: asyncio.Future[dict[str, Any]] = asyncio.get_running_loop().create_future()
-        self._pending[request_id] = fut
-        await self._send(message)
-        return await fut
-
-    async def ping(self) -> None:
-        """Send ping/pong to verify connection is alive."""
-        response = await self._request({"type": "ping"})
-        if response.get("type") != "pong":
-            raise ValueError("Expected pong after ping")
-
-    async def subscribe_states(
-        self,
-        entity_ids: list[str],
-        handler: Callable[[dict[str, Any]], Coroutine[Any, Any, None] | None],
+    async def _register_subscription(
+        self, spec: tuple[list[str], Callable[[dict[str, Any]], Awaitable[None] | None]]
     ) -> int:
-        """Subscribe to state changes for specific entities."""
+        entity_ids, handler = spec
         response = await self._request(
             {
                 "type": "subscribe_entities",
@@ -187,26 +287,5 @@ class HomeAssistantWebSocketClient:
         self._subscriptions[subscription_id_int] = handler
         return subscription_id_int
 
-    async def get_states(self, entity_ids: list[str] | None = None) -> dict[str, Any]:
-        """Fetch states for specified entity IDs (or all if None/empty)."""
-        response = await self._request(
-            {
-                "type": "get_states",
-            }
-        )
-
-        if response.get("type") != "result":
-            raise ValueError(f"Unexpected response to get_states: {response}")
-        if not response.get("success"):
-            raise ValueError(f"get_states failed: {response}")
-
-        states = response.get("result") or []
-        if not entity_ids:
-            return {state["entity_id"]: state for state in states if state.get("entity_id")}
-
-        filtered = {
-            state["entity_id"]: state
-            for state in states
-            if state.get("entity_id") in entity_ids
-        }
-        return filtered
+    def _is_connected(self) -> bool:
+        return self._websocket is not None and not self._websocket.closed

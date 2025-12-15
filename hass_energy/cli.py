@@ -12,6 +12,7 @@ from .config import Config, load_config
 from .datalogger import DataLogger
 from .ha_client import HomeAssistantWebSocketClient
 from .mapper import load_mapper
+from .optimizer import load_optimizer
 
 
 def sync(func: Callable[..., Coroutine[Any, Any, Any]]) -> Callable[..., Any]:
@@ -219,6 +220,65 @@ async def run_mapper(ctx: click.Context) -> None:
         await client.disconnect()
 
     click.echo(json.dumps(mapped, indent=2))
+
+
+@cli.command("run-optimizer")
+@click.pass_context
+@sync
+async def run_optimizer(ctx: click.Context) -> None:
+    """Run the configured mapper and optimizer once and print the decision output."""
+    config: Config = ctx.obj["config"]
+    if not config.optimizer:
+        click.echo("No optimizer configured; add an optimizer section to the config.", err=True)
+        sys.exit(1)
+
+    try:
+        mapper = load_mapper(config.mapper)
+    except Exception as err:
+        click.echo(f"Failed to load mapper: {err}", err=True)
+        sys.exit(1)
+
+    try:
+        optimizer = load_optimizer(config.optimizer)
+    except Exception as err:
+        click.echo(f"Failed to load optimizer: {err}", err=True)
+        sys.exit(1)
+
+    required_entities = mapper.required_entities()
+    if not required_entities:
+        click.echo("Mapper has no required entities.", err=True)
+        sys.exit(1)
+    optimizer_entities = optimizer.required_entities()
+
+    client = HomeAssistantWebSocketClient(
+        base_url=config.home_assistant.base_url,
+        token=config.home_assistant.token,
+        verify_ssl=config.home_assistant.verify_ssl,
+        ws_max_size=config.home_assistant.ws_max_size,
+    )
+
+    try:
+        await client.connect()
+        all_entities = list(dict.fromkeys([*required_entities, *optimizer_entities]))
+        states = await client.get_states(all_entities)
+        mapped = mapper.map(states)
+        missing_knobs = [entity for entity in optimizer_entities if entity not in states]
+        if missing_knobs:
+            click.echo(
+                "Missing optimizer knob entities from Home Assistant: "
+                f"{', '.join(sorted(missing_knobs))}",
+                err=True,
+            )
+            sys.exit(1)
+        knob_states = {entity: states[entity] for entity in optimizer_entities}
+        decision = optimizer.decide(mapped, knob_states)
+    except Exception as err:
+        click.echo(f"Failed to run optimizer: {err}", err=True)
+        sys.exit(1)
+    finally:
+        await client.disconnect()
+
+    click.echo(json.dumps(decision, indent=2))
 
 
 @cli.group("hass")
