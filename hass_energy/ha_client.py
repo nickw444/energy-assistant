@@ -130,6 +130,8 @@ class HomeAssistantWebSocketClient:
                 if self._closing:
                     return
                 await self._handle_connection_lost(exc)
+                # Stop this receiver; a new one will be started after reconnect.
+                return
 
     async def _handle_connection_lost(self, exc: Exception) -> None:
         self._set_pending_exception(exc)
@@ -255,7 +257,7 @@ class HomeAssistantWebSocketClient:
                 async with self._conn_lock:
                     if self._is_connected():
                         return
-                    await self._open_connection(start_receiver=False)
+                    await self._open_connection(start_receiver=True)
                     await self._resubscribe_all()
                     return
             except Exception:
