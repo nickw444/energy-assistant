@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from hass_energy.optimizer import HassEnergyOptimizer
@@ -18,6 +19,7 @@ class MapperAlignedOptimizer(HassEnergyOptimizer):
 
     def decide(self, mapped: dict[str, Any], entities: dict[str, Any]) -> dict[str, Any]:
         realtime = mapped.get("realtime") or {}
+        horizon = (mapped.get("horizon") or {}).get("windows") or []
 
         price_import_cents = _to_float(realtime.get("price_import_cents"))
         price_export_cents = _to_float(realtime.get("price_export_cents"))
@@ -36,6 +38,106 @@ class MapperAlignedOptimizer(HassEnergyOptimizer):
 
         mode = "SELF_CONSUME"
         reason = "Default to self-consume unless a stronger signal appears."
+        forecast_pv_surplus_today = _forecast_surplus_today(horizon)
+
+        # Negative feed-in: avoid exporting at a loss.
+        if price_export_cents is not None and price_export_cents < 0:
+            mode = "SELF_CONSUME_CURTAIL"
+            reason = "Export price is negative; curtail to avoid paid export."
+            return _decision(
+                reason,
+                mode,
+                price_import_cents,
+                price_export_cents,
+                battery_soc,
+                pv_kw,
+                load_kw,
+                grid_kw,
+                ev_connected,
+                ev_charge_kw,
+                surplus_kw,
+            )
+
+        # Use forecasted PV to top up the EV when the battery is already healthy.
+        if (
+            ev_connected
+            and battery_soc is not None
+            and battery_soc > 0.9
+            and forecast_pv_surplus_today is not None
+            and forecast_pv_surplus_today >= 5.0
+        ):
+            mode = "EV_FROM_PV"
+            reason = (
+                f"Battery healthy and ~{forecast_pv_surplus_today:.1f} kWh PV surplus expected today; "
+                "charge EV from PV."
+            )
+            return _decision(
+                reason,
+                mode,
+                price_import_cents,
+                price_export_cents,
+                battery_soc,
+                pv_kw,
+                load_kw,
+                grid_kw,
+                ev_connected,
+                ev_charge_kw,
+                surplus_kw,
+            )
+
+        # Sell/export rules: step down the price requirement as SoC increases.
+        sell_steps = [
+            (0.9, 20.0),
+            (0.7, 25.0),
+            (0.5, 30.0),
+        ]
+        if price_export_cents is not None and battery_soc is not None:
+            for soc_threshold, price_threshold in sell_steps:
+                if battery_soc > soc_threshold and price_export_cents >= price_threshold:
+                    mode = "EXPORT_MAX"
+                    reason = (
+                        f"SoC above {int(soc_threshold * 100)}% and export price >= {price_threshold}c; sell energy."
+                    )
+                    return _decision(
+                        reason,
+                        mode,
+                        price_import_cents,
+                        price_export_cents,
+                        battery_soc,
+                        pv_kw,
+                        load_kw,
+                        grid_kw,
+                        ev_connected,
+                        ev_charge_kw,
+                        surplus_kw,
+                    )
+
+        # Buy/charge rules for low SoC and cheap import prices.
+        buy_steps = [
+            (0.3, 8.0),
+            (0.5, 6.0),
+            (0.7, 4.0),
+        ]
+        if price_import_cents is not None and battery_soc is not None:
+            for soc_limit, price_limit in buy_steps:
+                if battery_soc < soc_limit and price_import_cents <= price_limit:
+                    mode = "GRID_CHARGE_BATTERY"
+                    reason = (
+                        f"SoC below {int(soc_limit * 100)}% with import price <= {price_limit}c; buy energy to charge."
+                    )
+                    return _decision(
+                        reason,
+                        mode,
+                        price_import_cents,
+                        price_export_cents,
+                        battery_soc,
+                        pv_kw,
+                        load_kw,
+                        grid_kw,
+                        ev_connected,
+                        ev_charge_kw,
+                        surplus_kw,
+                    )
 
         # Demand window: never import from grid; export is allowed, but avoid negative exports.
         if demand_window_active:
@@ -287,6 +389,41 @@ def _decision(
         },
         "knobs": {},
     }
+
+
+def _forecast_surplus_today(windows: list[dict[str, Any]]) -> float | None:
+    """Estimate PV surplus (pv minus load) remaining today from forecast windows."""
+
+    if not windows:
+        return None
+
+    now = datetime.now().astimezone()
+    surplus = 0.0
+    considered = False
+
+    for window in windows:
+        start_raw = window.get("start")
+        try:
+            start = datetime.fromisoformat(start_raw)
+        except Exception:
+            continue
+
+        if start.astimezone(now.tzinfo).date() != now.date():
+            continue
+        if start < now:
+            continue
+
+        pv_kwh = _to_float(window.get("pv_forecast_kwh"))
+        load_kwh = _to_float(window.get("load_forecast_kwh")) or 0.0
+        if pv_kwh is None:
+            continue
+
+        surplus += max(pv_kwh - load_kwh, 0.0)
+        considered = True
+
+    if not considered:
+        return None
+    return surplus
 
 
 def get_optimizer() -> MapperAlignedOptimizer:

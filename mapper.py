@@ -53,6 +53,7 @@ class Mapper(HassEnergyMapper):
         pv_power: str = "sensor.inverter_pv_total_power",
         load_power: str = "sensor.inverter_load_power",
         grid_power: str = "sensor.inverter_grid_meter_power",
+        battery_power: str = "sensor.inverter_battery_power",
         battery_soc: str = "sensor.inverter_battery_soc",
         ev_soc: str = "sensor.tessie_battery",
         battery_soh_pct: str = "sensor.inverter_modbus_battery_soh",
@@ -70,6 +71,9 @@ class Mapper(HassEnergyMapper):
         pv_power_smoothed_1m: str = "sensor.hass_energy_pv_power_smoothed_1m",
         pv_power_smoothed_5m: str = "sensor.hass_energy_pv_power_smoothed_5m",
         pv_power_smoothed_15m: str = "sensor.hass_energy_pv_power_smoothed_15m",
+        battery_power_smoothed_1m: str = "sensor.hass_energy_battery_power_smoothed_1m",
+        battery_power_smoothed_5m: str = "sensor.hass_energy_battery_power_smoothed_5m",
+        battery_power_smoothed_15m: str = "sensor.hass_energy_battery_power_smoothed_15m",
         load_power_smoothed_1m: str = "sensor.hass_energy_load_power_smoothed_1m",
         load_power_smoothed_5m: str = "sensor.hass_energy_load_power_smoothed_5m",
         load_power_smoothed_15m: str = "sensor.hass_energy_load_power_smoothed_15m",
@@ -84,6 +88,7 @@ class Mapper(HassEnergyMapper):
         self.pv_power = pv_power
         self.load_power = load_power
         self.grid_power = grid_power
+        self.battery_power = battery_power
         self.battery_soc = battery_soc
         self.ev_soc = ev_soc
         self.battery_soh_pct = battery_soh_pct
@@ -101,6 +106,9 @@ class Mapper(HassEnergyMapper):
         self.pv_power_smoothed_1m = pv_power_smoothed_1m
         self.pv_power_smoothed_5m = pv_power_smoothed_5m
         self.pv_power_smoothed_15m = pv_power_smoothed_15m
+        self.battery_power_smoothed_1m = battery_power_smoothed_1m
+        self.battery_power_smoothed_5m = battery_power_smoothed_5m
+        self.battery_power_smoothed_15m = battery_power_smoothed_15m
         self.load_power_smoothed_1m = load_power_smoothed_1m
         self.load_power_smoothed_5m = load_power_smoothed_5m
         self.load_power_smoothed_15m = load_power_smoothed_15m
@@ -117,6 +125,7 @@ class Mapper(HassEnergyMapper):
             self.pv_power,
             self.load_power,
             self.grid_power,
+            self.battery_power,
             self.battery_soc,
             self.ev_soc,
             self.price_import_now,
@@ -132,6 +141,9 @@ class Mapper(HassEnergyMapper):
             self.pv_power_smoothed_1m,
             self.pv_power_smoothed_5m,
             self.pv_power_smoothed_15m,
+            self.battery_power_smoothed_1m,
+            self.battery_power_smoothed_5m,
+            self.battery_power_smoothed_15m,
             self.load_power_smoothed_1m,
             self.load_power_smoothed_5m,
             self.load_power_smoothed_15m,
@@ -163,9 +175,13 @@ class Mapper(HassEnergyMapper):
             "pv_kw": _required_kw(states, self.pv_power),
             "load_kw": _required_kw(states, self.load_power),
             "grid_kw": _required_kw(states, self.grid_power),
+            "battery_kw": _required_kw(states, self.battery_power),
             "pv_kw_smoothed_1m": _required_kw(states, self.pv_power_smoothed_1m),
             "pv_kw_smoothed_5m": _required_kw(states, self.pv_power_smoothed_5m),
             "pv_kw_smoothed_15m": _required_kw(states, self.pv_power_smoothed_15m),
+            "battery_kw_smoothed_1m": _required_kw(states, self.battery_power_smoothed_1m),
+            "battery_kw_smoothed_5m": _required_kw(states, self.battery_power_smoothed_5m),
+            "battery_kw_smoothed_15m": _required_kw(states, self.battery_power_smoothed_15m),
             "load_kw_smoothed_1m": _required_kw(states, self.load_power_smoothed_1m),
             "load_kw_smoothed_5m": _required_kw(states, self.load_power_smoothed_5m),
             "load_kw_smoothed_15m": _required_kw(states, self.load_power_smoothed_15m),

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import logging
 import ssl
 from collections.abc import Awaitable, Callable, Coroutine
 from dataclasses import dataclass, field
@@ -10,6 +11,8 @@ from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 from websockets.legacy.client import WebSocketClientProtocol, connect
+
+logger = logging.getLogger(__name__)
 
 
 def _build_websocket_url(base_url: str) -> str:
@@ -65,6 +68,7 @@ class HomeAssistantWebSocketClient:
         self._closing = False
         async with self._conn_lock:
             if self._is_connected():
+                logger.debug("connect called but websocket already connected")
                 return self._ha_version or "already-connected"
             version = await self._open_connection(timeout=timeout, start_receiver=True)
             return version
@@ -129,12 +133,14 @@ class HomeAssistantWebSocketClient:
             except Exception as exc:
                 if self._closing:
                     return
+                logger.warning("Receiver loop error: %s; triggering reconnect", exc)
                 await self._handle_connection_lost(exc)
                 # Stop this receiver; a new one will be started after reconnect.
                 return
 
     async def _handle_connection_lost(self, exc: Exception) -> None:
         self._set_pending_exception(exc)
+        logger.info("Connection lost; scheduling reconnect: %s", exc)
         await self._close_websocket()
         await self._reconnect_with_backoff()
 
@@ -212,6 +218,7 @@ class HomeAssistantWebSocketClient:
         ssl_context = _ssl_context(self.verify_ssl) if ws_url.startswith("wss://") else None
 
         async with asyncio.timeout(timeout):
+            logger.info("Connecting to Home Assistant websocket at %s", ws_url)
             websocket = await connect(ws_url, ssl=ssl_context, max_size=self.ws_max_size)
             initial = await websocket.recv()
             initial_data = json.loads(initial)
@@ -240,6 +247,7 @@ class HomeAssistantWebSocketClient:
             self._ha_version = version
             if start_receiver:
                 self._receiver_task = asyncio.create_task(self._receiver_loop())
+            logger.info("Websocket connected; Home Assistant version %s", version)
             return version
 
     async def _close_websocket(self) -> None:
@@ -256,11 +264,15 @@ class HomeAssistantWebSocketClient:
             try:
                 async with self._conn_lock:
                     if self._is_connected():
+                        logger.debug("Reconnect aborted; websocket already connected")
                         return
+                    logger.info("Attempting reconnect with %.1fs backoff", delay)
                     await self._open_connection(start_receiver=True)
                     await self._resubscribe_all()
+                    logger.info("Reconnected and resubscribed successfully")
                     return
-            except Exception:
+            except Exception as exc:
+                logger.warning("Reconnect attempt failed: %s", exc)
                 await asyncio.sleep(delay)
                 delay = min(delay * 2, 30.0)
 
@@ -273,6 +285,7 @@ class HomeAssistantWebSocketClient:
         self, spec: tuple[list[str], Callable[[dict[str, Any]], Awaitable[None] | None]]
     ) -> int:
         entity_ids, handler = spec
+        logger.debug("Registering subscription for %s", entity_ids)
         response = await self._request(
             {
                 "type": "subscribe_entities",

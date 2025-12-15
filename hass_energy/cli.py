@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import sys
 from collections.abc import Callable, Coroutine
 from functools import wraps
@@ -15,6 +16,18 @@ from .mapper import load_mapper
 from .optimizer import load_optimizer
 
 
+def _configure_logging(log_level: str) -> None:
+    """Configure logging only for hass_energy loggers."""
+    level = getattr(logging, log_level.upper(), logging.INFO)
+    logger = logging.getLogger("hass_energy")
+    logger.setLevel(level)
+    if not logger.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
+        logger.addHandler(handler)
+    logger.propagate = False
+
+
 def sync(func: Callable[..., Coroutine[Any, Any, Any]]) -> Callable[..., Any]:
     """Decorator that runs async click commands with asyncio.run."""
     @wraps(func)
@@ -26,6 +39,13 @@ def sync(func: Callable[..., Coroutine[Any, Any, Any]]) -> Callable[..., Any]:
 
 @click.group()
 @click.option(
+    "--log-level",
+    default="INFO",
+    show_default=True,
+    type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], case_sensitive=False),
+    help="Logging verbosity for hass-energy tooling.",
+)
+@click.option(
     "--config",
     "config_path",
     required=True,
@@ -33,8 +53,9 @@ def sync(func: Callable[..., Coroutine[Any, Any, Any]]) -> Callable[..., Any]:
     help="Path to hass-energy YAML config.",
 )
 @click.pass_context
-def cli(ctx: click.Context, config_path: Path) -> None:
+def cli(ctx: click.Context, log_level: str, config_path: Path) -> None:
     """Entry point for the hass-energy CLI."""
+    _configure_logging(log_level)
     ctx.ensure_object(dict)
     try:
         ctx.obj["config"] = load_config(config_path)
