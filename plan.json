@@ -1,0 +1,1232 @@
+{
+  "generated_at": 1766214727.958417,
+  "status": "Optimal",
+  "objective": -502.2725082785186,
+  "total_cost": -502.2725082785186,
+  "total_import_kwh": 21.78884407626667,
+  "total_export_kwh": 55.969926672022204,
+  "slots": [
+    {
+      "start": "2025-12-20T18:15:01+11:00",
+      "end": "2025-12-20T18:20:00+11:00",
+      "duration_h": 0.08305555555555555,
+      "import_kw": 0.0,
+      "export_kw": 0.0,
+      "pv_kw": 11.88722408026756,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.25,
+      "export_price": 0.21,
+      "slot_cost": 0.0,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 9.4001441,
+          "discharge_kw": 0.0,
+          "soc_kwh": 37.210312
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-20T18:20:01+11:00",
+      "end": "2025-12-20T18:25:00+11:00",
+      "duration_h": 0.08305555555555555,
+      "import_kw": 0.0,
+      "export_kw": 0.0,
+      "pv_kw": 3.922675585284281,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.26,
+      "export_price": 0.21,
+      "slot_cost": 0.0,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 1.4355956,
+          "discharge_kw": 0.0,
+          "soc_kwh": 37.325969
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-20T18:25:01+11:00",
+      "end": "2025-12-20T18:30:00+11:00",
+      "duration_h": 0.08305555555555555,
+      "import_kw": 0.0,
+      "export_kw": 0.0,
+      "pv_kw": 0.6862876254180603,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.27,
+      "export_price": 0.23,
+      "slot_cost": 0.0,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 1.8007924,
+          "soc_kwh": 37.171778
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-20T18:30:01+11:00",
+      "end": "2025-12-20T18:35:00+11:00",
+      "duration_h": 0.08305555555555555,
+      "import_kw": 0.0,
+      "export_kw": 0.0,
+      "pv_kw": 0.0,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.24,
+      "export_price": 0.2,
+      "slot_cost": 0.0,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 2.48708,
+          "soc_kwh": 36.958823
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-20T18:35:01+11:00",
+      "end": "2025-12-20T18:40:00+11:00",
+      "duration_h": 0.08305555555555555,
+      "import_kw": 0.0,
+      "export_kw": 0.0,
+      "pv_kw": 0.0,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.24,
+      "export_price": 0.2,
+      "slot_cost": 0.0,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 2.48708,
+          "soc_kwh": 36.745869
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-20T18:40:01+11:00",
+      "end": "2025-12-20T18:45:00+11:00",
+      "duration_h": 0.08305555555555555,
+      "import_kw": 2.48708,
+      "export_kw": 0.0,
+      "pv_kw": 0.0,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.23,
+      "export_price": 0.19,
+      "slot_cost": 0.04751013655555556,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 0.0,
+          "soc_kwh": 36.745869
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-20T18:45:01+11:00",
+      "end": "2025-12-20T18:50:00+11:00",
+      "duration_h": 0.08305555555555555,
+      "import_kw": 2.48708,
+      "export_kw": 0.0,
+      "pv_kw": 0.0,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.23,
+      "export_price": 0.19,
+      "slot_cost": 0.04751013655555556,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 0.0,
+          "soc_kwh": 36.745869
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-20T18:50:01+11:00",
+      "end": "2025-12-20T18:55:00+11:00",
+      "duration_h": 0.08305555555555555,
+      "import_kw": 12.48708,
+      "export_kw": 0.0,
+      "pv_kw": 0.0,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.17,
+      "export_price": 0.13,
+      "slot_cost": 0.17631063233333333,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 10.0,
+          "discharge_kw": 0.0,
+          "soc_kwh": 37.551508
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-20T18:55:01+11:00",
+      "end": "2025-12-20T19:00:00+11:00",
+      "duration_h": 0.08305555555555555,
+      "import_kw": 12.48708,
+      "export_kw": 0.0,
+      "pv_kw": 0.0,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.16,
+      "export_price": 0.13,
+      "slot_cost": 0.16593941866666667,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 10.0,
+          "discharge_kw": 0.0,
+          "soc_kwh": 38.357147
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-20T19:00:01+11:00",
+      "end": "2025-12-20T19:30:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 7.0012779,
+      "export_kw": 0.0,
+      "pv_kw": 0.0,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.22,
+      "export_price": 0.18,
+      "slot_cost": 0.7697127131283333,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 4.5141979,
+          "discharge_kw": 0.0,
+          "soc_kwh": 40.545316
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-20T19:30:01+11:00",
+      "end": "2025-12-20T20:00:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.0,
+      "export_kw": 7.51292,
+      "pv_kw": 0.0,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.37,
+      "export_price": 0.32,
+      "slot_cost": -1.201399384888889,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 10.0,
+          "soc_kwh": 35.393541
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-20T20:00:01+11:00",
+      "end": "2025-12-20T20:30:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.0,
+      "export_kw": 7.51292,
+      "pv_kw": 0.0,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.41,
+      "export_price": 0.35,
+      "slot_cost": -1.3140305772222223,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 10.0,
+          "soc_kwh": 30.241765
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-20T20:30:01+11:00",
+      "end": "2025-12-20T21:00:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.0,
+      "export_kw": 7.51292,
+      "pv_kw": 0.0,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.32,
+      "export_price": 0.27,
+      "slot_cost": -1.013680731,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 10.0,
+          "soc_kwh": 25.08999
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-20T21:00:01+11:00",
+      "end": "2025-12-20T21:30:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.0,
+      "export_kw": 0.0,
+      "pv_kw": 0.0,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.31,
+      "export_price": 0.22,
+      "slot_cost": 0.0,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 2.48708,
+          "soc_kwh": 23.808702
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-20T21:30:01+11:00",
+      "end": "2025-12-20T22:00:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.0,
+      "export_kw": 0.0,
+      "pv_kw": 0.0,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.29,
+      "export_price": 0.2,
+      "slot_cost": 0.0,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 2.48708,
+          "soc_kwh": 22.527414
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-20T22:00:01+11:00",
+      "end": "2025-12-20T22:30:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.0,
+      "export_kw": 7.51292,
+      "pv_kw": 0.0,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.37,
+      "export_price": 0.28,
+      "slot_cost": -1.051224461777778,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 10.0,
+          "soc_kwh": 17.375639
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-20T22:30:01+11:00",
+      "end": "2025-12-20T23:00:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.0,
+      "export_kw": 0.0,
+      "pv_kw": 0.0,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.28,
+      "export_price": 0.2,
+      "slot_cost": 0.0,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 2.48708,
+          "soc_kwh": 16.094351
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-20T23:00:01+11:00",
+      "end": "2025-12-20T23:30:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.0,
+      "export_kw": 7.51292,
+      "pv_kw": 0.0,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.33,
+      "export_price": 0.25,
+      "slot_cost": -0.9385932694444445,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 10.0,
+          "soc_kwh": 10.942576
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-20T23:30:01+11:00",
+      "end": "2025-12-21T00:00:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.0,
+      "export_kw": 0.0,
+      "pv_kw": 0.0,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.25,
+      "export_price": 0.17,
+      "slot_cost": 0.0,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 2.48708,
+          "soc_kwh": 9.6612878
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T00:00:01+11:00",
+      "end": "2025-12-21T00:30:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.0,
+      "export_kw": 0.0,
+      "pv_kw": 0.0,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.24,
+      "export_price": 0.16,
+      "slot_cost": 0.0,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 2.48708,
+          "soc_kwh": 8.38
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T00:30:01+11:00",
+      "end": "2025-12-21T01:00:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 2.48708,
+      "export_kw": 0.0,
+      "pv_kw": 0.0,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.2,
+      "export_price": 0.13,
+      "slot_cost": 0.24856982888888893,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 0.0,
+          "soc_kwh": 8.38
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T01:00:01+11:00",
+      "end": "2025-12-21T01:30:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 2.48708,
+      "export_kw": 0.0,
+      "pv_kw": 0.0,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.2,
+      "export_price": 0.12,
+      "slot_cost": 0.24856982888888893,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 0.0,
+          "soc_kwh": 8.38
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T01:30:01+11:00",
+      "end": "2025-12-21T02:00:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 2.4606653,
+      "export_kw": 0.0,
+      "pv_kw": 0.026414674819344078,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.19,
+      "export_price": 0.11,
+      "slot_cost": 0.23363333505361114,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 0.0,
+          "soc_kwh": 8.38
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T02:00:01+11:00",
+      "end": "2025-12-21T02:30:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 2.2375414,
+      "export_kw": 0.0,
+      "pv_kw": 0.24953863257365202,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.18,
+      "export_price": 0.11,
+      "slot_cost": 0.20126684893,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 0.0,
+          "soc_kwh": 8.38
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T02:30:01+11:00",
+      "end": "2025-12-21T03:00:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 3.1155142,
+      "export_kw": 0.0,
+      "pv_kw": 0.6681712062256808,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.18,
+      "export_price": 0.11,
+      "slot_cost": 0.28024050228999997,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 1.2966054,
+          "discharge_kw": 0.0,
+          "soc_kwh": 9.0085043
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T03:00:01+11:00",
+      "end": "2025-12-21T03:30:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.0,
+      "export_kw": 0.0,
+      "pv_kw": 1.2671039466370204,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.2,
+      "export_price": 0.13,
+      "slot_cost": 0.0,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 1.2199761,
+          "soc_kwh": 8.38
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T03:30:01+11:00",
+      "end": "2025-12-21T04:00:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.32808056,
+      "export_kw": 0.0,
+      "pv_kw": 2.1589994441356306,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.19,
+      "export_price": 0.11,
+      "slot_cost": 0.031150337837111113,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 0.0,
+          "soc_kwh": 8.38
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T04:00:01+11:00",
+      "end": "2025-12-21T04:30:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.0,
+      "export_kw": 0.65126352,
+      "pv_kw": 3.1383435241801,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.19,
+      "export_price": 0.11,
+      "slot_cost": -0.03579959388133334,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 0.0,
+          "soc_kwh": 8.38
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T04:30:01+11:00",
+      "end": "2025-12-21T05:00:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.0,
+      "export_kw": 1.7210579,
+      "pv_kw": 4.208137854363535,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.19,
+      "export_price": 0.11,
+      "slot_cost": -0.09460559661972222,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 0.0,
+          "soc_kwh": 8.38
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T05:00:01+11:00",
+      "end": "2025-12-21T05:30:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.0,
+      "export_kw": 2.8334759,
+      "pv_kw": 5.320555864369093,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.19,
+      "export_price": 0.11,
+      "slot_cost": -0.15575459606972222,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 0.0,
+          "soc_kwh": 8.38
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T05:30:01+11:00",
+      "end": "2025-12-21T06:00:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.0,
+      "export_kw": 3.8796571,
+      "pv_kw": 6.366737076153418,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.18,
+      "export_price": 0.11,
+      "slot_cost": -0.21326259542194445,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 0.0,
+          "soc_kwh": 8.38
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T06:00:01+11:00",
+      "end": "2025-12-21T06:30:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.0,
+      "export_kw": 4.8786121,
+      "pv_kw": 7.365692051139522,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.17,
+      "export_price": 0.1,
+      "slot_cost": -0.24379508799722222,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 0.0,
+          "soc_kwh": 8.38
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T06:30:01+11:00",
+      "end": "2025-12-21T07:00:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.0,
+      "export_kw": 5.4737427,
+      "pv_kw": 7.9608226792662595,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.13,
+      "export_price": 0.06,
+      "slot_cost": -0.16412105195499999,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 0.0,
+          "soc_kwh": 8.38
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T07:00:01+11:00",
+      "end": "2025-12-21T07:30:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.0,
+      "export_kw": 0.0,
+      "pv_kw": 8.311017231795441,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.1,
+      "export_price": 0.04,
+      "slot_cost": 0.0,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 5.8239372,
+          "discharge_kw": 0.0,
+          "soc_kwh": 11.20304
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T07:30:01+11:00",
+      "end": "2025-12-21T08:00:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 3.4959973,
+      "export_kw": 0.0,
+      "pv_kw": 8.740255697609783,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.06,
+      "export_price": -0.0,
+      "slot_cost": 0.10482165237833334,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 9.749173,
+          "discharge_kw": 0.0,
+          "soc_kwh": 15.928762
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T08:00:01+11:00",
+      "end": "2025-12-21T08:30:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.0,
+      "export_kw": 0.0,
+      "pv_kw": 9.025013896609227,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.06,
+      "export_price": -0.0,
+      "slot_cost": 0.0,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 6.5379339,
+          "discharge_kw": 0.0,
+          "soc_kwh": 19.097899
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T08:30:01+11:00",
+      "end": "2025-12-21T09:00:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.0,
+      "export_kw": 0.0,
+      "pv_kw": 9.19330739299611,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.06,
+      "export_price": -0.01,
+      "slot_cost": 0.0,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 6.7062274,
+          "discharge_kw": 0.0,
+          "soc_kwh": 22.348612
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T09:00:01+11:00",
+      "end": "2025-12-21T09:30:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 3.48708,
+      "export_kw": 0.0,
+      "pv_kw": 8.999999999999998,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.05,
+      "export_price": -0.01,
+      "slot_cost": 0.08712856833333334,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 10.0,
+          "discharge_kw": 0.0,
+          "soc_kwh": 27.195918
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T09:30:01+11:00",
+      "end": "2025-12-21T10:00:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 3.9357292,
+      "export_kw": 0.0,
+      "pv_kw": 8.551350750416898,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.06,
+      "export_price": -0.01,
+      "slot_cost": 0.11800628051333333,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 10.0,
+          "discharge_kw": 0.0,
+          "soc_kwh": 32.043223
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T10:00:01+11:00",
+      "end": "2025-12-21T10:30:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 4.5856903,
+      "export_kw": 0.0,
+      "pv_kw": 7.901389660922735,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.06,
+      "export_price": -0.01,
+      "slot_cost": 0.13749428082833334,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 10.0,
+          "discharge_kw": 0.0,
+          "soc_kwh": 36.890529
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T10:30:01+11:00",
+      "end": "2025-12-21T11:00:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.0,
+      "export_kw": 0.0,
+      "pv_kw": 7.019899944413563,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.07,
+      "export_price": -0.0,
+      "slot_cost": 0.0,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 4.5328199,
+          "discharge_kw": 0.0,
+          "soc_kwh": 39.087725
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T11:00:01+11:00",
+      "end": "2025-12-21T11:30:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.0,
+      "export_kw": 0.0,
+      "pv_kw": 5.802223457476376,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.09,
+      "export_price": 0.01,
+      "slot_cost": 0.0,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 3.3151435,
+          "discharge_kw": 0.0,
+          "soc_kwh": 40.694676
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T11:30:01+11:00",
+      "end": "2025-12-21T12:00:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.0,
+      "export_kw": 0.0,
+      "pv_kw": 4.276375764313507,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.09,
+      "export_price": 0.01,
+      "slot_cost": 0.0,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 1.7892958,
+          "discharge_kw": 0.0,
+          "soc_kwh": 41.562003
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T12:00:01+11:00",
+      "end": "2025-12-21T12:30:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.0,
+      "export_kw": 0.0,
+      "pv_kw": 3.1843690939410783,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.09,
+      "export_price": 0.01,
+      "slot_cost": 0.0,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.69728909,
+          "discharge_kw": 0.0,
+          "soc_kwh": 41.9
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T12:30:01+11:00",
+      "end": "2025-12-21T13:00:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.06433403,
+      "export_kw": 0.0,
+      "pv_kw": 2.4227459699833243,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.09,
+      "export_price": 0.01,
+      "slot_cost": 0.00289342299925,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 0.0,
+          "soc_kwh": 41.9
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T13:00:01+11:00",
+      "end": "2025-12-21T13:30:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.58962586,
+      "export_kw": 0.0,
+      "pv_kw": 1.8974541411895498,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.1,
+      "export_price": 0.03,
+      "slot_cost": 0.029464914503888887,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 0.0,
+          "soc_kwh": 41.9
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T13:30:01+11:00",
+      "end": "2025-12-21T14:00:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.91080429,
+      "export_kw": 0.0,
+      "pv_kw": 1.5762757087270705,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.1,
+      "export_price": 0.03,
+      "slot_cost": 0.045514914380833334,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 0.0,
+          "soc_kwh": 41.9
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T14:00:01+11:00",
+      "end": "2025-12-21T14:30:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 1.4378971,
+      "export_kw": 0.0,
+      "pv_kw": 1.0491828793774318,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.11,
+      "export_price": 0.03,
+      "slot_cost": 0.07904040475527778,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 0.0,
+          "soc_kwh": 41.9
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T14:30:01+11:00",
+      "end": "2025-12-21T15:00:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.0,
+      "export_kw": 3.6270501,
+      "pv_kw": 1.0491828793774318,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 0.63,
+      "export_price": 0.5,
+      "slot_cost": -0.9062587680416667,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 5.0649472,
+          "soc_kwh": 39.290653
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T15:00:01+11:00",
+      "end": "2025-12-21T15:30:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.0,
+      "export_kw": 8.5621029,
+      "pv_kw": 1.0491828793774318,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 23.42,
+      "export_price": 21.23,
+      "slot_cost": -90.83622966000917,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 10.0,
+          "soc_kwh": 34.138877
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T15:30:01+11:00",
+      "end": "2025-12-21T16:00:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.0,
+      "export_kw": 8.5621029,
+      "pv_kw": 1.0491828793774318,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 23.42,
+      "export_price": 21.23,
+      "slot_cost": -90.83622966000917,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 10.0,
+          "soc_kwh": 28.987102
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T16:00:01+11:00",
+      "end": "2025-12-21T16:30:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.0,
+      "export_kw": 8.5621029,
+      "pv_kw": 1.0491828793774318,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 11.16,
+      "export_price": 10.12,
+      "slot_cost": -43.30017165140333,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 10.0,
+          "soc_kwh": 23.835326
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T16:30:01+11:00",
+      "end": "2025-12-21T17:00:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.0,
+      "export_kw": 8.5621029,
+      "pv_kw": 1.0491828793774318,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 23.42,
+      "export_price": 21.27,
+      "slot_cost": -91.0073765835325,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 10.0,
+          "soc_kwh": 18.683551
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T17:00:01+11:00",
+      "end": "2025-12-21T17:30:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.0,
+      "export_kw": 8.5621029,
+      "pv_kw": 1.0491828793774318,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 23.42,
+      "export_price": 21.27,
+      "slot_cost": -91.0073765835325,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 10.0,
+          "soc_kwh": 13.531775
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    },
+    {
+      "start": "2025-12-21T17:30:01+11:00",
+      "end": "2025-12-21T18:00:00+11:00",
+      "duration_h": 0.49972222222222223,
+      "import_kw": 0.0,
+      "export_kw": 8.5621029,
+      "pv_kw": 1.0491828793774318,
+      "pv_curtail_kw": 0.0,
+      "load_kw": 2.4870799999999997,
+      "import_price": 23.42,
+      "export_price": 21.27,
+      "slot_cost": -91.0073765835325,
+      "battery": {
+        "battery_main": {
+          "charge_kw": 0.0,
+          "discharge_kw": 10.0,
+          "soc_kwh": 8.38
+        }
+      },
+      "ev": {},
+      "deferrable": {}
+    }
+  ],
+  "metadata": {
+    "objective": "minimize_cost",
+    "forecast_window_hours": 24,
+    "realtime_sample_size": 15,
+    "history_sample_size": 0,
+    "compiled": {
+      "forecast_window_hours": 24,
+      "poll_interval_seconds": 300,
+      "home_assistant_configured": true
+    },
+    "missing_inputs": []
+  }
+}
