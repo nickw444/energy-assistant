@@ -43,6 +43,7 @@ def main(argv: list[str] | None = None) -> int:
     times: list[datetime] = []
     grid_kw: list[float] = []
     pv_kw: list[float] = []
+    pv_curtail_kw: list[float] = []
     load_kw: list[float] = []
     import_price: list[float] = []
     export_price: list[float] = []
@@ -70,6 +71,7 @@ def main(argv: list[str] | None = None) -> int:
         times.append(start_dt)
         grid_kw.append(float(slot_dict.get("grid_kw", 0.0)))
         pv_kw.append(float(slot_dict.get("pv_kw", 0.0)))
+        pv_curtail_kw.append(float(slot_dict.get("pv_curtail_kw", 0.0)))
         load_kw.append(float(slot_dict.get("load_kw", 0.0)))
         import_price.append(float(slot_dict.get("import_price", 0.0)))
         export_price.append(float(slot_dict.get("export_price", 0.0)))
@@ -121,6 +123,13 @@ def main(argv: list[str] | None = None) -> int:
     ax_inputs = axes_list[0]
     ax_inputs.plot(times, load_kw, label="input_load_kw", color="tab:blue")
     ax_inputs.plot(times, pv_kw, label="input_pv_kw", color="tab:green")
+    ax_inputs.plot(
+        times,
+        pv_curtail_kw,
+        label="output_pv_curtail_kw",
+        color="tab:red",
+        linestyle="--",
+    )
     ax_inputs.set_ylabel("Inputs (kW)")
     ax_inputs.legend(loc="upper right", ncol=2, fontsize=8)
     ax_inputs.grid(True, alpha=0.3)
@@ -170,6 +179,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.output:
         fig.savefig(args.output, dpi=150)
     else:
+        _enable_hover(fig, axes_list, local_tz)
         plt_any.show()
     return 0
 
@@ -184,6 +194,82 @@ def _load_json(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError("Expected JSON object at top level")
     return cast(dict[str, Any], data)
+
+
+def _enable_hover(fig: Any, axes: list[Any], tz: Any) -> None:
+    annotations: dict[Any, Any] = {}
+    line_meta: dict[Any, list[tuple[Any, str, list[float], list[float]]]] = {}
+
+    for ax in axes:
+        annot = ax.annotate(
+            "",
+            xy=(0, 0),
+            xytext=(10, 10),
+            textcoords="offset points",
+            bbox={"boxstyle": "round", "fc": "white", "alpha": 0.85},
+            arrowprops={"arrowstyle": "->", "alpha": 0.4},
+        )
+        annot.set_visible(False)
+        annotations[ax] = annot
+
+        lines: list[tuple[Any, str, list[float], list[float]]] = []
+        for line in ax.get_lines():
+            label = line.get_label()
+            if not label or label.startswith("_"):
+                continue
+            x_raw = list(line.get_xdata())
+            y_raw = list(line.get_ydata())
+            x_nums = [float(x) for x in mdates.date2num(x_raw)]
+            y_vals = [float(y) for y in y_raw]
+            lines.append((line, label, x_nums, y_vals))
+        line_meta[ax] = lines
+
+    def _format(label: str, x_num: float, y_val: float) -> str:
+        dt = mdates.num2date(x_num, tz=tz)
+        return f"{label}\n{dt:%Y-%m-%d %H:%M}\n{y_val:.3f}"
+
+    def on_move(event: Any) -> None:
+        if event.inaxes is None or event.x is None or event.y is None:
+            changed = False
+            for annot in annotations.values():
+                if annot.get_visible():
+                    annot.set_visible(False)
+                    changed = True
+            if changed:
+                fig.canvas.draw_idle()
+            return
+
+        ax = event.inaxes
+        lines = line_meta.get(ax, [])
+        if not lines or event.xdata is None or event.ydata is None:
+            return
+
+        best: tuple[Any, str, float, float] | None = None
+        best_dist = float("inf")
+        for _line, label, x_nums, y_vals in lines:
+            for x_num, y_val in zip(x_nums, y_vals, strict=False):
+                disp_x, disp_y = ax.transData.transform((x_num, y_val))
+                dx = disp_x - event.x
+                dy = disp_y - event.y
+                dist = dx * dx + dy * dy
+                if dist < best_dist:
+                    best_dist = dist
+                    best = (_line, label, x_num, y_val)
+
+        annot = annotations[ax]
+        if best is None or best_dist > 100:
+            if annot.get_visible():
+                annot.set_visible(False)
+                fig.canvas.draw_idle()
+            return
+
+        _, label, x_num, y_val = best
+        annot.xy = (x_num, y_val)
+        annot.set_text(_format(label, x_num, y_val))
+        annot.set_visible(True)
+        fig.canvas.draw_idle()
+
+    fig.canvas.mpl_connect("motion_notify_event", on_move)
 
 
 if __name__ == "__main__":
