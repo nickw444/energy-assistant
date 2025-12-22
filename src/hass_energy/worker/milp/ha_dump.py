@@ -31,6 +31,20 @@ ENTITY_IDS: dict[str, str] = {
     "ev_charge_power": "sensor.tessie_charger_power",
 }
 
+DEFAULT_BATTERY_CAPACITY_KWH = 41.9
+DEFAULT_BATTERY_CHARGE_POWER_MAX_KW = 10.0
+DEFAULT_BATTERY_DISCHARGE_POWER_MAX_KW = 10.0
+DEFAULT_BATTERY_CHARGE_EFFICIENCY = 0.97
+DEFAULT_BATTERY_DISCHARGE_EFFICIENCY = 0.97
+DEFAULT_BATTERY_SOC_MIN_FRAC = 0.10
+DEFAULT_BATTERY_SOC_RESERVE_FRAC = 0.20
+DEFAULT_EV_CAPACITY_KWH = 75.0
+DEFAULT_EV_TARGET_SOC_PCT = 80.0
+DEFAULT_EV_MAX_POWER_KW = 7.2
+DEFAULT_EV_VALUE_PER_KWH = 0.08
+DEFAULT_EV_MIN_POWER_KW = 0.5
+DEFAULT_EV_SWITCH_PENALTY = 0.02
+
 
 class Forecast(TypedDict):
     start: str
@@ -59,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
     app_config = load_app_config(args.config)
     client = HomeAssistantClient()
 
-    states_payload = client.fetch_realtime_state(app_config.energy)
+    states_payload = client.fetch_realtime_state(app_config.homeassistant)
     mapped = map_states_to_realtime(
         states_payload,
         forecast_window_hours=app_config.energy.forecast_window_hours,
@@ -126,6 +140,9 @@ def map_states_to_realtime(states_payload: Any, *, forecast_window_hours: int) -
         if value is not None:
             realtime[key] = value / 1000.0  # convert W -> kW
 
+    # Temporary override: force base load to 800 W (0.8 kW) for validation.
+    realtime["load_power"] = 0.8
+
     for key in [
         "battery_soc",
         "ev_soc",
@@ -134,6 +151,13 @@ def map_states_to_realtime(states_payload: Any, *, forecast_window_hours: int) -
         value = _extract_float_state(_get(key))
         if value is not None:
             realtime[key] = value
+
+    battery_config = _build_battery_inputs(
+        soc_pct=realtime.get("battery_soc"),
+        soh_pct=realtime.get("battery_soh_pct"),
+    )
+    if battery_config:
+        realtime["batteries"] = [battery_config]
 
     pv_forecasts = _collect_pv_forecasts(
         by_entity,
@@ -149,8 +173,16 @@ def map_states_to_realtime(states_payload: Any, *, forecast_window_hours: int) -
     ev_connected = _extract_bool_state(_get("ev_connected_flag"))
     if demand_flag is not None:
         realtime["demand_window"] = demand_flag
-    if ev_connected is not None:
-        realtime["ev_connected"] = ev_connected
+    # Temporary override: force EV connected for validation.
+    realtime["ev_connected"] = True
+
+    ev_config = _build_ev_inputs(
+        connected=realtime.get("ev_connected"),
+        soc_pct=realtime.get("ev_soc"),
+        forecast_window_hours=forecast_window_hours,
+    )
+    if ev_config:
+        realtime["evs"] = [ev_config]
 
     return realtime
 
@@ -212,6 +244,79 @@ def _extract_price_forecasts(entry: dict[str, Any] | None, *, local_tz: tzinfo) 
             )
         )
     return cleaned
+
+
+def _build_battery_inputs(
+    *,
+    soc_pct: float | None,
+    soh_pct: float | None,
+) -> dict[str, float | str] | None:
+    if soc_pct is None:
+        return None
+    try:
+        soc_pct_f = float(soc_pct)
+    except (TypeError, ValueError):
+        return None
+    if not (0 <= soc_pct_f <= 100):
+        return None
+
+    capacity_kwh = DEFAULT_BATTERY_CAPACITY_KWH
+    if soh_pct is not None:
+        try:
+            soh_pct_f = float(soh_pct)
+        except (TypeError, ValueError):
+            soh_pct_f = None
+        if soh_pct_f is not None and 0 < soh_pct_f <= 120:
+            capacity_kwh = capacity_kwh * soh_pct_f / 100.0
+
+    soc_init_kwh = capacity_kwh * soc_pct_f / 100.0
+
+    return {
+        "name": "battery_main",
+        "soc_init_kwh": soc_init_kwh,
+        "soc_min_kwh": capacity_kwh * DEFAULT_BATTERY_SOC_MIN_FRAC,
+        "soc_max_kwh": capacity_kwh,
+        "soc_reserve_kwh": capacity_kwh * DEFAULT_BATTERY_SOC_RESERVE_FRAC,
+        "charge_efficiency": DEFAULT_BATTERY_CHARGE_EFFICIENCY,
+        "discharge_efficiency": DEFAULT_BATTERY_DISCHARGE_EFFICIENCY,
+        "charge_power_max_kw": DEFAULT_BATTERY_CHARGE_POWER_MAX_KW,
+        "discharge_power_max_kw": DEFAULT_BATTERY_DISCHARGE_POWER_MAX_KW,
+    }
+
+
+def _build_ev_inputs(
+    *,
+    connected: bool | None,
+    soc_pct: float | None,
+    forecast_window_hours: int,
+) -> dict[str, object] | None:
+    if connected is not True:
+        return None
+
+    horizon_steps = max(int(forecast_window_hours * 12), 1)
+    availability = [True] * horizon_steps
+
+    target_energy_kwh: float | None = None
+    if soc_pct is not None:
+        try:
+            soc_pct_f = float(soc_pct)
+        except (TypeError, ValueError):
+            soc_pct_f = None
+        if soc_pct_f is not None:
+            soc_pct_f = max(0.0, min(soc_pct_f, 100.0))
+            target_soc = DEFAULT_EV_TARGET_SOC_PCT
+            energy_needed = max(0.0, (target_soc - soc_pct_f) / 100.0) * DEFAULT_EV_CAPACITY_KWH
+            target_energy_kwh = energy_needed
+
+    return {
+        "name": "ev_main",
+        "max_power_kw": DEFAULT_EV_MAX_POWER_KW,
+        "min_power_kw": DEFAULT_EV_MIN_POWER_KW,
+        "availability": availability,
+        "target_energy_kwh": target_energy_kwh,
+        "value_per_kwh": DEFAULT_EV_VALUE_PER_KWH,
+        "switch_penalty": DEFAULT_EV_SWITCH_PENALTY,
+    }
 
 
 def _collect_pv_forecasts(

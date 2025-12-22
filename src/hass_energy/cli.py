@@ -60,8 +60,8 @@ def main(argv: list[str] | None = None) -> int:
     server = uvicorn.Server(
         config=uvicorn.Config(
             app,
-            host=app_config.host,
-            port=app_config.port,
+            host=app_config.server.host,
+            port=app_config.server.port,
             reload=False,
             log_level="info",
         )

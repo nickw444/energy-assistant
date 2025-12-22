@@ -28,7 +28,7 @@ def main(argv: list[str] | None = None) -> int:
 
     app_config = load_app_config(args.config)
     ha_client = HomeAssistantClient()
-    states_payload = ha_client.fetch_realtime_state(app_config.energy)
+    states_payload = ha_client.fetch_realtime_state(app_config.homeassistant)
     realtime_state = map_states_to_realtime(
         states_payload,
         forecast_window_hours=app_config.energy.forecast_window_hours,
