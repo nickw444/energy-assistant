@@ -15,16 +15,44 @@ Energy management system that pulls Home Assistant data, plans using MILP (stub 
 2) Install dependencies: `uv sync --all-extras --dev`.
 3) Create a YAML config (default `config.yaml`, validated via Pydantic):
    ```yaml
-   host: 0.0.0.0
-   port: 8000
-   data_dir: ./data
+   server:
+     host: 0.0.0.0
+     port: 8000
+     data_dir: ./data
+   homeassistant:
+     base_url: ""
+     token: null
+     verify_tls: true
    energy:
      forecast_window_hours: 24
      poll_interval_seconds: 300
-     home_assistant:
-       base_url: ""
-       token: null
-       verify_tls: true
+   plant:
+     grid:
+       max_import_kw: 0.0
+       max_export_kw: 0.0
+       realtime_grid_power:
+         type: home_assistant
+         entity: sensor.grid_power
+       realtime_price_import:
+         type: home_assistant
+         entity: sensor.price_import
+       realtime_price_export:
+         type: home_assistant
+         entity: sensor.price_export
+       price_import_forecast:
+         type: home_assistant
+         platform: amberelectric
+         entity: sensor.price_import_forecast
+       price_export_forecast:
+         type: home_assistant
+         platform: amberelectric
+         entity: sensor.price_export_forecast
+     load:
+       realtime_load_power:
+         type: home_assistant
+         entity: sensor.load_power
+     inverters: []
+   loads: []
    ```
 4) Run the API + worker (always on): `uv run hass-energy --config config.yaml`.
 
@@ -34,7 +62,7 @@ Energy management system that pulls Home Assistant data, plans using MILP (stub 
 - `POST /plan/trigger` – run a one-shot plan; returns stub payload while MILP solver is not yet wired.
 
 ### Configuration and data
-- A single YAML file (default `config.yaml`) holds server settings and energy configuration. It is read once at startup; the API does not write config—edit the YAML directly.
+- A single YAML file (default `config.yaml`) holds server settings, Home Assistant settings, plant definition, and energy settings. It is read once at startup; the API does not write config—edit the YAML directly.
 - Plans are written to `<data_dir>/plans/latest.json` from the config file.
 
 ### Development

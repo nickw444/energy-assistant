@@ -5,7 +5,7 @@ from typing import Any, cast
 
 import httpx
 
-from hass_energy.config import EnergySystemConfig
+from hass_energy.config import HomeAssistantConfig
 
 logger = logging.getLogger(__name__)
 
@@ -22,18 +22,18 @@ class HomeAssistantClient:
             headers["Authorization"] = f"Bearer {token}"
         return headers
 
-    def fetch_realtime_state(self, config: EnergySystemConfig) -> dict[str, Any]:
-        base_url = config.home_assistant.base_url.rstrip("/")
+    def fetch_realtime_state(self, config: HomeAssistantConfig) -> dict[str, Any]:
+        base_url = config.base_url.rstrip("/")
         if not base_url:
             logger.warning("Home Assistant base_url not configured; skipping realtime fetch")
             return {}
 
         url = f"{base_url}/api/states"
-        headers = self._build_headers(config.home_assistant.token)
+        headers = self._build_headers(config.token)
 
         try:
             with httpx.Client(
-                verify=config.home_assistant.verify_tls,
+                verify=config.verify_tls,
                 timeout=self._timeout,
             ) as client:
                 response = client.get(url, headers=headers)
@@ -43,18 +43,18 @@ class HomeAssistantClient:
             logger.error("Failed to fetch realtime data from Home Assistant: %s", exc)
             return {}
 
-    def fetch_history(self, config: EnergySystemConfig) -> list[dict[str, Any]]:
-        base_url = config.home_assistant.base_url.rstrip("/")
+    def fetch_history(self, config: HomeAssistantConfig) -> list[dict[str, Any]]:
+        base_url = config.base_url.rstrip("/")
         if not base_url:
             logger.warning("Home Assistant base_url not configured; skipping history fetch")
             return []
 
         url = f"{base_url}/api/history/period"
-        headers = self._build_headers(config.home_assistant.token)
+        headers = self._build_headers(config.token)
 
         try:
             with httpx.Client(
-                verify=config.home_assistant.verify_tls,
+                verify=config.verify_tls,
                 timeout=self._timeout,
             ) as client:
                 response = client.get(url, headers=headers)

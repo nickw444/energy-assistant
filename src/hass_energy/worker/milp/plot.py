@@ -48,6 +48,7 @@ def main(argv: list[str] | None = None) -> int:
     import_price: list[float] = []
     export_price: list[float] = []
     slot_costs: list[float] = []
+    cumulative_costs: list[float] = []
     battery_series: dict[str, dict[str, list[float]]] = {}
     ev_series: dict[str, list[float]] = {}
     deferrable_series: dict[str, list[int]] = {}
@@ -76,6 +77,7 @@ def main(argv: list[str] | None = None) -> int:
         import_price.append(float(slot_dict.get("import_price", 0.0)))
         export_price.append(float(slot_dict.get("export_price", 0.0)))
         slot_costs.append(float(slot_dict.get("slot_cost", 0.0)))
+        cumulative_costs.append(slot_costs[-1] + (cumulative_costs[-1] if cumulative_costs else 0.0))
 
         battery = slot_dict.get("battery")
         if isinstance(battery, dict):
@@ -117,7 +119,7 @@ def main(argv: list[str] | None = None) -> int:
         raise ValueError("No valid slots found to plot")
 
     plt_any = cast(Any, plt)
-    fig, axes = cast(tuple[Any, Any], plt_any.subplots(5, 1, sharex=True, figsize=(12, 13)))
+    fig, axes = cast(tuple[Any, Any], plt_any.subplots(6, 1, sharex=True, figsize=(12, 15)))
     axes_list = cast(list[Any], axes)
 
     ax_inputs = axes_list[0]
@@ -171,7 +173,13 @@ def main(argv: list[str] | None = None) -> int:
     ax_cost.legend(loc="upper right", ncol=2, fontsize=8)
     ax_cost.grid(True, alpha=0.3)
 
-    ax_soc.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M", tz=local_tz))
+    ax_cumulative = axes_list[5]
+    ax_cumulative.plot(times, cumulative_costs, label="cumulative_cost", color="tab:olive")
+    ax_cumulative.set_ylabel("Cumulative Cost (AUD)")
+    ax_cumulative.legend(loc="upper right", ncol=2, fontsize=8)
+    ax_cumulative.grid(True, alpha=0.3)
+
+    ax_cumulative.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M", tz=local_tz))
     fig.autofmt_xdate()
     fig.suptitle("MILP Plan Time-Series")
     fig.tight_layout()

@@ -24,6 +24,5 @@ class ModelCompiler:
             metadata={
                 "forecast_window_hours": config.forecast_window_hours,
                 "poll_interval_seconds": config.poll_interval_seconds,
-                "home_assistant_configured": bool(config.home_assistant.base_url),
             },
         )

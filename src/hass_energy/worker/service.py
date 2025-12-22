@@ -44,10 +44,10 @@ class Worker:
         logger.info("Worker stopped")
 
     def trigger_once(self) -> dict[str, Any]:
-        config = self.app_config.energy
-        state = self.home_assistant_client.fetch_realtime_state(config)
-        history = self.home_assistant_client.fetch_history(config)
-        plan = self._build_plan(config, state, history)
+        ha_config = self.app_config.homeassistant
+        state = self.home_assistant_client.fetch_realtime_state(ha_config)
+        history = self.home_assistant_client.fetch_history(ha_config)
+        plan = self._build_plan(self.app_config.energy, state, history)
         self._persist_plan(plan)
         return plan
 
@@ -68,7 +68,7 @@ class Worker:
         return self.planner.generate_plan(config, realtime_state, history)
 
     def _persist_plan(self, plan: dict[str, Any]) -> None:
-        plan_dir = self.app_config.data_dir / "plans"
+        plan_dir = self.app_config.server.data_dir / "plans"
         plan_dir.mkdir(parents=True, exist_ok=True)
         path = plan_dir / "latest.json"
         path.write_text(json_dumps(plan))
