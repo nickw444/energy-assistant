@@ -31,11 +31,12 @@ def main(argv: list[str] | None = None) -> int:
     states_payload = ha_client.fetch_realtime_state(app_config.homeassistant)
     realtime_state = map_states_to_realtime(
         states_payload,
-        forecast_window_hours=app_config.energy.forecast_window_hours,
+        interval_duration=app_config.ems.interval_duration,
+        num_intervals=app_config.ems.num_intervals,
     )
 
     planner = MilpPlanner()
-    plan = planner.generate_plan(app_config.energy, realtime_state=realtime_state, history=[])
+    plan = planner.generate_plan(app_config.ems, realtime_state=realtime_state, history=[])
     print(json.dumps(plan, indent=2))
     return 0
 

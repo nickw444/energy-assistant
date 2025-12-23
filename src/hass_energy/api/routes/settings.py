@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-from hass_energy.config import AppConfig, EnergySystemConfig
+from hass_energy.models.config import AppConfig, EmsConfig
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -19,11 +19,11 @@ def get_app_config(request: Request) -> AppConfig:
     return config
 
 
-@router.get("", response_model=EnergySystemConfig)
+@router.get("", response_model=EmsConfig)
 def read_settings(
     app_config: Annotated[AppConfig, Depends(get_app_config)],
-) -> EnergySystemConfig:
-    return app_config.energy
+) -> EmsConfig:
+    return app_config.ems
 
 
 @router.post("")

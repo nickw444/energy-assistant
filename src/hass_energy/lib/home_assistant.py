@@ -4,36 +4,43 @@ import logging
 from typing import Any, cast
 
 import httpx
+from pydantic import BaseModel, ConfigDict
 
-from hass_energy.config import HomeAssistantConfig
 
 logger = logging.getLogger(__name__)
+
+class HomeAssistantConfig(BaseModel):
+    base_url: str
+    token: str
+    verify_tls: bool = True
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class HomeAssistantClient:
     """Tiny client for Home Assistant API interactions."""
 
-    def __init__(self, *, timeout_seconds: float = 10.0) -> None:
+    def __init__(self, *, config: HomeAssistantConfig, timeout_seconds: float = 10.0) -> None:
+        self._config = config
         self._timeout = timeout_seconds
 
     def _build_headers(self, token: str | None) -> dict[str, str]:
         headers: dict[str, str] = {"Content-Type": "application/json"}
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
+        headers["Authorization"] = f"Bearer {token}"
         return headers
 
-    def fetch_realtime_state(self, config: HomeAssistantConfig) -> dict[str, Any]:
-        base_url = config.base_url.rstrip("/")
+    def fetch_realtime_state(self) -> list[Any]:
+        base_url = self._config.base_url.rstrip("/")
         if not base_url:
             logger.warning("Home Assistant base_url not configured; skipping realtime fetch")
-            return {}
+            return []
 
         url = f"{base_url}/api/states"
-        headers = self._build_headers(config.token)
+        headers = self._build_headers(self._config.token)
 
         try:
             with httpx.Client(
-                verify=config.verify_tls,
+                verify=self._config.verify_tls,
                 timeout=self._timeout,
             ) as client:
                 response = client.get(url, headers=headers)
@@ -41,20 +48,19 @@ class HomeAssistantClient:
                 return response.json()
         except httpx.HTTPError as exc:
             logger.error("Failed to fetch realtime data from Home Assistant: %s", exc)
-            return {}
+            return []
 
-    def fetch_history(self, config: HomeAssistantConfig) -> list[dict[str, Any]]:
-        base_url = config.base_url.rstrip("/")
+    def fetch_history(self) -> list[dict[str, Any]]:
+        base_url = self._config.base_url.rstrip("/")
         if not base_url:
             logger.warning("Home Assistant base_url not configured; skipping history fetch")
             return []
 
         url = f"{base_url}/api/history/period"
-        headers = self._build_headers(config.token)
-
+        headers = self._build_headers(self._config.token)
         try:
             with httpx.Client(
-                verify=config.verify_tls,
+                verify=self._config.verify_tls,
                 timeout=self._timeout,
             ) as client:
                 response = client.get(url, headers=headers)

@@ -7,7 +7,7 @@ from typing import Any, TypedDict, cast
 
 import pulp
 
-from hass_energy.config import EnergySystemConfig
+from hass_energy.models.config import EmsConfig
 from hass_energy.worker.milp.compiler import CompiledModel, ModelCompiler
 
 
@@ -93,7 +93,7 @@ class MilpPlanner:
 
     def generate_plan(
         self,
-        config: EnergySystemConfig,
+        config: EmsConfig,
         realtime_state: dict[str, Any],
         history: list[dict[str, Any]],
     ) -> dict[str, Any]:
@@ -194,7 +194,8 @@ class MilpPlanner:
             "slots": plan_slots,
             "metadata": {
                 "objective": "minimize_cost",
-                "forecast_window_hours": config.forecast_window_hours,
+                "interval_duration": config.interval_duration,
+                "num_intervals": config.num_intervals,
                 "realtime_sample_size": len(realtime_state),
                 "history_sample_size": len(history),
                 "compiled": compiled.metadata,
@@ -535,10 +536,10 @@ class MilpPlanner:
             load_forecast,
             pv_forecast,
         ) or datetime.now(UTC)
-        horizon_hours = max(int(config.forecast_window_hours), 1)
+        horizon_minutes = max(int(config.interval_duration * config.num_intervals), 1)
         step_minutes = 5
         step = timedelta(minutes=step_minutes)
-        total_steps = max(1, int(horizon_hours * 60 / step_minutes))
+        total_steps = max(1, int(horizon_minutes / step_minutes))
 
         import_timeline = self._build_timeline(import_forecast)
         export_timeline = self._build_timeline(export_forecast)

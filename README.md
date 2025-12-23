@@ -23,9 +23,9 @@ Energy management system that pulls Home Assistant data, plans using MILP (stub 
      base_url: ""
      token: null
      verify_tls: true
-   energy:
-     forecast_window_hours: 24
-     poll_interval_seconds: 300
+   ems:
+     interval_duration: 60
+     num_intervals: 24
    plant:
      grid:
        max_import_kw: 0.0
@@ -55,6 +55,7 @@ Energy management system that pulls Home Assistant data, plans using MILP (stub 
    loads: []
    ```
 4) Run the API + worker (always on): `uv run hass-energy --config config.yaml`.
+5) Run the MILP v2 CLI (wired but not implemented yet): `uv run hass-energy milp --config config.yaml`.
 
 ### API surface (initial)
 - `GET /health` – readiness probe.

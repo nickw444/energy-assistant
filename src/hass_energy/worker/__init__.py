@@ -1,6 +1,6 @@
 """Worker package for background planning and data collection."""
 
 from hass_energy.worker.milp import MilpPlanner
-from hass_energy.worker.service import Worker, json_dumps
+from hass_energy.worker.service import Worker
 
-__all__ = ["Worker", "json_dumps", "MilpPlanner"]
+__all__ = ["Worker", "MilpPlanner"]

@@ -5,45 +5,11 @@ from pathlib import Path
 from typing import Any, cast
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import ValidationError
 
-from hass_energy.models.loads import LoadConfig
-from hass_energy.models.plant import PlantConfig
+from hass_energy.models.config import AppConfig
 
 logger = logging.getLogger(__name__)
-
-
-class HomeAssistantConfig(BaseModel):
-    base_url: str = ""
-    token: str | None = None
-    verify_tls: bool = True
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class EnergySystemConfig(BaseModel):
-    forecast_window_hours: int = 24
-    poll_interval_seconds: int = 300
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class ServerConfig(BaseModel):
-    host: str = "0.0.0.0"
-    port: int = 8000
-    data_dir: Path = Field(default_factory=lambda: Path.cwd() / "data")
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class AppConfig(BaseModel):
-    server: ServerConfig = Field(default_factory=ServerConfig)
-    homeassistant: HomeAssistantConfig = Field(default_factory=HomeAssistantConfig)
-    energy: EnergySystemConfig = Field(default_factory=EnergySystemConfig)
-    plant: PlantConfig | None = None
-    loads: list[LoadConfig] = Field(default_factory=list)
-
-    model_config = ConfigDict(extra="forbid")
 
 
 def load_app_config(config_path: Path | None) -> AppConfig:

@@ -76,13 +76,19 @@ def main(argv: list[str] | None = None) -> int:
     states_payload = client.fetch_realtime_state(app_config.homeassistant)
     mapped = map_states_to_realtime(
         states_payload,
-        forecast_window_hours=app_config.energy.forecast_window_hours,
+        interval_duration=app_config.ems.interval_duration,
+        num_intervals=app_config.ems.num_intervals,
     )
     print(json.dumps(mapped, indent=2))
     return 0
 
 
-def map_states_to_realtime(states_payload: Any, *, forecast_window_hours: int) -> dict[str, Any]:
+def map_states_to_realtime(
+    states_payload: Any,
+    *,
+    interval_duration: int,
+    num_intervals: int,
+) -> dict[str, Any]:
     """Map a Home Assistant /api/states payload into planner realtime input."""
     if not isinstance(states_payload, list):
         return {}
@@ -159,9 +165,10 @@ def map_states_to_realtime(states_payload: Any, *, forecast_window_hours: int) -
     if battery_config:
         realtime["batteries"] = [battery_config]
 
+    horizon_minutes = interval_duration * num_intervals
     pv_forecasts = _collect_pv_forecasts(
         by_entity,
-        window_hours=forecast_window_hours,
+        window_minutes=horizon_minutes,
         now=datetime.now(UTC),
         local_tz=local_tz,
     )
@@ -179,7 +186,7 @@ def map_states_to_realtime(states_payload: Any, *, forecast_window_hours: int) -
     ev_config = _build_ev_inputs(
         connected=realtime.get("ev_connected"),
         soc_pct=realtime.get("ev_soc"),
-        forecast_window_hours=forecast_window_hours,
+        horizon_minutes=horizon_minutes,
     )
     if ev_config:
         realtime["evs"] = [ev_config]
@@ -288,12 +295,12 @@ def _build_ev_inputs(
     *,
     connected: bool | None,
     soc_pct: float | None,
-    forecast_window_hours: int,
+    horizon_minutes: int,
 ) -> dict[str, object] | None:
     if connected is not True:
         return None
 
-    horizon_steps = max(int(forecast_window_hours * 12), 1)
+    horizon_steps = max(int(horizon_minutes / 5), 1)
     availability = [True] * horizon_steps
 
     target_energy_kwh: float | None = None
@@ -322,13 +329,13 @@ def _build_ev_inputs(
 def _collect_pv_forecasts(
     by_entity: dict[str, dict[str, Any]],
     *,
-    window_hours: int,
+    window_minutes: int,
     now: datetime,
     local_tz: tzinfo,
 ) -> list[Forecast]:
     detailed = _extract_detailed_solcast_forecast(
         by_entity,
-        window_hours=window_hours,
+        window_minutes=window_minutes,
         now=now,
         local_tz=local_tz,
     )
@@ -339,7 +346,7 @@ def _collect_pv_forecasts(
 def _extract_detailed_solcast_forecast(
     by_entity: dict[str, dict[str, Any]],
     *,
-    window_hours: int,
+    window_minutes: int,
     now: datetime,
     local_tz: tzinfo,
 ) -> list[Forecast]:
@@ -369,7 +376,7 @@ def _extract_detailed_solcast_forecast(
 
     forecasts: list[Forecast] = []
 
-    cutoff = now + timedelta(hours=window_hours) if window_hours > 0 else None
+    cutoff = now + timedelta(minutes=window_minutes) if window_minutes > 0 else None
 
     for detailed, unit in detailed_sets:
         step = _infer_step(detailed)
