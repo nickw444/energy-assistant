@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from hass_energy.models.sources import HomeAssistantEntitySource
+from hass_energy.lib.source_resolver.hass_source import HomeAssistantBinarySensorEntitySource, HomeAssistantPercentageEntitySource, HomeAssistantPowerKwEntitySource
 
 
 class SocIncentive(BaseModel):
@@ -20,9 +20,9 @@ class ControlledEvLoad(BaseModel):
     min_power_kw: float = Field(ge=0)
     max_power_kw: float = Field(ge=0)
     energy_kwh: float = Field(ge=0)
-    connected: HomeAssistantEntitySource
-    realtime_power: HomeAssistantEntitySource
-    state_of_charge_pct: HomeAssistantEntitySource
+    connected: HomeAssistantBinarySensorEntitySource
+    realtime_power: HomeAssistantPowerKwEntitySource
+    state_of_charge_pct: HomeAssistantPercentageEntitySource
     soc_incentives: list[SocIncentive] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)

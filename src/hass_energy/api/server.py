@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from hass_energy.api.routes import plan, settings
-from hass_energy.config import AppConfig
+from hass_energy.models.config import AppConfig
 from hass_energy.worker import Worker
 
 logger = logging.getLogger(__name__)

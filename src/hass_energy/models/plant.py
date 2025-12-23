@@ -2,11 +2,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from hass_energy.models.sources import (
-    HomeAssistantEntitySource,
-    HomeAssistantSolcastForecastSource,
-    PriceForecastSource,
-)
+from hass_energy.lib.source_resolver.hass_source import HomeAssistantAmberElectricForecastSource, HomeAssistantCurrencyEntitySource, HomeAssistantPercentageEntitySource, HomeAssistantPowerKwEntitySource, HomeAssistantSolcastForecastSource
+
 
 class TimeWindow(BaseModel):
     start: str = Field(pattern=r"^\d{2}:\d{2}$")
@@ -14,30 +11,28 @@ class TimeWindow(BaseModel):
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-
 class GridConfig(BaseModel):
     max_import_kw: float = Field(ge=0)
     max_export_kw: float = Field(ge=0)
-    realtime_grid_power: HomeAssistantEntitySource
-    realtime_price_import: HomeAssistantEntitySource
-    realtime_price_export: HomeAssistantEntitySource
-    price_import_forecast: PriceForecastSource
-    price_export_forecast: PriceForecastSource
+    realtime_grid_power: HomeAssistantPowerKwEntitySource
+    realtime_price_import: HomeAssistantCurrencyEntitySource
+    realtime_price_export: HomeAssistantCurrencyEntitySource
+    price_import_forecast: HomeAssistantAmberElectricForecastSource
+    price_export_forecast: HomeAssistantAmberElectricForecastSource
     import_forbidden_periods: list[TimeWindow] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-
 class PlantLoadConfig(BaseModel):
-    realtime_load_power: HomeAssistantEntitySource
-    load_forecast: HomeAssistantEntitySource | None = None
+    realtime_load_power: HomeAssistantPowerKwEntitySource
+    # Stub for now: Need to work out how to retreive history states.
+    # load_forecast: HomeAssistantPowerKwEntitySource | None = None
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-
 class PvConfig(BaseModel):
     capacity_kw: float = Field(ge=0)
-    realtime_power: HomeAssistantEntitySource | None = None
+    realtime_power: HomeAssistantPowerKwEntitySource | None = None
     forecast: HomeAssistantSolcastForecastSource | None = None
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
@@ -50,8 +45,8 @@ class BatteryConfig(BaseModel):
     reserve_soc_pct: float = Field(ge=0, le=100)
     max_charge_kw: float | None = Field(default=None, ge=0)
     max_discharge_kw: float | None = Field(default=None, ge=0)
-    state_of_charge_pct: HomeAssistantEntitySource
-    realtime_power: HomeAssistantEntitySource
+    state_of_charge_pct: HomeAssistantPercentageEntitySource
+    realtime_power: HomeAssistantPowerKwEntitySource
     dc_efficiency_pct: float | None = Field(default=None, ge=0, le=100)
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
@@ -81,3 +76,4 @@ class PlantConfig(BaseModel):
     inverters: list[InverterConfig]
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
