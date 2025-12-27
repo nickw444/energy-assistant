@@ -17,7 +17,6 @@ from hass_energy.config import load_app_config
 from hass_energy.lib.home_assistant import HomeAssistantClient
 from hass_energy.lib.source_resolver.hass_provider import HassDataProvider
 from hass_energy.lib.source_resolver.resolver import ValueResolver
-from hass_energy.milp_v2 import MilpCompiler, MilpExecutor, MilpPlanner
 from hass_energy.plotting import plot_plan
 from hass_energy.worker import Worker
 
@@ -97,45 +96,6 @@ def cli(ctx: click.Context, config: Path, log_level: str) -> int | None:
         if worker:
             worker.stop()
     return 0
-
-
-@cli.command()
-@click.option("--plot/--no-plot", default=False, help="Show an interactive plot of the plan.")
-@click.pass_context
-def milp(ctx: click.Context, plot: bool) -> None:
-    ctx.ensure_object(dict)
-    config_path = ctx.obj["config"]
-    log_level = ctx.obj["log_level"]
-    _configure_logging(log_level)
-
-    app_config = load_app_config(config_path)
-    hass_client = HomeAssistantClient(config=app_config.homeassistant)
-    hass_data_provider = HassDataProvider(hass_client=hass_client)
-    resolver = ValueResolver(hass_data_provider=hass_data_provider)
-    resolver.mark_for_hydration(app_config)
-    resolver.hydrate()
-
-    planner = MilpPlanner(
-        compiler=MilpCompiler(),
-        executor=MilpExecutor(),
-    )
-    try:
-        plan = planner.generate_plan(
-            ems=app_config.ems,
-            plant=app_config.plant,
-            loads=app_config.loads,
-            value_resolver=resolver,
-        )
-    except NotImplementedError as exc:
-        raise click.ClickException(str(exc)) from exc
-
-    if plot:
-        try:
-            plot_plan(plan)
-        except ImportError as exc:
-            raise click.ClickException("matplotlib is required for --plot") from exc
-    click.echo(json.dumps(asdict(plan), indent=2))
-
 
 def _parse_log_level(level_str: str) -> int:
     normalized = level_str.strip().upper()

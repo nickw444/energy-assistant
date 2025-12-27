@@ -12,3 +12,6 @@ wheels/
 # Local config files
 data/
 config.dev.yaml
+
+
+._old
