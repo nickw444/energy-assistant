@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from hass_energy.lib.source_resolver.hass_provider import HassDataProvider
 from hass_energy.lib.source_resolver.hass_source import (
     HomeAssistantEntitySource,
+    HomeAssistantHistoryEntitySource,
     HomeAssistantMultiEntitySource,
 )
 from hass_energy.lib.source_resolver.sources import EntitySource
@@ -26,19 +27,41 @@ class ValueResolver:
         if isinstance(source, HomeAssistantEntitySource):
             # Simulate fetching data from Home Assistant
             state = self._hass_data_provider.get(source.entity)
-            return source.mapper(state)
+            try:
+                return source.mapper(state)
+            except Exception as exc:
+                raise ValueError(
+                    f"Failed to resolve Home Assistant entity {source.entity}: {exc}"
+                ) from exc
+        if isinstance(source, HomeAssistantHistoryEntitySource):
+            history = self._hass_data_provider.get_history(source.entity)
+            try:
+                return source.mapper(history)
+            except Exception as exc:
+                raise ValueError(
+                    f"Failed to resolve Home Assistant history for {source.entity}: {exc}"
+                ) from exc
         if isinstance(source, HomeAssistantMultiEntitySource):
             states = [
                 self._hass_data_provider.get(entity)
                 for entity in source.entities
             ]
-            return source.mapper(states)
+            try:
+                return source.mapper(states)
+            except Exception as exc:
+                entities = ", ".join(source.entities)
+                raise ValueError(
+                    f"Failed to resolve Home Assistant entities [{entities}]: {exc}"
+                ) from exc
 
         raise ValueError("Unsupported source type")
 
     def mark(self, source: EntitySource[object, object]) -> None:
         if isinstance(source, HomeAssistantEntitySource):
             self._hass_data_provider.mark(source.entity)
+            return
+        if isinstance(source, HomeAssistantHistoryEntitySource):
+            self._hass_data_provider.mark_history(source.entity, source.history_days)
             return
         if isinstance(source, HomeAssistantMultiEntitySource):
             for entity in source.entities:

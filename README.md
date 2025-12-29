@@ -56,6 +56,7 @@ Energy management system that pulls Home Assistant data, plans using MILP (stub 
    ```
 4) Run the API + worker (always on): `uv run hass-energy --config config.yaml`.
 5) Run the MILP v2 CLI (wired but not implemented yet): `uv run hass-energy milp --config config.yaml`.
+6) Inspect load forecast hydration: `uv run hass-energy --config config.yaml hydrate-load-forecast`.
 
 ### API surface (initial)
 - `GET /health` – readiness probe.

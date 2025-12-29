@@ -5,7 +5,7 @@ import inspect
 import json
 import logging
 import signal
-from dataclasses import asdict
+import traceback
 from pathlib import Path
 from threading import Event
 
@@ -14,8 +14,10 @@ import uvicorn
 
 from hass_energy.api.server import create_app
 from hass_energy.config import load_app_config
+from hass_energy.ems.solver import solve_once
 from hass_energy.lib.home_assistant import HomeAssistantClient
 from hass_energy.lib.source_resolver.hass_provider import HassDataProvider
+from hass_energy.lib.source_resolver.models import PowerForecastInterval
 from hass_energy.lib.source_resolver.resolver import ValueResolver
 from hass_energy.plotting import plot_plan
 from hass_energy.worker import Worker
@@ -97,6 +99,137 @@ def cli(ctx: click.Context, config: Path, log_level: str) -> int | None:
             worker.stop()
     return 0
 
+
+@cli.group("ems")
+@click.pass_context
+def ems(ctx: click.Context) -> None:
+    """EMS MILP playground commands."""
+    _ = ctx
+
+
+@ems.command("solve")
+@click.option(
+    "--output",
+    type=click.Path(path_type=Path, dir_okay=False),
+    default=None,
+    help="Write the extracted plan JSON to this path (defaults to data_dir/ems_plan.json).",
+)
+@click.option(
+    "--stdout/--no-stdout",
+    default=False,
+    show_default=True,
+    help="Also print the plan JSON to stdout.",
+)
+@click.option(
+    "--plot/--no-plot",
+    default=True,
+    show_default=True,
+    help="Plot the extracted plan.",
+)
+@click.option(
+    "--plot-output",
+    type=click.Path(path_type=Path, dir_okay=False),
+    default=None,
+    help="Save the plot to this path instead of showing it.",
+)
+@click.option(
+    "--solver-msg/--no-solver-msg",
+    default=False,
+    show_default=True,
+    help="Enable solver output (CBC).",
+)
+@click.pass_context
+def ems_solve(
+    ctx: click.Context,
+    output: Path | None,
+    stdout: bool,
+    plot: bool,
+    plot_output: Path | None,
+    solver_msg: bool,
+) -> None:
+    _configure_logging(str(ctx.obj.get("log_level", "INFO")))
+    config_path = Path(ctx.obj.get("config", Path("config.yaml")))
+    app_config = load_app_config(config_path)
+
+    if output is None:
+        output = app_config.server.data_dir / "ems_plan.json"
+    output.parent.mkdir(parents=True, exist_ok=True)
+
+    if plot_output is not None:
+        plot_output.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        hass_client = HomeAssistantClient(config=app_config.homeassistant)
+        hass_data_provider = HassDataProvider(hass_client=hass_client)
+
+        resolver = ValueResolver(hass_data_provider=hass_data_provider)
+        resolver.mark_for_hydration(app_config)
+        resolver.hydrate()
+
+        plan = solve_once(
+            app_config,
+            resolver=resolver,
+            solver_msg=solver_msg,
+        )
+    except Exception as exc:
+        raise click.ClickException(traceback.format_exc()) from exc
+
+    output.write_text(json.dumps(plan, indent=2, sort_keys=True))
+    click.echo(f"Wrote EMS plan to {output}")
+
+    if stdout:
+        click.echo(json.dumps(plan, indent=2, sort_keys=True))
+    if plot:
+        plot_plan(plan, title="EMS Plan", output=plot_output)
+
+
+@cli.command("hydrate-load-forecast")
+@click.option(
+    "--limit",
+    type=int,
+    default=5,
+    show_default=True,
+    help="Number of intervals to print for inspection.",
+)
+@click.pass_context
+def hydrate_load_forecast(ctx: click.Context, limit: int) -> None:
+    """Hydrate config and resolve the load forecast source for inspection."""
+    _configure_logging(str(ctx.obj.get("log_level", "INFO")))
+    config_path = Path(ctx.obj.get("config", Path("config.yaml")))
+    app_config = load_app_config(config_path)
+
+    load_forecast = app_config.plant.load.forecast
+
+    try:
+        hass_client = HomeAssistantClient(config=app_config.homeassistant)
+        hass_data_provider = HassDataProvider(hass_client=hass_client)
+
+        resolver = ValueResolver(hass_data_provider=hass_data_provider)
+        resolver.mark_for_hydration(app_config)
+        resolver.hydrate()
+
+        resolved = resolver.resolve(load_forecast)
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    if not isinstance(resolved, list) or not all(
+        isinstance(item, PowerForecastInterval) for item in resolved
+    ):
+        raise click.ClickException(
+            "Load forecast source did not resolve to list[PowerForecastInterval]."
+        )
+
+    sorted_intervals = sorted(resolved, key=lambda interval: interval.start)
+    entity = getattr(load_forecast, "entity", "<unknown>")
+    click.echo(f"Resolved {len(sorted_intervals)} intervals for {entity}")
+
+    show = sorted_intervals[: max(limit, 0)]
+    for interval in show:
+        click.echo(
+            f"{interval.start.isoformat()} -> {interval.end.isoformat()} = "
+            f"{interval.value:.3f} kW"
+        )
+
 def _parse_log_level(level_str: str) -> int:
     normalized = level_str.strip().upper()
     mapping = {
@@ -118,8 +251,6 @@ def _configure_logging(level_str: str) -> None:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
     logging.getLogger("hass_energy").setLevel(log_level)
-
-
 
 
 if __name__ == "__main__":

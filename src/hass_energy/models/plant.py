@@ -1,8 +1,17 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from hass_energy.lib.source_resolver.hass_source import HomeAssistantAmberElectricForecastSource, HomeAssistantCurrencyEntitySource, HomeAssistantPercentageEntitySource, HomeAssistantPowerKwEntitySource, HomeAssistantSolcastForecastSource
+from hass_energy.lib.source_resolver.hass_source import (
+    HomeAssistantAmberElectricForecastSource,
+    HomeAssistantCurrencyEntitySource,
+    HomeAssistantHistoricalAverageForecastSource,
+    HomeAssistantPercentageEntitySource,
+    HomeAssistantPowerKwEntitySource,
+    HomeAssistantSolcastForecastSource,
+)
 
 
 class TimeWindow(BaseModel):
@@ -10,6 +19,7 @@ class TimeWindow(BaseModel):
     end: str = Field(pattern=r"^\d{2}:\d{2}$")
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
 
 class GridConfig(BaseModel):
     max_import_kw: float = Field(ge=0)
@@ -23,17 +33,17 @@ class GridConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
+
 class PlantLoadConfig(BaseModel):
     realtime_load_power: HomeAssistantPowerKwEntitySource
-    # Stub for now: Need to work out how to retreive history states.
-    # load_forecast: HomeAssistantPowerKwEntitySource | None = None
+    forecast: HomeAssistantHistoricalAverageForecastSource
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
+
 class PvConfig(BaseModel):
-    capacity_kw: float = Field(ge=0)
     realtime_power: HomeAssistantPowerKwEntitySource | None = None
-    forecast: HomeAssistantSolcastForecastSource | None = None
+    forecast: HomeAssistantSolcastForecastSource
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -52,7 +62,7 @@ class BatteryConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     @model_validator(mode="after")
-    def _validate_soc_bounds(self) -> "BatteryConfig":
+    def _validate_soc_bounds(self) -> BatteryConfig:
         if self.min_soc_pct > self.max_soc_pct:
             raise ValueError("min_soc_pct must be <= max_soc_pct")
         if self.reserve_soc_pct > self.max_soc_pct:
@@ -64,8 +74,9 @@ class InverterConfig(BaseModel):
     name: str = Field(min_length=1)
     peak_power_kw: float = Field(ge=0)
     ac_efficiency_pct: float = Field(ge=0, le=100)
-    pv: list[PvConfig]
-    battery: list[BatteryConfig] = Field(default_factory=list)
+    curtailment: Literal["load-aware", "binary"] | None = None
+    pv: PvConfig
+    battery: BatteryConfig | None = None
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -76,4 +87,3 @@ class PlantConfig(BaseModel):
     inverters: list[InverterConfig]
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-
