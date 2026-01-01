@@ -24,6 +24,16 @@ def required_float(value: str | int | float | None) -> float:
 def required_bool(value: str | int | float | None) -> bool:
     if value is None:
         raise ValueError("Value is required and cannot be None")
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"on", "true", "1", "yes"}:
+            return True
+        if normalized in {"off", "false", "0", "no"}:
+            return False
     return bool(value)
 
 def _normalize_power_kw(value: float, unit: str | None) -> float:

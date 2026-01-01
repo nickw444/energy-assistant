@@ -37,13 +37,53 @@ def plot_plan(
     pv_available_kw = _series(slots, "pv_available_kw")
     pv_inverters = _series_map(slots, "pv_inverters")
     pv_inverters_available = _series_map(slots, "pv_inverters_available")
+    inverter_ac_net = _series_map(slots, "inverter_ac_net_kw")
+    batt_charge = _series_map(slots, "battery_charge_kw")
+    batt_discharge = _series_map(slots, "battery_discharge_kw")
+    batt_net: dict[str, list[float]] = {}
+    for name, discharge_series in batt_discharge.items():
+        charge_series = batt_charge.get(name)
+        if charge_series is None:
+            continue
+        batt_net[name] = [
+            discharge - charge
+            for discharge, charge in zip(discharge_series, charge_series, strict=False)
+        ]
+    for name, charge_series in batt_charge.items():
+        if name in batt_net:
+            continue
+        discharge_series = batt_discharge.get(name)
+        if discharge_series is None:
+            continue
+        batt_net[name] = [
+            discharge - charge
+            for discharge, charge in zip(discharge_series, charge_series, strict=False)
+        ]
+    batt_soc = _series_map(slots, "battery_soc_kwh")
     load_kw = _series(slots, "load_kw")
+    ev_charge = _series_map(slots, "ev_charge_kw")
+    ev_soc = _series_map(slots, "ev_soc_kwh")
+    batt_capacity = _extract_top_level_map(plan, "battery_capacity_kwh")
+    ev_capacity = _extract_top_level_map(plan, "ev_capacity_kwh")
+    batt_soc_pct = _soc_percent_series(batt_soc, batt_capacity)
+    ev_soc_pct = _soc_percent_series(ev_soc, ev_capacity)
+    if batt_soc_pct or ev_soc_pct:
+        soc_unit = "%"
+        batt_soc_plot = batt_soc_pct
+        ev_soc_plot = ev_soc_pct
+    else:
+        soc_unit = "kWh"
+        batt_soc_plot = batt_soc
+        ev_soc_plot = ev_soc
     price_import = _series(slots, "price_import", "price_import_kw", "price_import_kwh")
     price_export = _series(slots, "price_export", "price_export_kw", "price_export_kwh")
     segment_cost = _series(slots, "segment_cost", "slot_cost", "cost_segment")
     cumulative_cost = _series(slots, "cumulative_cost", "total_cost")
     has_price = _has_any(price_import) or _has_any(price_export)
     has_cost = _has_any(segment_cost) or _has_any(cumulative_cost)
+    has_soc = any(_has_any(series) for series in batt_soc_plot.values()) or any(
+        _has_any(series) for series in ev_soc_plot.values()
+    )
 
     if not has_cost and (_has_any(price_import) or _has_any(price_export)):
         durations = [float(slot.get("duration_h", 0.0)) for slot in slots]
@@ -61,7 +101,16 @@ def plot_plan(
         cumulative_cost = _cumulative_sum(segment_cost)
         has_cost = _has_any(segment_cost) or _has_any(cumulative_cost)
 
-    if has_price and has_cost:
+    if has_price and has_cost and has_soc:
+        fig, (ax, ax_price, ax_cost, ax_soc) = plt.subplots(
+            4,
+            1,
+            figsize=(12, 12),
+            sharex=True,
+            gridspec_kw={"height_ratios": [3, 1, 1, 1]},
+        )
+        ax_cost_right = None
+    elif has_price and has_cost:
         fig, (ax, ax_price, ax_cost) = plt.subplots(
             3,
             1,
@@ -69,6 +118,27 @@ def plot_plan(
             sharex=True,
             gridspec_kw={"height_ratios": [3, 1, 1]},
         )
+        ax_soc = None
+        ax_cost_right = None
+    elif has_price and has_soc:
+        fig, (ax, ax_price, ax_soc) = plt.subplots(
+            3,
+            1,
+            figsize=(12, 10),
+            sharex=True,
+            gridspec_kw={"height_ratios": [3, 1, 1]},
+        )
+        ax_cost = None
+        ax_cost_right = None
+    elif has_cost and has_soc:
+        fig, (ax, ax_cost, ax_soc) = plt.subplots(
+            3,
+            1,
+            figsize=(12, 10),
+            sharex=True,
+            gridspec_kw={"height_ratios": [3, 1, 1]},
+        )
+        ax_price = None
         ax_cost_right = None
     elif has_price:
         fig, (ax, ax_price) = plt.subplots(
@@ -79,6 +149,7 @@ def plot_plan(
             gridspec_kw={"height_ratios": [3, 1]},
         )
         ax_cost = None
+        ax_soc = None
         ax_cost_right = None
     elif has_cost:
         fig, (ax, ax_cost) = plt.subplots(
@@ -89,11 +160,24 @@ def plot_plan(
             gridspec_kw={"height_ratios": [3, 1]},
         )
         ax_price = None
+        ax_soc = None
+        ax_cost_right = None
+    elif has_soc:
+        fig, (ax, ax_soc) = plt.subplots(
+            2,
+            1,
+            figsize=(12, 8),
+            sharex=True,
+            gridspec_kw={"height_ratios": [3, 1]},
+        )
+        ax_price = None
+        ax_cost = None
         ax_cost_right = None
     else:
         fig, ax = plt.subplots(figsize=(12, 6))
         ax_price = None
         ax_cost = None
+        ax_soc = None
         ax_cost_right = None
 
     lines: list[Any] = []
@@ -122,6 +206,22 @@ def plot_plan(
                 linestyle=":",
             )
             lines.append(line)
+    for name, series in batt_net.items():
+        if _has_any(series):
+            (line,) = ax.plot(times, series, label=f"batt_{name}_net_kw", linestyle=":")
+            lines.append(line)
+    for name, series in inverter_ac_net.items():
+        if _has_any(series):
+            (line,) = ax.plot(times, series, label=f"inv_{name}_ac_net_kw", linestyle="-.")
+            lines.append(line)
+    for name, series in ev_charge.items():
+        (line,) = ax.plot(
+            times,
+            series,
+            label=f"ev_{name}_charge_kw",
+            linestyle="--",
+        )
+        lines.append(line)
     if _has_any(load_kw):
         (line,) = ax.plot(times, load_kw, label="load_kw")
         lines.append(line)
@@ -182,6 +282,32 @@ def plot_plan(
             loc="best",
         )
 
+    soc_lines: list[Any] = []
+    if ax_soc is not None:
+        soc_min = 0.0
+        soc_max = 0.0
+        soc_suffix = "pct" if soc_unit == "%" else "kwh"
+        for name, series in batt_soc_plot.items():
+            if _has_any(series):
+                (line,) = ax_soc.plot(times, series, label=f"batt_{name}_soc_{soc_suffix}")
+                soc_lines.append(line)
+                soc_min = min(soc_min, min(series))
+                soc_max = max(soc_max, max(series))
+        for name, series in ev_soc_plot.items():
+            if _has_any(series):
+                (line,) = ax_soc.plot(times, series, label=f"ev_{name}_soc_{soc_suffix}")
+                soc_lines.append(line)
+                soc_min = min(soc_min, min(series))
+                soc_max = max(soc_max, max(series))
+        if soc_lines and soc_max > soc_min:
+            if soc_unit == "%":
+                ax_soc.set_ylim(0.0, max(100.0, soc_max * 1.05))
+            else:
+                ax_soc.set_ylim(0.0, soc_max * 1.05)
+        ax_soc.set_ylabel(soc_unit)
+        ax_soc.legend(loc="best")
+        ax_soc.grid(True, alpha=0.3)
+
     ax.set_title(title)
     ax.set_xlabel("Time")
     ax.set_ylabel("kW")
@@ -212,6 +338,8 @@ def plot_plan(
             unit="$",
             allowed_axes={ax_cost, ax_cost_right},
         )
+    if ax_soc is not None and soc_lines:
+        _enable_hover(ax_soc, soc_lines, times, unit=soc_unit)
 
     _enable_line_toggle(fig)
     plt.show()
@@ -285,6 +413,35 @@ def _series_map(
         if len(values) < len(slots):
             values.extend([0.0] * (len(slots) - len(values)))
     return series
+
+
+def _extract_top_level_map(plan: object, key: str) -> dict[str, float]:
+    if isinstance(plan, dict):
+        value = plan.get(key)
+    else:
+        value = getattr(plan, key, None)
+    if not isinstance(value, dict):
+        return {}
+    parsed: dict[str, float] = {}
+    for name, raw in value.items():
+        try:
+            parsed[str(name)] = float(raw)
+        except (TypeError, ValueError):
+            parsed[str(name)] = 0.0
+    return parsed
+
+
+def _soc_percent_series(
+    soc_series: dict[str, list[float]],
+    capacities: dict[str, float],
+) -> dict[str, list[float]]:
+    percent: dict[str, list[float]] = {}
+    for name, series in soc_series.items():
+        capacity = float(capacities.get(name, 0.0))
+        if capacity <= 0:
+            continue
+        percent[name] = [(value / capacity) * 100.0 for value in series]
+    return percent
 
 
 def _has_any(values: Iterable[float]) -> bool:

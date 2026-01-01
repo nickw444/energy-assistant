@@ -51,6 +51,12 @@ class HassDataProvider:
                 item for item in history if isinstance(item, dict)
             ]
 
+    def snapshot(self) -> dict[str, object]:
+        return {
+            "states": self._data,
+            "history": self._history_data,
+        }
+
     def get(self, entity_id: str) -> HomeAssistantStateDict:
         # Simulate fetching data from Home Assistant
         return self._data[entity_id]

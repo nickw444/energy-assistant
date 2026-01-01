@@ -1,3 +1,5 @@
+Deprecated: the canonical EMS design now lives in `src/hass_energy/ems/AGENTS.md`.
+
 Here’s a full end-to-end design doc for the EMS MILP system based on everything we’ve discussed. I’ll keep it practical and implementation-oriented, with code snippets you can drop into a real codebase.
 
 ---
@@ -90,6 +92,7 @@ homeassistant:
   base_url: "https://hass.nickwhyte.com"
   token: "YOUR_LONG_LIVED_TOKEN"
   verify_tls: true
+  timeout_seconds: 30
 
 ems:
   interval_duration: 5

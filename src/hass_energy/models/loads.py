@@ -4,7 +4,12 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from hass_energy.lib.source_resolver.hass_source import HomeAssistantBinarySensorEntitySource, HomeAssistantPercentageEntitySource, HomeAssistantPowerKwEntitySource
+from hass_energy.lib.source_resolver.hass_source import (
+    HomeAssistantBinarySensorEntitySource,
+    HomeAssistantPercentageEntitySource,
+    HomeAssistantPowerKwEntitySource,
+)
+from hass_energy.models.plant import TimeWindow
 
 
 class SocIncentive(BaseModel):
@@ -21,6 +26,12 @@ class ControlledEvLoad(BaseModel):
     max_power_kw: float = Field(ge=0)
     energy_kwh: float = Field(ge=0)
     connected: HomeAssistantBinarySensorEntitySource
+    # Combined availability signal (true when the EV can be connected).
+    can_connect: HomeAssistantBinarySensorEntitySource | None = None
+    # Time windows when connecting the EV is permitted (local time).
+    allowed_connect_times: list[TimeWindow] = Field(default_factory=list)
+    # Grace period from "now" before assuming the EV can be connected.
+    connect_grace_minutes: int = Field(default=0, ge=0)
     realtime_power: HomeAssistantPowerKwEntitySource
     state_of_charge_pct: HomeAssistantPercentageEntitySource
     soc_incentives: list[SocIncentive] = Field(default_factory=list)

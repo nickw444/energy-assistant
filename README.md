@@ -23,6 +23,7 @@ Energy management system that pulls Home Assistant data, plans using MILP (stub 
      base_url: ""
      token: null
      verify_tls: true
+     timeout_seconds: 30
    ems:
      interval_duration: 60
      num_intervals: 24

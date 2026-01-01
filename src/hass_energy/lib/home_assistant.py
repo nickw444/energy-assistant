@@ -15,6 +15,7 @@ class HomeAssistantConfig(BaseModel):
     base_url: str
     token: str
     verify_tls: bool = True
+    timeout_seconds: float = 30.0
 
     model_config = ConfigDict(extra="forbid")
 
@@ -22,9 +23,9 @@ class HomeAssistantConfig(BaseModel):
 class HomeAssistantClient:
     """Tiny client for Home Assistant API interactions."""
 
-    def __init__(self, *, config: HomeAssistantConfig, timeout_seconds: float = 10.0) -> None:
+    def __init__(self, *, config: HomeAssistantConfig) -> None:
         self._config = config
-        self._timeout = timeout_seconds
+        self._timeout = config.timeout_seconds
 
     def _build_headers(self, token: str | None) -> dict[str, str]:
         headers: dict[str, str] = {"Content-Type": "application/json"}
@@ -55,7 +56,7 @@ class HomeAssistantClient:
                 return response.json()
         except httpx.HTTPError as exc:
             logger.error("Failed to fetch realtime data from Home Assistant: %s", exc)
-            return []
+            raise
 
     def fetch_history(
         self,
@@ -102,7 +103,7 @@ class HomeAssistantClient:
                 return []
         except httpx.HTTPError as exc:
             logger.error("Failed to fetch history data from Home Assistant: %s", exc)
-            return []
+            raise
 
     def fetch_entity_history(
         self,
