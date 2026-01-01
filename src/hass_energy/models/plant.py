@@ -50,6 +50,8 @@ class PvConfig(BaseModel):
 
 class BatteryConfig(BaseModel):
     capacity_kwh: float = Field(ge=0)
+    storage_efficiency_pct: float = Field(gt=0, le=100)
+    throughput_cost_per_kwh: float = Field(default=0.0, ge=0)
     min_soc_pct: float = Field(ge=0, le=100)
     max_soc_pct: float = Field(ge=0, le=100)
     reserve_soc_pct: float = Field(ge=0, le=100)
@@ -73,7 +75,6 @@ class BatteryConfig(BaseModel):
 class InverterConfig(BaseModel):
     name: str = Field(min_length=1)
     peak_power_kw: float = Field(ge=0)
-    ac_efficiency_pct: float = Field(ge=0, le=100)
     curtailment: Literal["load-aware", "binary"] | None = None
     pv: PvConfig
     battery: BatteryConfig | None = None

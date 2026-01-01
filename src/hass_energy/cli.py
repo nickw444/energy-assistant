@@ -6,6 +6,7 @@ import json
 import logging
 import signal
 import traceback
+from datetime import datetime
 from pathlib import Path
 from threading import Event
 
@@ -166,6 +167,7 @@ def ems_solve(
         resolver.mark_for_hydration(app_config)
         resolver.hydrate()
 
+        click.echo("Solving EMS MILP...")
         plan = solve_once(
             app_config,
             resolver=resolver,
@@ -181,6 +183,49 @@ def ems_solve(
         click.echo(json.dumps(plan, indent=2, sort_keys=True))
     if plot:
         plot_plan(plan, title="EMS Plan", output=plot_output)
+
+
+@ems.command("record-fixture")
+@click.option(
+    "--output",
+    type=click.Path(path_type=Path, dir_okay=False),
+    default=None,
+    help="Write the fixture JSON to this path.",
+)
+@click.option(
+    "--name",
+    type=str,
+    default=None,
+    help="Fixture name (saved under tests/fixtures/ems/<name>.json).",
+)
+@click.pass_context
+def ems_record_fixture(ctx: click.Context, output: Path | None, name: str | None) -> None:
+    """Record a Home Assistant fixture for EMS tests."""
+    _configure_logging(str(ctx.obj.get("log_level", "INFO")))
+    config_path = Path(ctx.obj.get("config", Path("config.yaml")))
+    app_config = load_app_config(config_path)
+
+    if output is None:
+        fixture_dir = Path("tests") / "fixtures" / "ems"
+        filename = f"{name}.json" if name else "ems_fixture.json"
+        output = fixture_dir / filename
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        hass_client = HomeAssistantClient(config=app_config.homeassistant)
+        hass_data_provider = HassDataProvider(hass_client=hass_client)
+
+        resolver = ValueResolver(hass_data_provider=hass_data_provider)
+        resolver.mark_for_hydration(app_config)
+        resolver.hydrate()
+    except Exception as exc:
+        raise click.ClickException(traceback.format_exc()) from exc
+
+    fixture = hass_data_provider.snapshot()
+    fixture["captured_at"] = datetime.now().astimezone().isoformat()
+    output.write_text(json.dumps(fixture, indent=2, sort_keys=True))
+    click.echo(f"Wrote EMS fixture to {output}")
 
 
 @cli.command("hydrate-load-forecast")

@@ -25,6 +25,7 @@ class Horizon:
     interval_minutes: int
     num_intervals: int
     slots: list[HorizonSlot]
+    # TODO(NW): We should pull this out of horizon, since it's an input parameter.
     import_allowed: list[bool]
 
     @property

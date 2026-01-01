@@ -11,21 +11,12 @@
 - CLI `hass-energy milp` now wires the MILP v2 planner (compiler + executor); it currently fails until those phases are implemented.
 - MILP v2 slotting uses `EmsConfig.interval_duration` and `EmsConfig.num_intervals` to align forecast slots to the current block start.
 - Plotting helpers live in `src/hass_energy/plotting/` and are shared by CLI.
-- The MILP planner currently covers core grid/PV/load balance plus battery SOC (charge/discharge limits, efficiencies, reserve bounds); EV/deferrable constraints are still deferred for incremental rebuilds.
-- The MILP planner supports EV charging with availability masks, optional target energy caps, and optional value per kWh in the objective; deferrable loads still deferred.
-- Inverter export throughput is capped (PV after curtailment + battery discharge) using `inverter_export_limit_kw` from realtime inputs, defaulting to 10 kW.
-- Inverter AC↔DC efficiency defaults to 95% each way and is applied on top of battery charge/discharge efficiencies (override via `inverter_charge_efficiency` / `inverter_discharge_efficiency` in realtime inputs).
-- Import/export are disabled above/below price limits (default cap 0.50 AUD/kWh for import and floor 0.20 AUD/kWh for export; override with `import_price_cap` / `export_price_floor` in realtime inputs).
 - A lightweight plan checker lives at `hass_energy/worker/milp/checker.py` with pytest coverage in `tests/`.
-- Builder/EMS tests should treat the solver as a black box (inputs/outputs only); avoid testing private helpers.
 - `hass_energy/worker/milp/ha_dump.py` now emits a single-battery stub in realtime inputs when `battery_soc` is available (capacity/limits are currently constants).
 - `hass_energy/worker/milp/ha_dump.py` emits a simple EV stub when `ev_connected` is true (defaults for capacity, target SOC, max power, value-per-kWh, min power, and switch penalty).
-- Load forecast inputs use the historical average source with an explicit `unit` and `interval_duration` that should match `ems.interval_duration` (aligned to the top of the hour).
-- Inverter configs can enable curtailment with `curtailment: load-aware | binary | null`; load-aware blocks export while allowing PV to meet load, binary is an on/off switch for inverter output.
-- When `price_export` is exactly 0.0, the objective uses a tiny positive export bonus to avoid arbitrary curtailment.
 - Tests should mirror the `src/hass_energy` package structure under `tests/` (e.g., `tests/hass_energy/ems/`).
-- Keep resolved series separate from decision variables (ModelSeries vs ModelVars) for clarity.
 - Planner now consumes a resolved payload (no source models). Resolved schemas live in `src/hass_energy/models/resolved.py`; resolution scaffolding/registry is under `src/hass_energy/lib/resolution/` for two-pass fetch→transform in the future.
+- EMS-specific guidance lives in `src/hass_energy/ems/AGENTS.md`.
 - `ConfigMapper` (`src/hass_energy/lib/resolver/__init__.py`) offers a recursive walk utility that calls a visitor for side effects and allows halting recursion by returning `False`.
 
 ## Continuous learning

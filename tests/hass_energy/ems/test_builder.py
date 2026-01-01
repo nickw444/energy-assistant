@@ -99,7 +99,6 @@ def _make_config(
             InverterConfig(
                 name="Inv",
                 peak_power_kw=5.0,
-                ac_efficiency_pct=95.0,
                 curtailment=None,
                 pv=PvConfig(
                     realtime_power=None,
@@ -306,7 +305,6 @@ def test_pv_forecast_reused_per_inverter() -> None:
         InverterConfig(
             name="A",
             peak_power_kw=5.0,
-            ac_efficiency_pct=95.0,
             curtailment=None,
             pv=PvConfig(
                 realtime_power=None,
@@ -321,7 +319,6 @@ def test_pv_forecast_reused_per_inverter() -> None:
         InverterConfig(
             name="B",
             peak_power_kw=5.0,
-            ac_efficiency_pct=95.0,
             curtailment=None,
             pv=PvConfig(
                 realtime_power=None,
@@ -389,7 +386,6 @@ def test_load_aware_curtailment_blocks_export() -> None:
     inverter = InverterConfig(
         name="Curtail",
         peak_power_kw=5.0,
-        ac_efficiency_pct=95.0,
         curtailment="load-aware",
         pv=PvConfig(
             realtime_power=None,
@@ -434,7 +430,6 @@ def test_binary_curtailment_prefers_import_over_negative_export() -> None:
     inverter = InverterConfig(
         name="Curtail",
         peak_power_kw=5.0,
-        ac_efficiency_pct=95.0,
         curtailment="binary",
         pv=PvConfig(
             realtime_power=None,
