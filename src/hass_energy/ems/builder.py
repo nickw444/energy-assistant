@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 import pulp
@@ -19,117 +18,84 @@ _EV_RAMP_PENALTY_COST = 1e-4
 _EV_ANCHOR_PENALTY_COST = 0.05
 
 
-def _new_var_dict() -> dict[int, pulp.LpVariable]:
-    return {}
-
-
-def _new_inverter_var_dict() -> dict[str, dict[int, pulp.LpVariable]]:
-    return {}
-
-
-def _new_load_var_dict() -> dict[str, dict[int, pulp.LpVariable]]:
-    return {}
-
-
-def _new_load_scalar_dict() -> dict[str, pulp.LpVariable]:
-    return {}
-
-
-def _new_ev_incentive_dict() -> dict[str, list[tuple[pulp.LpVariable, float]]]:
-    return {}
-
-
-def _new_bool_dict() -> dict[str, bool]:
-    return {}
-
-
-def _new_float_dict() -> dict[str, float]:
-    return {}
-
-
-def _new_float_list() -> list[float]:
-    return []
-
-
-def _new_bool_list() -> list[bool]:
-    return []
+@dataclass(slots=True)
+class GridBuild:
+    # Grid import decision variables per timestep t in Horizon.T.
+    P_import: dict[int, pulp.LpVariable]
+    # Grid export decision variables per timestep t in Horizon.T.
+    P_export: dict[int, pulp.LpVariable]
+    # Import violation slack per timestep t (used when imports are forbidden).
+    P_import_violation_kw: dict[int, pulp.LpVariable]
+    # Import price series aligned to Horizon.T (slot 0 may be realtime override).
+    price_import: list[float]
+    # Export price series aligned to Horizon.T (slot 0 may be realtime override).
+    price_export: list[float]
+    # Import permission flags aligned to Horizon.T from forbidden time windows.
+    import_allowed: list[bool]
 
 
 @dataclass(slots=True)
-class ModelVars:
-    # Grid import decision variables (kW) keyed by slot index.
-    P_grid_import: dict[int, pulp.LpVariable] = field(default_factory=_new_var_dict)
-    # Grid export decision variables (kW) keyed by slot index.
-    P_grid_export: dict[int, pulp.LpVariable] = field(default_factory=_new_var_dict)
-    # Import violation slack variables (kW) keyed by slot index.
-    P_grid_import_violation_kw: dict[int, pulp.LpVariable] = field(default_factory=_new_var_dict)
-    # Per-inverter PV output variables (kW) keyed by inverter name then slot index.
-    P_pv_kw: dict[str, dict[int, pulp.LpVariable]] = field(default_factory=_new_inverter_var_dict)
-    # Per-inverter net AC flow (kW) keyed by inverter name then slot index.
-    P_inv_ac_net_kw: dict[str, dict[int, pulp.LpVariable]] = field(
-        default_factory=_new_inverter_var_dict
-    )
-    # Per-inverter curtailment flags (0/1) keyed by inverter name then slot index.
-    Curtail_inv: dict[str, dict[int, pulp.LpVariable]] = field(
-        default_factory=_new_inverter_var_dict
-    )
-    # Per-inverter battery charge power (kW) keyed by inverter name then slot index.
-    P_batt_charge_kw: dict[str, dict[int, pulp.LpVariable]] = field(
-        default_factory=_new_inverter_var_dict
-    )
-    # Per-inverter battery discharge power (kW) keyed by inverter name then slot index.
-    P_batt_discharge_kw: dict[str, dict[int, pulp.LpVariable]] = field(
-        default_factory=_new_inverter_var_dict
-    )
-    # Per-inverter battery state of charge (kWh) keyed by inverter name then slot index.
-    E_batt_kwh: dict[str, dict[int, pulp.LpVariable]] = field(
-        default_factory=_new_inverter_var_dict
-    )
-    # Per-EV charge power (kW) keyed by EV name then slot index.
-    P_ev_charge_kw: dict[str, dict[int, pulp.LpVariable]] = field(
-        default_factory=_new_load_var_dict
-    )
-    # Per-EV state of charge (kWh) keyed by EV name then slot index.
-    E_ev_kwh: dict[str, dict[int, pulp.LpVariable]] = field(default_factory=_new_load_var_dict)
-    # Per-EV charge ramp magnitude (kW change) keyed by EV name then slot index.
-    Ev_charge_ramp_kw: dict[str, dict[int, pulp.LpVariable]] = field(
-        default_factory=_new_load_var_dict
-    )
-    # Per-EV realtime anchor deviation (kW) keyed by EV name.
-    Ev_charge_anchor_kw: dict[str, pulp.LpVariable] = field(
-        default_factory=_new_load_scalar_dict
-    )
-    # Per-EV incentive segments (kWh) with their per-kWh rewards.
-    E_ev_incentive_segments: dict[str, list[tuple[pulp.LpVariable, float]]] = field(
-        default_factory=_new_ev_incentive_dict
-    )
+class InverterVars:
+    # Human-readable inverter name from config.
+    name: str
+    # Battery capacity for SoC normalization (None if no battery).
+    battery_capacity_kwh: float | None
+    # PV output variables per timestep t in Horizon.T (None if no PV).
+    P_pv_kw: dict[int, pulp.LpVariable] | None
+    # Net AC power variables per timestep t in Horizon.T.
+    P_inv_ac_net_kw: dict[int, pulp.LpVariable]
+    # Battery charge power variables per timestep t (None if no battery).
+    P_batt_charge_kw: dict[int, pulp.LpVariable] | None
+    # Battery discharge power variables per timestep t (None if no battery).
+    P_batt_discharge_kw: dict[int, pulp.LpVariable] | None
+    # Battery SoC variables at slot boundaries (indexed 0..N).
+    E_batt_kwh: dict[int, pulp.LpVariable] | None
+    # Curtailment binary variables per timestep t (None if curtailment disabled).
+    Curtail_inv: dict[int, pulp.LpVariable] | None
 
 
 @dataclass(slots=True)
-class ModelSeries:
-    # Resolved load series (kW) aligned to horizon slots.
-    load_kw: list[float] = field(default_factory=_new_float_list)
-    # Allowed grid import per slot.
-    import_allowed: list[bool] = field(default_factory=_new_bool_list)
-    # Resolved import price series ($/kWh) aligned to horizon slots.
-    price_import: list[float] = field(default_factory=_new_float_list)
-    # Resolved export price series ($/kWh) aligned to horizon slots.
-    price_export: list[float] = field(default_factory=_new_float_list)
-    # Resolved EV connection state (static for the solve).
-    ev_connected: dict[str, bool] = field(default_factory=_new_bool_dict)
-    # Resolved EV realtime power (kW) for reporting.
-    ev_realtime_power_kw: dict[str, float] = field(default_factory=_new_float_dict)
-    # Battery capacities (kWh) keyed by inverter name for reporting.
-    battery_capacity_kwh: dict[str, float] = field(default_factory=_new_float_dict)
-    # EV capacities (kWh) keyed by EV name for reporting.
-    ev_capacity_kwh: dict[str, float] = field(default_factory=_new_float_dict)
+class InverterBuild:
+    # Inverter vars keyed by inverter id from config.
+    inverters: dict[str, InverterVars]
+
+
+@dataclass(slots=True)
+class EvVars:
+    # Human-readable load name from config.
+    name: str
+    # EV battery capacity for SoC normalization.
+    capacity_kwh: float
+    # Connectivity flag resolved at solve time (applies to all timesteps).
+    connected: bool
+    # EV charge power variables per timestep t in Horizon.T.
+    P_ev_charge_kw: dict[int, pulp.LpVariable]
+    # EV SoC variables at slot boundaries (indexed 0..N).
+    E_ev_kwh: dict[int, pulp.LpVariable]
+    # EV charge ramp magnitude per timestep t (t>0 has ramp constraints).
+    Ev_charge_ramp_kw: dict[int, pulp.LpVariable]
+    # EV anchor deviation variable for slot 0 vs realtime power.
+    Ev_charge_anchor_kw: pulp.LpVariable
+
+
+@dataclass(slots=True)
+class LoadBuild:
+    # Baseline plant load series aligned to Horizon.T.
+    base_load_kw: list[float]
+    # Controllable load contributions per timestep t in Horizon.T.
+    load_contribs: dict[int, pulp.LpAffineExpression]
+    # EV vars keyed by load id from config.
+    evs: dict[str, EvVars]
+    # EV SoC incentive segments keyed by load id.
+    ev_incentive_segments: dict[str, list[tuple[pulp.LpVariable, float]]]
 
 
 @dataclass(slots=True)
 class MILPModel:
     problem: pulp.LpProblem
-    vars: ModelVars
-    series: ModelSeries
+    grid: GridBuild
+    inverters: InverterBuild
+    loads: LoadBuild
 
 
 class MILPBuilder:
@@ -149,34 +115,30 @@ class MILPBuilder:
 
     def build(self) -> MILPModel:
         problem = pulp.LpProblem("ems_optimisation", pulp.LpMinimize)
-        vars = ModelVars()
-        series = self._resolve_series(self._horizon)
+        base_load_kw = self._resolve_load_series(self._horizon)
+        grid = self._build_grid(problem, self._horizon)
+        inverters = self._build_inverters(problem, grid, self._horizon)
+        loads = self._build_loads(problem, self._horizon, base_load_kw)
+        self._build_ac_balance(problem, grid, inverters, loads, self._horizon)
+        self._build_objective(problem, grid, inverters, loads, self._horizon)
 
-        self._build_grid(problem, vars, series, self._horizon)
-        self._build_inverters(problem, vars, series, self._horizon)
-        load_contribs = self._build_loads(problem, vars, series, self._horizon)
-        self._build_ac_balance(problem, vars, series, load_contribs, self._horizon)
-        self._build_objective(problem, vars, series, self._horizon)
-
-        return MILPModel(problem, vars, series)
+        return MILPModel(problem, grid, inverters, loads)
 
     def _build_grid(
         self,
         problem: pulp.LpProblem,
-        vars: ModelVars,
-        series: ModelSeries,
         horizon: Horizon,
-    ) -> None:
+    ) -> GridBuild:
         T = horizon.T
         cfg = self._plant.grid
 
-        vars.P_grid_import = pulp.LpVariable.dicts(
+        P_import = pulp.LpVariable.dicts(
             "P_grid_import", T, lowBound=0, upBound=cfg.max_import_kw
         )
-        vars.P_grid_export = pulp.LpVariable.dicts(
+        P_export = pulp.LpVariable.dicts(
             "P_grid_export", T, lowBound=0, upBound=cfg.max_export_kw
         )
-        vars.P_grid_import_violation_kw = pulp.LpVariable.dicts(
+        P_import_violation_kw = pulp.LpVariable.dicts(
             "P_grid_import_violation_kw",
             T,
             lowBound=0,
@@ -188,54 +150,69 @@ class MILPBuilder:
             upBound=1,
             cat="Binary",
         )
+        import_allowed = self._resolve_import_allowed(horizon)
 
         for t in T:
             # Prevent simultaneous grid import/export by selecting an import or export mode.
             problem += (
-                vars.P_grid_import[t] <= cfg.max_import_kw * grid_import_on[t],
+                P_import[t] <= cfg.max_import_kw * grid_import_on[t],
                 f"grid_import_exclusive_t{t}",
             )
             problem += (
-                vars.P_grid_export[t] <= cfg.max_export_kw * (1 - grid_import_on[t]),
+                P_export[t] <= cfg.max_export_kw * (1 - grid_import_on[t]),
                 f"grid_export_exclusive_t{t}",
             )
             # Enforce the per-slot import cap. When imports are forbidden, the RHS becomes 0,
             # so only the violation variable can satisfy the constraint. It is heavily penalized
             # in the objective, keeping the model feasible while discouraging forbidden imports.
             problem += (
-                vars.P_grid_import[t]
-                <= cfg.max_import_kw * float(series.import_allowed[t])
-                + vars.P_grid_import_violation_kw[t],
+                P_import[t]
+                <= cfg.max_import_kw * float(import_allowed[t]) + P_import_violation_kw[t],
                 f"grid_import_forbidden_or_violation_t{t}",
             )
+
+        return GridBuild(
+            P_import=P_import,
+            P_export=P_export,
+            P_import_violation_kw=P_import_violation_kw,
+            price_import=self._resolve_price_series(
+                horizon,
+                self._plant.grid.price_import_forecast,
+                self._plant.grid.realtime_price_import,
+            ),
+            price_export=self._resolve_price_series(
+                horizon,
+                self._plant.grid.price_export_forecast,
+                self._plant.grid.realtime_price_export,
+            ),
+            import_allowed=import_allowed,
+        )
 
     def _build_inverters(
         self,
         problem: pulp.LpProblem,
-        vars: ModelVars,
-        series: ModelSeries,
+        grid: GridBuild,
         horizon: Horizon,
-    ) -> None:
+    ) -> InverterBuild:
         T = horizon.T
+        inverters: dict[str, InverterVars] = {}
 
         for inverter in self._plant.inverters:
             inv_name = inverter.name
-            inv_slug = _slug(inv_name)
+            inv_id = inverter.id
 
             pv_kw = pulp.LpVariable.dicts(
-                f"P_pv_{inv_slug}_kw",
+                f"P_pv_{inv_id}_kw",
                 T,
                 lowBound=0,
                 upBound=inverter.peak_power_kw,
             )
-            vars.P_pv_kw[inv_name] = pv_kw
             inv_ac_net_kw = pulp.LpVariable.dicts(
-                f"P_inv_{inv_slug}_ac_net_kw",
+                f"P_inv_{inv_id}_ac_net_kw",
                 T,
                 lowBound=-inverter.peak_power_kw,
                 upBound=inverter.peak_power_kw,
             )
-            vars.P_inv_ac_net_kw[inv_name] = inv_ac_net_kw
 
             pv_available_kw_series = self._resolve_power_series(
                 horizon,
@@ -249,46 +226,47 @@ class MILPBuilder:
             ]
 
             curtailment = inverter.curtailment
+            curtail_vars: dict[int, pulp.LpVariable] | None = None
             if curtailment is None:
                 for t in T:
                     problem += (
                         # No curtailment: inverter AC output must equal available PV.
                         pv_kw[t] == pv_available_kw_series[t],
-                        f"inverter_pv_total_{inv_slug}_t{t}",
+                        f"inverter_pv_total_{inv_id}_t{t}",
                     )
             else:
                 curtail = pulp.LpVariable.dicts(
-                    f"Curtail_inv_{inv_slug}",
+                    f"Curtail_inv_{inv_id}",
                     T,
                     lowBound=0,
                     upBound=1,
                     cat="Binary",
                 )
-                vars.Curtail_inv[inv_name] = curtail
+                curtail_vars = curtail
                 for t in T:
                     if curtailment == "binary":
                         problem += (
                             # Binary curtailment: either full PV or fully off.
                             pv_kw[t] == pv_available_kw_series[t] * (1 - curtail[t]),
-                            f"inverter_pv_binary_{inv_slug}_t{t}",
+                            f"inverter_pv_binary_{inv_id}_t{t}",
                         )
                     else:
                         problem += (
                             # Load-aware: output cannot exceed available PV.
                             pv_kw[t] <= pv_available_kw_series[t],
-                            f"inverter_pv_max_{inv_slug}_t{t}",
+                            f"inverter_pv_max_{inv_id}_t{t}",
                         )
                         problem += (
                             # Load-aware: curtail flag reduces minimum output (allows export block).
                             pv_kw[t]
                             >= pv_available_kw_series[t] * (1 - curtail[t]),
-                            f"inverter_pv_min_{inv_slug}_t{t}",
+                            f"inverter_pv_min_{inv_id}_t{t}",
                         )
                         problem += (
                             # Load-aware: when curtailing, block grid export.
-                            vars.P_grid_export[t]
+                            grid.P_export[t]
                             <= self._plant.grid.max_export_kw * (1 - curtail[t]),
-                            f"inverter_export_block_{inv_slug}_t{t}",
+                            f"inverter_export_block_{inv_id}_t{t}",
                         )
 
             battery = inverter.battery
@@ -297,10 +275,21 @@ class MILPBuilder:
                     problem += (
                         # Net AC flow equals PV output when no battery is present.
                         inv_ac_net_kw[t] == pv_kw[t],
-                        f"inverter_ac_net_{inv_slug}_t{t}",
+                        f"inverter_ac_net_{inv_id}_t{t}",
                     )
+                inverters[inv_id] = InverterVars(
+                    name=inv_name,
+                    battery_capacity_kwh=None,
+                    P_pv_kw=pv_kw,
+                    P_inv_ac_net_kw=inv_ac_net_kw,
+                    P_batt_charge_kw=None,
+                    P_batt_discharge_kw=None,
+                    E_batt_kwh=None,
+                    Curtail_inv=curtail_vars,
+                )
                 continue
 
+            battery_capacity_kwh = float(battery.capacity_kwh)
             charge_limit = (
                 battery.max_charge_kw
                 if battery.max_charge_kw is not None
@@ -319,19 +308,19 @@ class MILPBuilder:
             storage_efficiency = battery.storage_efficiency_pct / 100.0
 
             P_batt_charge = pulp.LpVariable.dicts(
-                f"P_batt_{inv_slug}_charge_kw",
+                f"P_batt_{inv_id}_charge_kw",
                 T,
                 lowBound=0,
                 upBound=charge_limit,
             )
             P_batt_discharge = pulp.LpVariable.dicts(
-                f"P_batt_{inv_slug}_discharge_kw",
+                f"P_batt_{inv_id}_discharge_kw",
                 T,
                 lowBound=0,
                 upBound=discharge_limit,
             )
             batt_charge_mode = pulp.LpVariable.dicts(
-                f"Batt_{inv_slug}_charge_mode",
+                f"Batt_{inv_id}_charge_mode",
                 T,
                 lowBound=0,
                 upBound=1,
@@ -340,42 +329,38 @@ class MILPBuilder:
             # SoC is defined at slot boundaries, so we need N+1 points for N intervals.
             soc_indices = range(horizon.num_intervals + 1)
             E_batt_kwh = pulp.LpVariable.dicts(
-                f"E_batt_{inv_slug}_kwh",
+                f"E_batt_{inv_id}_kwh",
                 soc_indices,
                 lowBound=soc_min_kwh,
                 upBound=soc_max_kwh,
             )
-            vars.P_batt_charge_kw[inv_name] = P_batt_charge
-            vars.P_batt_discharge_kw[inv_name] = P_batt_discharge
-            vars.E_batt_kwh[inv_name] = E_batt_kwh
-            series.battery_capacity_kwh[inv_name] = float(battery.capacity_kwh)
 
             initial_soc_pct = self._resolver.resolve(battery.state_of_charge_pct)
             initial_soc_kwh = battery.capacity_kwh * float(initial_soc_pct) / 100.0
             problem += (
                 E_batt_kwh[0] == initial_soc_kwh,
-                f"batt_soc_initial_{inv_slug}",
+                f"batt_soc_initial_{inv_id}",
             )
             problem += (
                 E_batt_kwh[horizon.num_intervals] >= initial_soc_kwh,
-                f"batt_soc_terminal_{inv_slug}",
+                f"batt_soc_terminal_{inv_id}",
             )
 
             for t in T:
                 # Select charge vs discharge mode (idle is allowed in either mode).
                 problem += (
                     P_batt_charge[t] <= charge_limit * batt_charge_mode[t],
-                    f"batt_charge_limit_{inv_slug}_t{t}",
+                    f"batt_charge_limit_{inv_id}_t{t}",
                 )
                 problem += (
                     P_batt_discharge[t] <= discharge_limit * (1 - batt_charge_mode[t]),
-                    f"batt_discharge_limit_{inv_slug}_t{t}",
+                    f"batt_discharge_limit_{inv_id}_t{t}",
                 )
                 # Net AC flow combines PV and battery charge/discharge.
                 problem += (
                     inv_ac_net_kw[t]
                     == pv_kw[t] + P_batt_discharge[t] - P_batt_charge[t],
-                    f"inverter_ac_net_{inv_slug}_t{t}",
+                    f"inverter_ac_net_{inv_id}_t{t}",
                 )
                 # Battery energy balance with storage efficiency.
                 problem += (
@@ -386,47 +371,58 @@ class MILPBuilder:
                         - P_batt_discharge[t] / storage_efficiency
                     )
                     * horizon.dt_hours(t),
-                    f"batt_soc_step_{inv_slug}_t{t}",
+                    f"batt_soc_step_{inv_id}_t{t}",
                 )
+
+            inverters[inv_id] = InverterVars(
+                name=inv_name,
+                battery_capacity_kwh=battery_capacity_kwh,
+                P_pv_kw=pv_kw,
+                P_inv_ac_net_kw=inv_ac_net_kw,
+                P_batt_charge_kw=P_batt_charge,
+                P_batt_discharge_kw=P_batt_discharge,
+                E_batt_kwh=E_batt_kwh,
+                Curtail_inv=curtail_vars,
+            )
+
+        return InverterBuild(inverters=inverters)
 
     def _build_ac_balance(
         self,
         problem: pulp.LpProblem,
-        vars: ModelVars,
-        series: ModelSeries,
-        load_contribs: dict[int, pulp.LpAffineExpression],
+        grid: GridBuild,
+        inverters: InverterBuild,
+        loads: LoadBuild,
         horizon: Horizon,
     ) -> None:
-        P_import = vars.P_grid_import
-        P_export = vars.P_grid_export
-        P_inv_ac_net_kw = vars.P_inv_ac_net_kw
+        P_import = grid.P_import
+        P_export = grid.P_export
+        inverter_values = inverters.inverters.values()
 
         for t in horizon.T:
-            inv_total = pulp.lpSum(
-                inv_series[t] for inv_series in P_inv_ac_net_kw.values()
-            )
-            extra_load = load_contribs.get(t, 0.0)
+            inv_total = pulp.lpSum(inv.P_inv_ac_net_kw[t] for inv in inverter_values)
+            extra_load = loads.load_contribs.get(t, 0.0)
+            base_load = float(loads.base_load_kw[t]) if t < len(loads.base_load_kw) else 0.0
             problem += (
-                P_import[t] + inv_total - P_export[t]
-                == float(series.load_kw[t]) + extra_load,
+                P_import[t] + inv_total - P_export[t] == base_load + extra_load,
                 f"ac_balance_t{t}",
             )
 
     def _build_objective(
         self,
         problem: pulp.LpProblem,
-        vars: ModelVars,
-        series: ModelSeries,
+        grid: GridBuild,
+        inverters: InverterBuild,
+        loads: LoadBuild,
         horizon: Horizon,
     ) -> None:
-        P_import = vars.P_grid_import
-        P_export = vars.P_grid_export
-        P_import_violation = vars.P_grid_import_violation_kw
-        price_import = series.price_import
-        price_export = series.price_export
-        Curtail_inv = vars.Curtail_inv
-        P_batt_charge = vars.P_batt_charge_kw
-        P_batt_discharge = vars.P_batt_discharge_kw
+        P_import = grid.P_import
+        P_export = grid.P_export
+        P_import_violation = grid.P_import_violation_kw
+        price_import = grid.price_import
+        price_export = grid.price_export
+        inverter_by_id = inverters.inverters
+        ev_by_id = loads.evs
 
         # Price-aware objective: minimize net cost (import cost minus export revenue).
         # When export price is exactly zero, add a tiny bonus to prefer exporting over curtailment.
@@ -463,12 +459,15 @@ class MILPBuilder:
             battery = inverter.battery
             if battery is None:
                 continue
+            inv_vars = inverter_by_id.get(inverter.id)
+            if inv_vars is None:
+                continue
             wear_cost = battery.throughput_cost_per_kwh
             if wear_cost <= 0:
                 continue
-            charge_series = P_batt_charge.get(inverter.name)
-            discharge_series = P_batt_discharge.get(inverter.name)
-            if not isinstance(charge_series, dict) or not isinstance(discharge_series, dict):
+            charge_series = inv_vars.P_batt_charge_kw
+            discharge_series = inv_vars.P_batt_discharge_kw
+            if charge_series is None or discharge_series is None:
                 continue
             objective += pulp.lpSum(
                 wear_cost
@@ -480,16 +479,17 @@ class MILPBuilder:
         w_curtail_tie = 1e-6
         total = len(self._plant.inverters)
         for idx, inverter in enumerate(self._plant.inverters):
-            series = Curtail_inv.get(inverter.name)
-            if not isinstance(series, dict):
+            inv_vars = inverter_by_id.get(inverter.id)
+            if inv_vars is None or inv_vars.Curtail_inv is None:
                 continue
+            series = inv_vars.Curtail_inv
             weight = w_curtail_tie * (total - idx)
             # Consistent ordering bias avoids multiple equivalent curtailment choices.
             objective += pulp.lpSum(
                 weight * series[t] * horizon.dt_hours(t) for t in horizon.T
             )
         # EV terminal SoC incentives (piecewise per-kWh rewards).
-        for segments in vars.E_ev_incentive_segments.values():
+        for segments in loads.ev_incentive_segments.values():
             for segment_var, incentive in segments:
                 if abs(float(incentive)) <= 1e-12:
                     continue
@@ -499,9 +499,10 @@ class MILPBuilder:
         for load in self._loads:
             if not isinstance(load, ControlledEvLoad):
                 continue
-            ramp_series = vars.Ev_charge_ramp_kw.get(load.name)
-            if not isinstance(ramp_series, dict):
+            ev_vars = ev_by_id.get(load.id)
+            if ev_vars is None:
                 continue
+            ramp_series = ev_vars.Ev_charge_ramp_kw
             objective += pulp.lpSum(
                 ramp_penalty * ramp_series[t] for t in horizon.T if t > 0
             )
@@ -511,38 +512,48 @@ class MILPBuilder:
             for load in self._loads:
                 if not isinstance(load, ControlledEvLoad):
                     continue
-                anchor_var = vars.Ev_charge_anchor_kw.get(load.name)
-                if anchor_var is None:
+                ev_vars = ev_by_id.get(load.id)
+                if ev_vars is None:
                     continue
+                anchor_var = ev_vars.Ev_charge_anchor_kw
                 objective += anchor_penalty * anchor_var * horizon.dt_hours(0)
         problem += objective
 
     def _build_loads(
         self,
         problem: pulp.LpProblem,
-        vars: ModelVars,
-        series: ModelSeries,
         horizon: Horizon,
-    ) -> dict[int, pulp.LpAffineExpression]:
+        base_load_kw: list[float],
+    ) -> LoadBuild:
         load_contribs: dict[int, pulp.LpAffineExpression] = {
             t: pulp.LpAffineExpression() for t in horizon.T
         }
-        handlers = {
-            "controlled_ev": self._build_controlled_ev_load,
-            "nonvariable_load": self._build_nonvariable_load,
-        }
+        evs: dict[str, EvVars] = {}
+        ev_incentive_segments: dict[str, list[tuple[pulp.LpVariable, float]]] = {}
         for load in self._loads:
-            handler = handlers.get(load.load_type)
-            if handler is None:
-                raise ValueError(f"Unsupported load type: {load.load_type}")
-            handler(problem, vars, series, horizon, load, load_contribs)
-        return load_contribs
+            if isinstance(load, ControlledEvLoad):
+                ev_id = load.id
+                ev_vars, segments = self._build_controlled_ev_load(
+                    problem, horizon, load, load_contribs, ev_id
+                )
+                evs[ev_id] = ev_vars
+                ev_incentive_segments[ev_id] = segments
+                continue
+            elif isinstance(load, NonVariableLoad):
+                self._build_nonvariable_load(problem, horizon, load, load_contribs)
+                continue
+            raise ValueError(f"Unsupported load type: {load.load_type}")
+
+        return LoadBuild(
+            base_load_kw=base_load_kw,
+            load_contribs=load_contribs,
+            evs=evs,
+            ev_incentive_segments=ev_incentive_segments,
+        )
 
     def _build_nonvariable_load(
         self,
         _problem: pulp.LpProblem,
-        _vars: ModelVars,
-        _series: ModelSeries,
         _horizon: Horizon,
         _load: NonVariableLoad,
         _load_contribs: dict[int, pulp.LpAffineExpression],
@@ -553,20 +564,16 @@ class MILPBuilder:
     def _build_controlled_ev_load(
         self,
         problem: pulp.LpProblem,
-        vars: ModelVars,
-        series: ModelSeries,
         horizon: Horizon,
         load: ControlledEvLoad,
         load_contribs: dict[int, pulp.LpAffineExpression],
-    ) -> None:
+        ev_id: str,
+    ) -> tuple[EvVars, list[tuple[pulp.LpVariable, float]]]:
         T = horizon.T
         ev_name = load.name
-        ev_slug = _slug(ev_name)
 
         connected = bool(self._resolver.resolve(load.connected))
-        series.ev_connected[ev_name] = connected
         realtime_power = float(self._resolver.resolve(load.realtime_power))
-        series.ev_realtime_power_kw[ev_name] = realtime_power
         initial_soc_pct = float(self._resolver.resolve(load.state_of_charge_pct))
         can_connect = True
         if load.can_connect is not None:
@@ -575,27 +582,24 @@ class MILPBuilder:
         capacity_kwh = float(load.energy_kwh)
         initial_soc_kwh = capacity_kwh * initial_soc_pct / 100.0
         initial_soc_kwh = max(0.0, min(capacity_kwh, initial_soc_kwh))
-        series.ev_capacity_kwh[ev_name] = capacity_kwh
 
         P_ev_charge = pulp.LpVariable.dicts(
-            f"P_ev_{ev_slug}_charge_kw",
+            f"P_ev_{ev_id}_charge_kw",
             T,
             lowBound=0,
             upBound=load.max_power_kw,
         )
         soc_indices = range(horizon.num_intervals + 1)
         E_ev_kwh = pulp.LpVariable.dicts(
-            f"E_ev_{ev_slug}_kwh",
+            f"E_ev_{ev_id}_kwh",
             soc_indices,
             lowBound=0,
             upBound=capacity_kwh,
         )
-        vars.P_ev_charge_kw[ev_name] = P_ev_charge
-        vars.E_ev_kwh[ev_name] = E_ev_kwh
 
         problem += (
             E_ev_kwh[0] == initial_soc_kwh,
-            f"ev_soc_initial_{ev_slug}",
+            f"ev_soc_initial_{ev_id}",
         )
 
         connected_allow_by_slot = self._ev_connected_allowance(
@@ -608,34 +612,32 @@ class MILPBuilder:
         charge_on = None
         if load.min_power_kw > 0:
             charge_on = pulp.LpVariable.dicts(
-                f"Ev_{ev_slug}_charge_on",
+                f"Ev_{ev_id}_charge_on",
                 T,
                 lowBound=0,
                 upBound=1,
                 cat="Binary",
             )
         ramp_vars = pulp.LpVariable.dicts(
-            f"Ev_{ev_slug}_ramp_kw",
+            f"Ev_{ev_id}_ramp_kw",
             T,
             lowBound=0,
         )
-        vars.Ev_charge_ramp_kw[ev_name] = ramp_vars
         anchor_var = pulp.LpVariable(
-            f"Ev_{ev_slug}_anchor_kw",
+            f"Ev_{ev_id}_anchor_kw",
             lowBound=0,
         )
-        vars.Ev_charge_anchor_kw[ev_name] = anchor_var
         problem += (
             ramp_vars[0] == 0,
-            f"ev_charge_ramp_init_{ev_slug}",
+            f"ev_charge_ramp_init_{ev_id}",
         )
         problem += (
             anchor_var >= P_ev_charge[0] - realtime_power,
-            f"ev_anchor_up_{ev_slug}",
+            f"ev_anchor_up_{ev_id}",
         )
         problem += (
             anchor_var >= realtime_power - P_ev_charge[0],
-            f"ev_anchor_down_{ev_slug}",
+            f"ev_anchor_down_{ev_id}",
         )
 
         for t in T:
@@ -643,39 +645,56 @@ class MILPBuilder:
             # Enforce connection gating.
             problem += (
                 P_ev_charge[t] <= load.max_power_kw * connected_allow,
-                f"ev_connected_limit_{ev_slug}_t{t}",
+                f"ev_connected_limit_{ev_id}_t{t}",
             )
             if charge_on is not None:
                 problem += (
                     charge_on[t] <= connected_allow,
-                    f"ev_charge_on_connected_{ev_slug}_t{t}",
+                    f"ev_charge_on_connected_{ev_id}_t{t}",
                 )
                 problem += (
                     P_ev_charge[t] >= load.min_power_kw * charge_on[t],
-                    f"ev_charge_min_{ev_slug}_t{t}",
+                    f"ev_charge_min_{ev_id}_t{t}",
                 )
                 problem += (
                     P_ev_charge[t] <= load.max_power_kw * charge_on[t],
-                    f"ev_charge_max_{ev_slug}_t{t}",
+                    f"ev_charge_max_{ev_id}_t{t}",
                 )
             if t > 0:
                 problem += (
                     ramp_vars[t] >= P_ev_charge[t] - P_ev_charge[t - 1],
-                    f"ev_charge_ramp_up_{ev_slug}_t{t}",
+                    f"ev_charge_ramp_up_{ev_id}_t{t}",
                 )
                 problem += (
                     ramp_vars[t] >= P_ev_charge[t - 1] - P_ev_charge[t],
-                    f"ev_charge_ramp_down_{ev_slug}_t{t}",
+                    f"ev_charge_ramp_down_{ev_id}_t{t}",
                 )
             # SoC dynamics (charge-only).
             problem += (
                 E_ev_kwh[t + 1]
                 == E_ev_kwh[t] + P_ev_charge[t] * horizon.dt_hours(t),
-                f"ev_soc_step_{ev_slug}_t{t}",
+                f"ev_soc_step_{ev_id}_t{t}",
             )
             load_contribs[t] += P_ev_charge[t]
 
-        self._build_ev_soc_incentives(problem, vars, horizon, load, ev_slug, ev_name)
+        segments = self._build_ev_soc_incentives(
+            problem,
+            load,
+            ev_id,
+            ev_name,
+            E_ev_kwh[horizon.num_intervals],
+        )
+
+        ev_vars = EvVars(
+            name=ev_name,
+            capacity_kwh=capacity_kwh,
+            connected=connected,
+            P_ev_charge_kw=P_ev_charge,
+            E_ev_kwh=E_ev_kwh,
+            Ev_charge_ramp_kw=ramp_vars,
+            Ev_charge_anchor_kw=anchor_var,
+        )
+        return ev_vars, segments
 
     def _ev_connected_allowance(
         self,
@@ -719,15 +738,14 @@ class MILPBuilder:
     def _build_ev_soc_incentives(
         self,
         problem: pulp.LpProblem,
-        vars: ModelVars,
-        horizon: Horizon,
         load: ControlledEvLoad,
-        ev_slug: str,
+        ev_id: str,
         ev_name: str,
-    ) -> None:
+        terminal_soc: pulp.LpVariable,
+    ) -> list[tuple[pulp.LpVariable, float]]:
         incentives = sorted(load.soc_incentives, key=lambda item: item.target_soc_pct)
         if not incentives:
-            return
+            return []
 
         capacity_kwh = float(load.energy_kwh)
         segments: list[tuple[pulp.LpVariable, float]] = []
@@ -742,7 +760,7 @@ class MILPBuilder:
                 )
             segment_size = target_kwh - prev_target_kwh
             segment_var = pulp.LpVariable(
-                f"E_ev_{ev_slug}_incentive_{idx}_kwh",
+                f"E_ev_{ev_id}_incentive_{idx}_kwh",
                 lowBound=0,
                 upBound=segment_size,
             )
@@ -752,18 +770,17 @@ class MILPBuilder:
         final_size = max(0.0, capacity_kwh - prev_target_kwh)
         if final_size > 0:
             segment_var = pulp.LpVariable(
-                f"E_ev_{ev_slug}_incentive_final_kwh",
+                f"E_ev_{ev_id}_incentive_final_kwh",
                 lowBound=0,
                 upBound=final_size,
             )
             segments.append((segment_var, 0.0))
 
-        terminal_soc = vars.E_ev_kwh[ev_name][horizon.num_intervals]
         problem += (
             pulp.lpSum(segment for segment, _ in segments) == terminal_soc,
-            f"ev_incentive_total_{ev_slug}",
+            f"ev_incentive_total_{ev_id}",
         )
-        vars.E_ev_incentive_segments[ev_name] = segments
+        return segments
 
     def _resolve_price_series(
         self,
@@ -832,38 +849,17 @@ class MILPBuilder:
             first_slot_override=realtime_value,
         )
 
-    def _resolve_series(self, horizon: Horizon) -> ModelSeries:
+    def _resolve_load_series(self, horizon: Horizon) -> list[float]:
         load_forecast = self._plant.load.forecast
         if load_forecast.interval_duration != horizon.interval_minutes:
             raise ValueError(
                 "Load forecast interval_duration must match EMS interval_duration"
             )
-        load_series = self._resolve_power_series(
+        return self._resolve_power_series(
             horizon,
             forecast_source=load_forecast,
             realtime_source=self._plant.load.realtime_load_power,
         )
-        import_allowed = self._resolve_import_allowed(horizon)
-        return ModelSeries(
-            load_kw=load_series,
-            import_allowed=import_allowed,
-            price_import=self._resolve_price_series(
-                horizon,
-                self._plant.grid.price_import_forecast,
-                self._plant.grid.realtime_price_import,
-            ),
-            price_export=self._resolve_price_series(
-                horizon,
-                self._plant.grid.price_export_forecast,
-                self._plant.grid.realtime_price_export,
-            ),
-        )
-
-
-def _slug(value: str) -> str:
-    slug = re.sub(r"[^a-zA-Z0-9]+", "_", value.strip())
-    slug = slug.strip("_")
-    return slug or "inv"
 
 
 def _parse_hhmm(value: str) -> int:

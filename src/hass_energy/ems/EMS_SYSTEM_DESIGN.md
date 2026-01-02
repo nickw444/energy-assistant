@@ -28,7 +28,7 @@ Core EMS code lives in:
 
 - `src/hass_energy/ems/builder.py`
   - Builds variables, constraints, and objective.
-- `src/hass_energy/ems/solver.py`
+- `src/hass_energy/ems/planner.py`
   - Orchestrates build + solve and extracts a plan.
 - `src/hass_energy/ems/horizon.py`
   - Time slotting, timezone resolution, import-forbidden evaluation.
@@ -54,11 +54,11 @@ Supporting runtime pieces:
 
 1. `load_app_config()` parses YAML into `AppConfig`.
 2. `ValueResolver` is created, config is marked for hydration, and HA data is fetched.
-3. `solve_once()`:
+3. `EmsMilpPlanner.generate_ems_plan()`:
    - Builds horizon via `build_horizon()`.
    - Builds MILP via `MILPBuilder.build()`.
    - Solves with CBC (`pulp.PULP_CBC_CMD`).
-   - Extracts a plan dictionary via `_extract_plan()`.
+   - Extracts a plan dictionary.
 4. Plan JSON is written to `data_dir/ems_plan.json` by default.
 5. `plot_plan()` renders a chart (optional).
 
@@ -104,13 +104,14 @@ Note: `realtime_grid_power` exists in config but is **not used** by the EMS solv
 - `forecast` (historical average)
 
 The load forecast **must** use the same `interval_duration` as `ems.interval_duration`
-(enforced in `MILPBuilder._resolve_series`). The plant load should **exclude
+(enforced in `MILPBuilder._resolve_load_series`). The plant load should **exclude
 controllable loads** (EV charging), which are modeled separately.
 
 ### 4.3 Inverters (`InverterConfig`)
 
 Fields:
 
+- `id` (slug-safe identifier used as plan key)
 - `name`
 - `peak_power_kw`
 - `curtailment` (None | "binary" | "load-aware")
@@ -158,13 +159,13 @@ slots used by the MILP.
   - Slots are **fixed-length** intervals of `interval_duration` minutes.
   - There is **no partial slot** at `t=0`; the first slot may partially precede `now`.
 - **Import forbidden periods**:
-  - `import_allowed[t]` is computed per slot by comparing the slot start time
-    against `grid.import_forbidden_periods`.
+  - `import_allowed[t]` is computed in the builder per slot by comparing the slot
+    start time against `grid.import_forbidden_periods` and stored on `GridBuild`.
   - Time windows use local time-of-day and can wrap midnight.
 
 Key types:
 
-- `Horizon`: holds `now`, `start`, `slots`, `import_allowed`, and `T` range.
+- `Horizon`: holds `now`, `start`, `slots`, and `T` range.
 - `HorizonSlot`: `index`, `start`, `end`, `duration_h`.
 
 ---
@@ -382,7 +383,7 @@ cover time before `now`. The slot-0 override compensates for this in practice.
 
 ## 10. Plan output format
 
-`solve_once()` returns a plan dict with:
+`EmsMilpPlanner.generate_ems_plan()` returns a plan dict with:
 
 Top-level keys:
 
@@ -478,8 +479,4 @@ current EMS stack:
 
 ## 15. EMS TODOs
 
-Tracked TODOs in the EMS package:
-
-- `horizon.py`: `import_allowed` currently lives on `Horizon` even though it is an
-  input derived from plant config; TODO is to move it out so `Horizon` only owns
-  time geometry and slotting.
+Tracked TODOs in the EMS package.

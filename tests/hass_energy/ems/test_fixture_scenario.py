@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from hass_energy.config import load_app_config
-from hass_energy.ems.solver import solve_once
+from hass_energy.ems.planner import EmsMilpPlanner
 from hass_energy.lib.source_resolver.fixtures import FixtureHassDataProvider
 from hass_energy.lib.source_resolver.resolver import ValueResolver
 
@@ -43,5 +43,7 @@ def test_fixture_scenario_snapshot(snapshot: object, monkeypatch: pytest.MonkeyP
     resolver.mark_for_hydration(app_config)
     resolver.hydrate()
 
-    plan = solve_once(app_config, resolver=resolver, now=now)
-    assert snapshot == plan.model_dump(mode="json")
+    plan = EmsMilpPlanner(app_config, resolver=resolver).generate_ems_plan(now=now)
+    payload = plan.model_dump(mode="json")
+    payload["timings"] = {key: 0.0 for key in payload["timings"]}
+    assert snapshot == payload

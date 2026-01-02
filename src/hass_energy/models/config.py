@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from hass_energy.lib.home_assistant import HomeAssistantConfig
 from hass_energy.models.loads import LoadConfig
@@ -32,3 +32,10 @@ class AppConfig(BaseModel):
     loads: list[LoadConfig] = []
 
     model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="after")
+    def _validate_load_ids_unique(self) -> "AppConfig":
+        ids = [load.id for load in self.loads]
+        if len(ids) != len(set(ids)):
+            raise ValueError("load ids must be unique")
+        return self

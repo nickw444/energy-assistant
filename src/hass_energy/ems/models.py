@@ -19,6 +19,15 @@ Rounded3Opt = Annotated[
     ),
 ]
 
+EmsPlanStatus = Literal[
+    "Optimal",
+    "Infeasible",
+    "Unbounded",
+    "Undefined",
+    "Not Solved",
+    "Unknown",
+]
+
 
 class GridTimestepPlan(BaseModel):
     import_kw: Rounded3
@@ -83,16 +92,18 @@ class TimestepPlan(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class EmsPlanTimings(BaseModel):
+    build_seconds: float
+    solve_seconds: float
+    total_seconds: float
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class EmsPlanOutput(BaseModel):
     generated_at: datetime
-    status: Literal[
-        "Optimal",
-        "Infeasible",
-        "Unbounded",
-        "Undefined",
-        "Not Solved",
-        "Unknown",
-    ]
+    status: EmsPlanStatus
+    timings: EmsPlanTimings
     timesteps: list[TimestepPlan]
 
     model_config = ConfigDict(extra="forbid")
