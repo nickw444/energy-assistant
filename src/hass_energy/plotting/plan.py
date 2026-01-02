@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from datetime import UTC, datetime, tzinfo
 from pathlib import Path
 from typing import Any
 
+from hass_energy.ems.models import EmsPlanOutput, EvTimestepPlan, InverterTimestepPlan, TimestepPlan
+
 
 def plot_plan(
-    plan: object,
+    plan: EmsPlanOutput,
     *,
     title: str = "Energy Plan",
     output: Path | None = None,
@@ -17,29 +19,29 @@ def plot_plan(
     except ImportError as exc:
         raise ImportError("matplotlib is required to plot plans") from exc
 
-    slots = _extract_slots(plan)
-    if not slots:
-        raise ValueError("Plan has no slots to plot.")
-
     local_tz = datetime.now().astimezone().tzinfo or UTC
-    times: list[datetime] = []
-    for slot in slots:
-        slot_time = _parse_time(slot.get("start"), local_tz=local_tz)
-        times.append(slot_time or datetime.now(tz=local_tz))
-
-    grid_import = _series(slots, "grid_import_kw", "grid_import", "import_kw", "import")
-    grid_export = _series(slots, "grid_export_kw", "grid_export", "export_kw", "export")
-    grid_net = _series(slots, "grid_kw", "grid_net_kw", "net_grid_kw")
-    if not _has_any(grid_net) and (_has_any(grid_import) or _has_any(grid_export)):
-        grid_net = [imp - exp for imp, exp in zip(grid_import, grid_export, strict=False)]
-
-    pv_kw = _series(slots, "pv_kw")
-    pv_available_kw = _series(slots, "pv_available_kw")
-    pv_inverters = _series_map(slots, "pv_inverters")
-    pv_inverters_available = _series_map(slots, "pv_inverters_available")
-    inverter_ac_net = _series_map(slots, "inverter_ac_net_kw")
-    batt_charge = _series_map(slots, "battery_charge_kw")
-    batt_discharge = _series_map(slots, "battery_discharge_kw")
+    timesteps = plan.timesteps
+    if not timesteps:
+        raise ValueError("Plan has no timesteps to plot.")
+    times = [_normalize_time(step.start, local_tz=local_tz) for step in timesteps]
+    durations = [float(step.duration_s) / 3600.0 for step in timesteps]
+    grid_import = [float(step.grid.import_kw) for step in timesteps]
+    grid_export = [float(step.grid.export_kw) for step in timesteps]
+    grid_net = [float(step.grid.net_kw) for step in timesteps]
+    pv_kw = [
+        sum(float(inv.pv_kw or 0.0) for inv in step.inverters.values())
+        for step in timesteps
+    ]
+    pv_available_kw: list[float] = []
+    pv_inverters = _collect_inverter_series(timesteps, lambda inv: inv.pv_kw)
+    pv_inverters_available: dict[str, list[float]] = {}
+    inverter_ac_net = _collect_inverter_series(timesteps, lambda inv: inv.ac_net_kw)
+    batt_charge = _collect_inverter_series(timesteps, lambda inv: inv.battery_charge_kw)
+    batt_discharge = _collect_inverter_series(
+        timesteps, lambda inv: inv.battery_discharge_kw
+    )
+    batt_soc = _collect_inverter_series(timesteps, lambda inv: inv.battery_soc_kwh)
+    batt_soc_pct = _collect_inverter_series(timesteps, lambda inv: inv.battery_soc_pct)
     batt_net: dict[str, list[float]] = {}
     for name, discharge_series in batt_discharge.items():
         charge_series = batt_charge.get(name)
@@ -59,15 +61,17 @@ def plot_plan(
             discharge - charge
             for discharge, charge in zip(discharge_series, charge_series, strict=False)
         ]
-    batt_soc = _series_map(slots, "battery_soc_kwh")
-    load_kw = _series(slots, "load_kw")
-    ev_charge = _series_map(slots, "ev_charge_kw")
-    ev_soc = _series_map(slots, "ev_soc_kwh")
-    batt_capacity = _extract_top_level_map(plan, "battery_capacity_kwh")
-    ev_capacity = _extract_top_level_map(plan, "ev_capacity_kwh")
-    batt_soc_pct = _soc_percent_series(batt_soc, batt_capacity)
-    ev_soc_pct = _soc_percent_series(ev_soc, ev_capacity)
-    if batt_soc_pct or ev_soc_pct:
+    load_kw = [float(step.loads.base_kw) for step in timesteps]
+    ev_charge = _collect_ev_series(timesteps, lambda ev: ev.charge_kw)
+    ev_soc = _collect_ev_series(timesteps, lambda ev: ev.soc_kwh)
+    ev_soc_pct = _collect_ev_series(timesteps, lambda ev: ev.soc_pct)
+    price_import = [float(step.economics.price_import) for step in timesteps]
+    price_export = [float(step.economics.price_export) for step in timesteps]
+    segment_cost = [float(step.economics.segment_cost) for step in timesteps]
+    cumulative_cost = [float(step.economics.cumulative_cost) for step in timesteps]
+    has_batt_pct = any(inv.battery_soc_pct is not None for step in timesteps for inv in step.inverters.values())
+    has_ev_pct = any(ev.soc_pct is not None for step in timesteps for ev in step.loads.evs.values())
+    if has_batt_pct or has_ev_pct:
         soc_unit = "%"
         batt_soc_plot = batt_soc_pct
         ev_soc_plot = ev_soc_pct
@@ -75,10 +79,6 @@ def plot_plan(
         soc_unit = "kWh"
         batt_soc_plot = batt_soc
         ev_soc_plot = ev_soc
-    price_import = _series(slots, "price_import", "price_import_kw", "price_import_kwh")
-    price_export = _series(slots, "price_export", "price_export_kw", "price_export_kwh")
-    segment_cost = _series(slots, "segment_cost", "slot_cost", "cost_segment")
-    cumulative_cost = _series(slots, "cumulative_cost", "total_cost")
     has_price = _has_any(price_import) or _has_any(price_export)
     has_cost = _has_any(segment_cost) or _has_any(cumulative_cost)
     has_soc = any(_has_any(series) for series in batt_soc_plot.values()) or any(
@@ -86,7 +86,6 @@ def plot_plan(
     )
 
     if not has_cost and (_has_any(price_import) or _has_any(price_export)):
-        durations = [float(slot.get("duration_h", 0.0)) for slot in slots]
         segment_cost = [
             (imp * p_imp - exp * p_exp) * dt
             for imp, exp, p_imp, p_exp, dt in zip(
@@ -345,103 +344,42 @@ def plot_plan(
     plt.show()
 
 
-def _extract_slots(plan: object) -> list[dict[str, Any]]:
-    try:
-        slots = plan.slots  # type: ignore[attr-defined]
-    except AttributeError:
-        slots = None
-    if isinstance(slots, list):
-        return [slot for slot in slots if isinstance(slot, dict)]
-
-    if isinstance(plan, dict):
-        if isinstance(plan.get("slots"), list):
-            return [slot for slot in plan["slots"] if isinstance(slot, dict)]
-        nested = plan.get("plan")
-        if isinstance(nested, dict) and isinstance(nested.get("slots"), list):
-            return [slot for slot in nested["slots"] if isinstance(slot, dict)]
-
-    return []
+def _normalize_time(value: datetime, *, local_tz: tzinfo) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=local_tz)
+    return value.astimezone(local_tz)
 
 
-def _parse_time(value: object, *, local_tz: tzinfo) -> datetime | None:
-    if isinstance(value, str):
-        try:
-            parsed = datetime.fromisoformat(value)
-        except ValueError:
-            return None
-        if parsed.tzinfo is None:
-            return parsed.replace(tzinfo=local_tz)
-        return parsed.astimezone(local_tz)
-    return None
-
-
-def _series(
-    slots: list[dict[str, Any]],
-    *keys: str,
-    default: float = 0.0,
-) -> list[float]:
-    values: list[float] = []
-    for slot in slots:
-        value: float | None = None
-        for key in keys:
-            if key in slot:
-                try:
-                    value = float(slot[key])
-                except (TypeError, ValueError):
-                    value = None
-                break
-        values.append(value if value is not None else default)
-    return values
-
-
-def _series_map(
-    slots: list[dict[str, Any]],
-    key: str,
+def _collect_inverter_series(
+    timesteps: list[TimestepPlan],
+    accessor: Callable[[InverterTimestepPlan], float | None],
 ) -> dict[str, list[float]]:
-    series: dict[str, list[float]] = {}
-    for slot in slots:
-        value = slot.get(key)
-        if not isinstance(value, dict):
-            continue
-        for name, raw in value.items():
-            try:
-                parsed = float(raw)
-            except (TypeError, ValueError):
-                parsed = 0.0
-            series.setdefault(str(name), []).append(parsed)
-    for values in series.values():
-        if len(values) < len(slots):
-            values.extend([0.0] * (len(slots) - len(values)))
+    names = sorted(
+        {inv.name for step in timesteps for inv in step.inverters.values()}
+    )
+    series: dict[str, list[float]] = {name: [] for name in names}
+    for step in timesteps:
+        inv_map = {inv.name: inv for inv in step.inverters.values()}
+        for name in names:
+            inv = inv_map.get(name)
+            raw = accessor(inv) if inv is not None else None
+            series[name].append(float(raw) if raw is not None else 0.0)
     return series
 
 
-def _extract_top_level_map(plan: object, key: str) -> dict[str, float]:
-    if isinstance(plan, dict):
-        value = plan.get(key)
-    else:
-        value = getattr(plan, key, None)
-    if not isinstance(value, dict):
-        return {}
-    parsed: dict[str, float] = {}
-    for name, raw in value.items():
-        try:
-            parsed[str(name)] = float(raw)
-        except (TypeError, ValueError):
-            parsed[str(name)] = 0.0
-    return parsed
-
-
-def _soc_percent_series(
-    soc_series: dict[str, list[float]],
-    capacities: dict[str, float],
+def _collect_ev_series(
+    timesteps: list[TimestepPlan],
+    accessor: Callable[[EvTimestepPlan], float | None],
 ) -> dict[str, list[float]]:
-    percent: dict[str, list[float]] = {}
-    for name, series in soc_series.items():
-        capacity = float(capacities.get(name, 0.0))
-        if capacity <= 0:
-            continue
-        percent[name] = [(value / capacity) * 100.0 for value in series]
-    return percent
+    names = sorted({ev.name for step in timesteps for ev in step.loads.evs.values()})
+    series: dict[str, list[float]] = {name: [] for name in names}
+    for step in timesteps:
+        ev_map = {ev.name: ev for ev in step.loads.evs.values()}
+        for name in names:
+            ev = ev_map.get(name)
+            raw = accessor(ev) if ev is not None else None
+            series[name].append(float(raw) if raw is not None else 0.0)
+    return series
 
 
 def _has_any(values: Iterable[float]) -> bool:

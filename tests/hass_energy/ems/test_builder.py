@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from hass_energy.ems.solver import solve_once
+from hass_energy.lib.slug import slugify
 from hass_energy.lib.home_assistant import HomeAssistantConfig
 from hass_energy.lib.source_resolver.hass_source import (
     HomeAssistantAmberElectricForecastSource,
@@ -179,11 +180,11 @@ def test_solver_exports_with_positive_price() -> None:
     )
 
     plan = solve_once(config, resolver=resolver, now=now)
-    slots = plan["slots"]
-    assert len(slots) == 2
-    for slot in slots:
-        assert abs(slot["grid_export_kw"] - 1.0) < 1e-6
-        assert abs(slot["grid_import_kw"]) < 1e-6
+    timesteps = plan.timesteps
+    assert len(timesteps) == 2
+    for step in timesteps:
+        assert abs(step.grid.export_kw - 1.0) < 1e-6
+        assert abs(step.grid.import_kw) < 1e-6
 
 
 def test_realtime_price_overrides_current_slot() -> None:
@@ -223,8 +224,8 @@ def test_realtime_price_overrides_current_slot() -> None:
     )
 
     plan = solve_once(config, resolver=resolver, now=now)
-    assert plan["slots"][0]["price_import"] == 0.3
-    assert plan["slots"][1]["price_import"] == 0.2
+    assert plan.timesteps[0].economics.price_import == 0.3
+    assert plan.timesteps[1].economics.price_import == 0.2
 
 
 def test_load_forecast_aligns_to_horizon() -> None:
@@ -293,10 +294,10 @@ def test_load_forecast_aligns_to_horizon() -> None:
     )
 
     plan = solve_once(config, resolver=resolver, now=now)
-    slots = plan["slots"]
-    assert abs(slots[0]["load_kw"] - 9.0) < 1e-6
-    assert abs(slots[1]["load_kw"] - 2.0) < 1e-6
-    assert abs(slots[2]["load_kw"] - 3.0) < 1e-6
+    timesteps = plan.timesteps
+    assert abs(timesteps[0].loads.base_kw - 9.0) < 1e-6
+    assert abs(timesteps[1].loads.base_kw - 2.0) < 1e-6
+    assert abs(timesteps[2].loads.base_kw - 3.0) < 1e-6
 
 
 def test_pv_forecast_reused_per_inverter() -> None:
@@ -374,11 +375,12 @@ def test_pv_forecast_reused_per_inverter() -> None:
     )
 
     plan = solve_once(config, resolver=resolver, now=now)
-    slot = plan["slots"][0]
-    assert abs(slot["pv_inverters"]["A"] - 1.5) < 1e-6
-    assert abs(slot["pv_inverters"]["B"] - 1.5) < 1e-6
-    assert abs(slot["pv_kw"] - 3.0) < 1e-6
-    assert abs(slot["grid_export_kw"] - 3.0) < 1e-6
+    step = plan.timesteps[0]
+    assert abs(step.inverters[slugify("A")].pv_kw - 1.5) < 1e-6
+    assert abs(step.inverters[slugify("B")].pv_kw - 1.5) < 1e-6
+    pv_total = sum(inv.pv_kw or 0.0 for inv in step.inverters.values())
+    assert abs(pv_total - 3.0) < 1e-6
+    assert abs(step.grid.export_kw - 3.0) < 1e-6
 
 
 def test_load_aware_curtailment_blocks_export() -> None:
@@ -419,10 +421,10 @@ def test_load_aware_curtailment_blocks_export() -> None:
     )
 
     plan = solve_once(config, resolver=resolver, now=now)
-    slot = plan["slots"][0]
-    assert slot["curtail_inverters"]["Curtail"] is True
-    assert abs(slot["grid_export_kw"]) < 1e-6
-    assert abs(slot["grid_import_kw"]) < 1e-6
+    step = plan.timesteps[0]
+    assert step.inverters[slugify("Curtail")].curtailment is True
+    assert abs(step.grid.export_kw) < 1e-6
+    assert abs(step.grid.import_kw) < 1e-6
 
 
 def test_binary_curtailment_prefers_import_over_negative_export() -> None:
@@ -463,7 +465,7 @@ def test_binary_curtailment_prefers_import_over_negative_export() -> None:
     )
 
     plan = solve_once(config, resolver=resolver, now=now)
-    slot = plan["slots"][0]
-    assert slot["curtail_inverters"]["Curtail"] is True
-    assert abs(slot["grid_export_kw"]) < 1e-6
-    assert abs(slot["grid_import_kw"] - 0.5) < 1e-6
+    step = plan.timesteps[0]
+    assert step.inverters[slugify("Curtail")].curtailment is True
+    assert abs(step.grid.export_kw) < 1e-6
+    assert abs(step.grid.import_kw - 0.5) < 1e-6

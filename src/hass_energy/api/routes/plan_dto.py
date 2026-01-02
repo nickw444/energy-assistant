@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
+from hass_energy.ems.models import EmsPlanOutput
+
 
 class PlanRunStateDto(BaseModel):
     run_id: str
@@ -17,30 +19,6 @@ class PlanRunStateDto(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class PlanResultDto(BaseModel):
-    generated_at: float
-    status: str
-    objective: float | None = None
-    plan: dict[str, object]
-
-    model_config = ConfigDict(extra="forbid")
-
-    @classmethod
-    def from_plan(cls, plan: object) -> "PlanResultDto":
-        if not isinstance(plan, dict):
-            return cls(generated_at=0.0, status="unknown", objective=None, plan={})
-        generated_at = float(plan.get("generated_at", 0.0) or 0.0)
-        status = str(plan.get("status") or "unknown")
-        objective_raw = plan.get("objective")
-        objective = float(objective_raw) if isinstance(objective_raw, (int, float)) else None
-        return cls(
-            generated_at=generated_at,
-            status=status,
-            objective=objective,
-            plan=plan,
-        )
-
-
 class PlanRunResponseDto(BaseModel):
     run: PlanRunStateDto
     already_running: bool = False
@@ -50,13 +28,13 @@ class PlanRunResponseDto(BaseModel):
 
 class PlanLatestResponseDto(BaseModel):
     run: PlanRunStateDto
-    result: PlanResultDto
+    plan: EmsPlanOutput
 
     model_config = ConfigDict(extra="forbid")
 
 
 class PlanAwaitResponseDto(BaseModel):
     run: PlanRunStateDto
-    result: PlanResultDto
+    plan: EmsPlanOutput
 
     model_config = ConfigDict(extra="forbid")

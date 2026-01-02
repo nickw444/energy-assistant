@@ -4,11 +4,12 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
-from typing import Any, Literal
+from typing import Literal
 
 from hass_energy.ems.solver import solve_once
 from hass_energy.lib.source_resolver.resolver import ValueResolver
 from hass_energy.models.config import AppConfig
+from hass_energy.ems.models import EmsPlanOutput
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ class Worker:
         self._in_progress = False
         self._current_run: PlanRunState | None = None
         self._latest_run: PlanRunState | None = None
-        self._latest_plan: dict[str, Any] | None = None
+        self._latest_plan: EmsPlanOutput | None = None
         self._schedule_task: asyncio.Task[None] | None = None
         self._stop_event = asyncio.Event()
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -85,7 +86,7 @@ class Worker:
         asyncio.create_task(self._run_once(run_state))
         return run_state, False
 
-    async def get_latest(self) -> tuple[PlanRunState, dict[str, Any]] | None:
+    async def get_latest(self) -> tuple[PlanRunState, EmsPlanOutput] | None:
         async with self._condition:
             if self._latest_run is None or self._latest_plan is None:
                 return None
@@ -96,7 +97,7 @@ class Worker:
         *,
         since_ts: float,
         timeout: int,
-    ) -> tuple[PlanRunState, dict[str, Any]] | None:
+    ) -> tuple[PlanRunState, EmsPlanOutput] | None:
         async with self._condition:
             def _predicate() -> bool:
                 return (
@@ -154,7 +155,7 @@ class Worker:
                 self._latest_plan = plan
             self._condition.notify_all()
 
-    def _solve_once_blocking(self) -> dict[str, Any]:
+    def _solve_once_blocking(self) -> EmsPlanOutput:
         self._resolver.hydrate()
         return solve_once(self._app_config, resolver=self._resolver)
 
@@ -195,8 +196,5 @@ def _update_run(
     )
 
 
-def _plan_generated_at(plan: dict[str, Any]) -> float:
-    raw = plan.get("generated_at", 0.0)
-    if isinstance(raw, (int, float)):
-        return float(raw)
-    return 0.0
+def _plan_generated_at(plan: EmsPlanOutput) -> float:
+    return plan.generated_at.timestamp()

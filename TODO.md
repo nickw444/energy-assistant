@@ -1,12 +1,13 @@
 ## EMS
 
+- [ ] Improve output models to reflect plant heirarchy
+- [ ] Better/explicit data passing between builders, rather than shared mutations
 - [ ] Refactoring to improve readability (Less AI Slop)
 - [ ] Implement slot -1 (pre-MPC slot) as model inputs
 - [ ] Better curtailment behaviour: Encourage curtailment even when export is going to be 0, when price is negative.
-- [ ] Improve output models to reflect plant heirarchy
-- [ ] Remove import forbidden periods from the horizon 
+- [x] Remove import forbidden periods from the horizon 
 - [ ] Verify that incentives don't show in total (real) cost values
-- [ ] Better/explicit data passing between builders, rather than shared mutations
+- [ ] Implement a class for the solver instead of using adhoc module level functions
 
 ## Home Assistant Integration
 

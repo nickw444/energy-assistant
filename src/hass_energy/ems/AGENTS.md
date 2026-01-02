@@ -10,6 +10,7 @@ time-stepped plan for plotting/inspection. The core code lives in:
 - `src/hass_energy/ems/solver.py` (solves and extracts plan output)
 - `src/hass_energy/ems/horizon.py` (time horizon and slotting)
 - `src/hass_energy/ems/forecast_alignment.py` (forecast alignment)
+- `src/hass_energy/ems/models.py` (typed plan output models; `solve_once` returns `EmsPlanOutput`)
 
 ## EMS Design (Canonical)
 
