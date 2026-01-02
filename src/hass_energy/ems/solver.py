@@ -23,7 +23,7 @@ def solve_once(
         raise ValueError("resolver is required")
 
     solve_time = now or datetime.now().astimezone()
-    horizon = build_horizon(app_config.ems, app_config.plant, now=solve_time)
+    horizon = build_horizon(app_config.ems, now=solve_time)
 
     builder = MILPBuilder(
         plant=app_config.plant,
@@ -58,6 +58,7 @@ def _extract_plan(model: Any, horizon: Horizon) -> dict[str, Any]:
     price_import = model_series.price_import
     price_export = model_series.price_export
     Curtail_inv = vars.Curtail_inv
+    import_allowed = model_series.import_allowed
 
     cumulative_cost = 0.0
     slots: list[dict[str, Any]] = []
@@ -139,7 +140,7 @@ def _extract_plan(model: Any, horizon: Horizon) -> dict[str, Any]:
                 "inverter_ac_net_kw": inverter_ac_net,
                 "curtail_inverters": curtail_inverters,
                 "curtail_any": any(curtail_inverters.values()),
-                "import_allowed": bool(horizon.import_allowed[t]),
+                "import_allowed": bool(import_allowed[t]),
             }
         )
 

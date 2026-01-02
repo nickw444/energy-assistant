@@ -21,7 +21,6 @@ def _make_horizon(start: datetime, interval_minutes: int, num_intervals: int) ->
         interval_minutes=interval_minutes,
         num_intervals=num_intervals,
         slots=slots,
-        import_allowed=[True] * num_intervals,
     )
 
 
