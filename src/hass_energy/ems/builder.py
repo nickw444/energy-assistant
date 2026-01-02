@@ -230,6 +230,11 @@ class MILPBuilder:
                 forecast_source=inverter.pv.forecast,
                 realtime_source=inverter.pv.realtime_power,
             )
+            # Clamp to [0, peak_power_kw] to avoid infeasible PV generation.
+            pv_available_kw_series = [
+                max(0.0, min(float(value), inverter.peak_power_kw))
+                for value in pv_available_kw_series
+            ]
 
             curtailment = inverter.curtailment
             if curtailment is None:

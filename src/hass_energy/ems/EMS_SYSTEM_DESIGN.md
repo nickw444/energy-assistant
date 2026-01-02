@@ -1,927 +1,453 @@
-Deprecated: the canonical EMS design now lives in `src/hass_energy/ems/AGENTS.md`.
+# EMS MILP System Design (Implemented)
 
-Here’s a full end-to-end design doc for the EMS MILP system based on everything we’ve discussed. I’ll keep it practical and implementation-oriented, with code snippets you can drop into a real codebase.
-
----
-
-# Home EMS MILP Optimiser — System Design Document
-
-## 1. Purpose & Scope
-
-This system is a **MILP-based optimiser** that:
-
-* Takes a **structured plant configuration** (your YAML with grid, inverters, PV, battery, controllable loads like Tessie).
-* Resolves **realtime + forecast data** from Home Assistant (and others).
-* Builds a **PuLP MILP model** representing:
-
-  * physical constraints (power limits, SoC, inverter topology),
-  * economics (grid prices, FiT),
-  * incentives (self-consumption, EV SoC, battery wear).
-* Solves for an **optimal control plan** over a time horizon (e.g. 24h with 5-min intervals).
-* Applies **only the first interval’s actions** to the real system; the rest is for visualisation.
-
-Architecture is based on **Option 2 — hierarchical component builders**:
-
-* The YAML config **is the graph**.
-* We compile it top-down into MILP variables and constraints.
-* Each component builder (grid, inverter, PV, battery, load) owns its own variables and constraints.
+This document describes the **current implementation** under `src/hass_energy/ems/`.
+It is intended to mirror the shipped code (builder, solver, horizon, forecast
+alignment, resolver inputs). Keep it in sync with `src/hass_energy/ems/AGENTS.md`.
 
 ---
 
-## 2. High-Level Architecture
+## 1. Scope and status
 
-### 2.1 Modules
+The EMS package builds and solves a PuLP MILP that produces a **time-stepped plan**
+for grid import/export, PV utilization, battery usage, and controllable EV charging.
+It does **not** currently apply control actions to devices; it only solves and
+emits a plan for inspection/plotting. The plan is used by:
 
-Proposed Python package layout:
+- CLI (`hass-energy ems solve`) for ad-hoc solves + plotting.
+- Background worker (`hass_energy/worker/`) for scheduled solves every minute.
+- API (`hass_energy/api/routes/plan.py`) for fetching/awaiting plan output.
 
-```text
-ems/
-  config/
-    models.py          # Pydantic config schema
-    loader.py          # Load + validate YAML
-  horizon/
-    horizon.py         # Time discretisation (Option C)
-  data/
-    timeseries.py      # TimeSeriesHandle interfaces and HA adapters
-  model/
-    builder.py         # MILPBuilder and component builders
-    objective.py       # Objective construction
-  runtime/
-    solver.py          # End-to-end solve() orchestration
-    actions.py         # Mapping MILP outputs → inverter / HA commands
-```
-
-### 2.2 Data Flow
-
-At each optimisation tick:
-
-1. **Load config** (once at startup) → `Config` (Pydantic).
-2. **Resolve dynamic data**:
-
-   * prices, PV forecast, load, SoC, etc. via `TimeSeriesHandle`s.
-3. **Construct Horizon**:
-
-   * now, intervals (5 min), number of intervals (e.g. 288 for 24h).
-4. **Build MILP model** via `MILPBuilder`:
-
-   * create variables & constraints for grid, inverters, PV, battery, loads.
-   * add objective.
-5. **Solve** with PuLP.
-6. **Extract plan**:
-
-   * actions for `t=0` → commands for Home Assistant / inverter API.
-   * future intervals → visualisation.
+The EMS implementation here is independent from the MILP v2 scaffolding under
+`src/hass_energy/milp_v2/`.
 
 ---
 
-## 3. Configuration Layer
+## 2. Code map (actual modules)
 
-You already have a detailed YAML. We’ll model it with Pydantic.
+Core EMS code lives in:
 
-### 3.1 YAML (simplified example)
+- `src/hass_energy/ems/builder.py`
+  - Builds variables, constraints, and objective.
+- `src/hass_energy/ems/solver.py`
+  - Orchestrates build + solve and extracts a plan.
+- `src/hass_energy/ems/horizon.py`
+  - Time slotting, timezone resolution, import-forbidden evaluation.
+- `src/hass_energy/ems/forecast_alignment.py`
+  - Aligns forecast intervals to horizon slots with optional slot-0 overrides.
 
-*(Token redacted and some details trimmed)*
+Supporting runtime pieces:
 
-```yaml
-server:
-  host: 127.0.0.1
-  port: 8000
-  data_dir: ./data
-
-homeassistant:
-  base_url: "https://hass.nickwhyte.com"
-  token: "YOUR_LONG_LIVED_TOKEN"
-  verify_tls: true
-  timeout_seconds: 30
-
-ems:
-  interval_duration: 5
-  num_intervals: 288   # 24h
-
-plant:
-  grid:
-    max_import_kw: 13.0
-    max_export_kw: 13.0
-    realtime_grid_power:
-      type: home_assistant
-      entity: sensor.hass_energy_grid_power_smoothed_1m
-    realtime_price_import:
-      type: home_assistant
-      entity: sensor.amber_general_price
-    realtime_price_export:
-      type: home_assistant
-      entity: sensor.amber_feed_in_price
-    price_import_forecast:
-      type: home_assistant
-      platform: amberelectric
-      entity: sensor.amber_general_forecast
-      use_advanced_price_forecast: true
-    price_export_forecast:
-      type: home_assistant
-      platform: amberelectric
-      entity: sensor.amber_feed_in_forecast
-      use_advanced_price_forecast: true
-    import_forbidden_periods:
-      - start: "14:55"
-        end: "21:05"
-
-  load:
-    realtime_load_power:
-      type: home_assistant
-      entity: sensor.hass_energy_load_power_smoothed_1m
-    forecast:
-      type: home_assistant
-      platform: historical_average
-      entity: sensor.hass_energy_load_power_smoothed_1m
-      history_days: 7
-      interval_duration: 5
-      unit: W
-
-  inverters:
-    - name: Primary
-      peak_power_kw: 10.0
-      ac_efficiency_pct: 96.0
-      curtailment: load-aware
-      pv:
-        realtime_power:
-          type: home_assistant
-          entity: sensor.hass_energy_pv_power_smoothed_1m
-        forecast:
-          type: home_assistant
-          platform: solcast
-          entities:
-            - sensor.solcast_pv_forecast_forecast_today
-            - sensor.solcast_pv_forecast_forecast_tomorrow
-            - sensor.solcast_pv_forecast_forecast_day_3
-      battery:
-        capacity_kwh: 41.9
-        min_soc_pct: 10.0
-        max_soc_pct: 100.0
-        reserve_soc_pct: 20.0
-        max_charge_kw: 11.0 
-        max_discharge_kw: 11.0
-        state_of_charge_pct:
-          type: home_assistant
-          entity: sensor.inverter_battery_soc
-
-    - name: Sungrow
-      peak_power_kw: 5.0
-      ac_efficiency_pct: 95.0
-      curtailment: binary
-      pv:
-        forecast:
-          type: home_assistant
-          platform: solcast
-          entities:
-            - sensor.solcast_pv_forecast_forecast_today
-            - sensor.solcast_pv_forecast_forecast_tomorrow
-            - sensor.solcast_pv_forecast_forecast_day_3
-
-loads:
-  - name: "Tessie"
-    load_type: "controlled_ev"
-    min_power_kw: 0.0
-    max_power_kw: 7.4
-    energy_kwh: 78.0
-    connected:
-      type: home_assistant
-      entity: binary_sensor.tesla_wall_connector_vehicle_connected
-    realtime_power:
-      type: home_assistant
-      entity: sensor.tessie_charger_power
-    state_of_charge_pct:
-      type: home_assistant
-      entity: sensor.tessie_battery
-    soc_incentives:
-      - target_soc_pct: 40.0
-        incentive: 0.08
-      - target_soc_pct: 60.0
-        incentive: 0.06
-      - target_soc_pct: 80.0
-        incentive: 0.04
-      - target_soc_pct: 90.0
-        incentive: 0.00
-```
-
-### 3.2 Pydantic Models (sketch)
-
-```python
-# ems/config/models.py
-from pydantic import BaseModel, Field
-from typing import Literal, List, Optional
-
-
-class HomeAssistantEntitySource(BaseModel):
-    type: Literal["home_assistant"]
-    entity: str = Field(min_length=1)
-
-
-class PriceForecastSource(BaseModel):
-    type: Literal["home_assistant"]
-    platform: Literal["amberelectric", "solcast"]
-    entity: str
-    entities: Optional[list[str]] = None
-    use_advanced_price_forecast: Optional[bool] = None
-
-
-class ImportForbiddenPeriod(BaseModel):
-    start: str  # "HH:MM"
-    end: str
-
-
-class GridConfig(BaseModel):
-    max_import_kw: float
-    max_export_kw: float
-    realtime_grid_power: HomeAssistantEntitySource
-    realtime_price_import: HomeAssistantEntitySource
-    realtime_price_export: HomeAssistantEntitySource
-    price_import_forecast: PriceForecastSource
-    price_export_forecast: PriceForecastSource
-    import_forbidden_periods: list[ImportForbiddenPeriod] = Field(default_factory=list)
-
-
-class PVConfig(BaseModel):
-    realtime_power: Optional[HomeAssistantEntitySource] = None
-    forecast: PriceForecastSource  # repurposed for PV forecast (required)
-
-
-class BatteryConfig(BaseModel):
-    capacity_kwh: float
-    min_soc_pct: float
-    max_soc_pct: float
-    reserve_soc_pct: float
-    max_charge_kw: float
-    max_discharge_kw: float
-    state_of_charge_pct: HomeAssistantEntitySource
-
-
-class InverterConfig(BaseModel):
-    name: str
-    peak_power_kw: float
-    ac_efficiency_pct: float
-    curtailment: Optional[Literal["load-aware", "binary"]] = None
-    pv: PVConfig
-    battery: Optional[BatteryConfig] = None
-
-
-class LoadRealtimeConfig(BaseModel):
-    realtime_load_power: HomeAssistantEntitySource
-    forecast: Optional[HomeAssistantEntitySource] = None
-
-
-class EVSocIncentive(BaseModel):
-    target_soc_pct: float
-    incentive: float
-
-
-class ControlledEVConfig(BaseModel):
-    name: str
-    load_type: Literal["controlled_ev"]
-    min_power_kw: float
-    max_power_kw: float
-    energy_kwh: float
-    connected: HomeAssistantEntitySource
-    realtime_power: HomeAssistantEntitySource
-    state_of_charge_pct: HomeAssistantEntitySource
-    soc_incentives: list[EVSocIncentive]
-
-
-class PlantConfig(BaseModel):
-    grid: GridConfig
-    load: LoadRealtimeConfig
-    inverters: list[InverterConfig]
-
-
-class EMSConfig(BaseModel):
-    interval_duration: int
-    num_intervals: int
-
-
-class RootConfig(BaseModel):
-    ems: EMSConfig
-    plant: PlantConfig
-    loads: list[ControlledEVConfig]
-```
+- `src/hass_energy/lib/source_resolver/`
+  - `ValueResolver`, HA sources, and forecast interval models.
+- `src/hass_energy/worker/`
+  - Background scheduler that runs EMS every minute.
+- `src/hass_energy/api/routes/plan.py`
+  - Plan run/await endpoints.
+- `src/hass_energy/plotting/plan.py`
+  - Plotting helpers used by the CLI.
 
 ---
 
-## 4. Time & Horizon Model
+## 3. Runtime flow (what actually happens)
 
-### 4.1 Horizon (Option C — realtime lead-in + aligned forecast)
+### 3.1 CLI solve (`hass-energy ems solve`)
 
-```python
-# ems/horizon/horizon.py
-from datetime import datetime, timedelta
+1. `load_app_config()` parses YAML into `AppConfig`.
+2. `ValueResolver` is created, config is marked for hydration, and HA data is fetched.
+3. `solve_once()`:
+   - Builds horizon via `build_horizon()`.
+   - Builds MILP via `MILPBuilder.build()`.
+   - Solves with CBC (`pulp.PULP_CBC_CMD`).
+   - Extracts a plan dictionary via `_extract_plan()`.
+4. Plan JSON is written to `data_dir/ems_plan.json` by default.
+5. `plot_plan()` renders a chart (optional).
 
+### 3.2 Worker + API
 
-def align_to_interval_boundary(now: datetime, interval_minutes: int) -> datetime:
-    # Round up to next multiple of interval_minutes
-    minutes = (now.minute // interval_minutes) * interval_minutes
-    base = now.replace(minute=minutes, second=0, microsecond=0)
-    if base < now:
-        base += timedelta(minutes=interval_minutes)
-    return base
-
-
-class Horizon:
-    def __init__(self, now: datetime, interval_minutes: int, num_intervals: int):
-        self.now = now
-        self.interval_minutes = interval_minutes
-        self.num_intervals = num_intervals
-
-        self.align_time = align_to_interval_boundary(now, interval_minutes)
-        self.dt0_minutes = (self.align_time - now).total_seconds() / 60.0
-        self.dt_regular_minutes = interval_minutes
-
-    @property
-    def T(self):
-        return range(self.num_intervals)
-
-    def dt_hours(self, t: int) -> float:
-        if t == 0:
-            return self.dt0_minutes / 60.0
-        return self.dt_regular_minutes / 60.0
-
-    def time_window(self, t: int) -> tuple[datetime, datetime]:
-        if t == 0:
-            return self.now, self.align_time
-        start = self.align_time + timedelta(
-            minutes=(t - 1) * self.interval_minutes
-        )
-        end = start + timedelta(minutes=self.interval_minutes)
-        return start, end
-```
+- The worker (`hass_energy/worker/service.py`) schedules a solve every minute.
+- Each run hydrates HA data, solves the MILP, and stores the latest plan in memory.
+- API endpoints allow:
+  - Triggering a run (`POST /plan/run`).
+  - Fetching latest (`GET /plan/latest`).
+  - Waiting for a fresh plan (`GET /plan/await`).
 
 ---
 
-## 5. Time Series Resolution Layer
+## 4. Configuration model (what the solver expects)
 
-### 5.1 TimeSeriesHandle Interface
+The EMS consumes `AppConfig` from `src/hass_energy/models/config.py`:
 
-```python
-# ems/data/timeseries.py
-from abc import ABC, abstractmethod
-from typing import List
-from ..horizon.horizon import Horizon
+- `ems`: `EmsConfig`
+  - `interval_duration` (minutes)
+  - `num_intervals`
+  - `timezone` (optional)
+- `plant`: `PlantConfig`
+  - `grid`: `GridConfig`
+  - `load`: `PlantLoadConfig`
+  - `inverters`: list[`InverterConfig`]
+- `loads`: list[`LoadConfig`] (currently `controlled_ev` and `nonvariable_load`)
 
+### 4.1 Grid (`GridConfig`)
 
-class TimeSeriesHandle(ABC):
-    @abstractmethod
-    def resolve(self, horizon: Horizon) -> List[float]:
-        """Return one value per timestep in the horizon."""
-        ...
+Fields used by EMS:
 
+- `max_import_kw`, `max_export_kw`
+- `realtime_price_import`, `realtime_price_export`
+- `price_import_forecast`, `price_export_forecast`
+- `import_forbidden_periods` (list of `TimeWindow`)
 
-class ScalarHandle(ABC):
-    @abstractmethod
-    def resolve_current(self) -> float:
-        """Return a single current value (e.g. SoC%)."""
-        ...
-```
+Note: `realtime_grid_power` exists in config but is **not used** by the EMS solver.
 
-You’ll implement HA-backed subclasses, e.g. `HAEntityHandle`, `AmberPriceForecastHandle`, `SolcastForecastHandle`.
+### 4.2 Plant load (`PlantLoadConfig`)
 
-These are responsible for sticking together realtime + forecast into a single, aligned array for the horizon.
+- `realtime_load_power`
+- `forecast` (historical average)
 
----
+The load forecast **must** use the same `interval_duration` as `ems.interval_duration`
+(enforced in `MILPBuilder._resolve_series`). The plant load should **exclude
+controllable loads** (EV charging), which are modeled separately.
 
-## 6. MILP Model Layer
+### 4.3 Inverters (`InverterConfig`)
 
-We use PuLP as the MILP backend.
+Fields:
 
-### 6.1 MILPBuilder Skeleton
+- `name`
+- `peak_power_kw`
+- `curtailment` (None | "binary" | "load-aware")
+- `pv` (forecast + optional realtime)
+- `battery` (optional)
 
-```python
-# ems/model/builder.py
-import pulp
-from typing import Dict, Any
-from ..config.models import PlantConfig, ControlledEVConfig
-from ..horizon.horizon import Horizon
-from .objective import build_objective
+### 4.4 Battery (`BatteryConfig`)
 
+Fields:
 
-class MILPModel:
-    def __init__(self, problem: pulp.LpProblem, vars: dict[str, Any]):
-        self.problem = problem
-        self.vars = vars
+- `capacity_kwh`
+- `storage_efficiency_pct`
+- `throughput_cost_per_kwh`
+- `min_soc_pct`, `max_soc_pct`, `reserve_soc_pct`
+- `max_charge_kw`, `max_discharge_kw` (optional)
+- `state_of_charge_pct` (realtime)
+- `realtime_power` (currently unused by EMS)
 
+### 4.5 Loads (`LoadConfig`)
 
-class MILPBuilder:
-    def __init__(
-        self,
-        plant_cfg: PlantConfig,
-        ev_cfgs: list[ControlledEVConfig],
-        horizon: Horizon,
-        resolved_data: dict[str, Any],  # map of resolved time series, SoC, etc.
-    ):
-        self.plant_cfg = plant_cfg
-        self.ev_cfgs = ev_cfgs
-        self.horizon = horizon
-        self.resolved = resolved_data
+`controlled_ev` loads support:
 
-        self.problem = pulp.LpProblem("ems_optimisation", pulp.LpMinimize)
-        self.vars: dict[str, Any] = {}
+- `min_power_kw`, `max_power_kw`, `energy_kwh`
+- `connected` (binary sensor)
+- `can_connect` (optional binary signal)
+- `allowed_connect_times` (list of `TimeWindow`, optional)
+- `connect_grace_minutes` (minutes before assuming EV can be connected)
+- `realtime_power`, `state_of_charge_pct`
+- `soc_incentives` (list of `{target_soc_pct, incentive}`)
 
-    def build(self) -> MILPModel:
-        self._build_grid()
-        self._build_ac_bus()
-        self._build_inverters()
-        self._build_ev_loads()
-        build_objective(self.problem, self.vars, self.resolved, self.horizon)
-        return MILPModel(self.problem, self.vars)
-```
-
-We’ll flesh out `_build_grid`, `_build_inverters`, `_build_ev_loads` etc. below.
+`nonvariable_load` exists but is currently a placeholder (no constraints added).
 
 ---
 
-## 7. Component Builders
+## 5. Time handling and horizon
 
-### 7.1 Grid + AC Bus
+`build_horizon()` (see `src/hass_energy/ems/horizon.py`) creates the planning
+slots used by the MILP.
 
-```python
-# ems/model/builder.py (continued)
+- **Timezone resolution**:
+  - If `ems.timezone` is set, it is used.
+  - Otherwise uses `now.tzinfo` or system local timezone.
+- **Slotting**:
+  - Horizon start is floored to the current interval boundary.
+  - Slots are **fixed-length** intervals of `interval_duration` minutes.
+  - There is **no partial slot** at `t=0`; the first slot may partially precede `now`.
+- **Import forbidden periods**:
+  - `import_allowed[t]` is computed per slot by comparing the slot start time
+    against `grid.import_forbidden_periods`.
+  - Time windows use local time-of-day and can wrap midnight.
 
-    def _build_grid(self):
-        T = self.horizon.T
-        cfg = self.plant_cfg.grid
+Key types:
 
-        P_import = pulp.LpVariable.dicts(
-            "P_grid_import", T, lowBound=0
-        )
-        P_export = pulp.LpVariable.dicts(
-            "P_grid_export", T, lowBound=0
-        )
-
-        self.vars["P_grid_import"] = P_import
-        self.vars["P_grid_export"] = P_export
-
-        for t in T:
-            self.problem += (
-                P_import[t] <= cfg.max_import_kw,
-                f"grid_import_cap_t{t}",
-            )
-            self.problem += (
-                P_export[t] <= cfg.max_export_kw,
-                f"grid_export_cap_t{t}",
-            )
-
-        # Forbidden import periods
-        grid_import_allowed = self.resolved["grid_import_allowed"]  # [0/1] per t
-        for t in T:
-            self.problem += (
-                P_import[t] <= cfg.max_import_kw * grid_import_allowed[t],
-                f"grid_import_forbidden_t{t}",
-            )
-
-    def _build_ac_bus(self):
-        """
-        AC bus balance is built after we have:
-        - grid import/export vars
-        - inverter AC vars
-        - load vars
-        So we call this at the end of build(), or treat it as a separate
-        pass that uses self.vars.
-        """
-        pass  # placeholder; we’ll show the idea below
-```
-
-We’ll define AC bus balance once all components are created. Conceptually:
-
-```python
-def _build_ac_bus(self):
-    T = self.horizon.T
-    P_import = self.vars["P_grid_import"]
-    P_export = self.vars["P_grid_export"]
-    P_load = self.vars["P_load_total"]  # fixed load
-    P_inv_ac = self.vars["P_inv_ac"]    # dict[inverter_name][t]
-    P_ev = self.vars["P_ev_charge"]     # dict[ev_name][t]
-
-    for t in T:
-        self.problem += (
-            P_import[t]
-            + sum(P_inv_ac[inv][t] for inv in P_inv_ac.keys())
-            - P_export[t]
-            - P_load[t]
-            - sum(P_ev[ev][t] for ev in P_ev.keys())
-            == 0,
-            f"ac_power_balance_t{t}",
-        )
-```
-
-### 7.2 PV & Inverter
-
-Per inverter:
-
-* AC variable `P_inv_ac[i,t]` (signed).
-* DC net power variable `P_inv_dc_net[i,t]`.
-* PV used variables per PV.
-* Boolean `Curtail_inv[i,t]`.
-
-```python
-    def _build_inverters(self):
-        T = self.horizon.T
-        self.vars["P_inv_ac"] = {}
-        self.vars["P_inv_dc_net"] = {}
-        self.vars["Curtail_inv"] = {}
-        self.vars["P_pv_used"] = {}
-
-        for inv_cfg in self.plant_cfg.inverters:
-            inv_name = inv_cfg.name
-
-            P_inv_ac = pulp.LpVariable.dicts(
-                f"P_inv_ac[{inv_name}]", T,
-                lowBound=-inv_cfg.peak_power_kw,
-                upBound=inv_cfg.peak_power_kw,
-            )
-            P_inv_dc_net = pulp.LpVariable.dicts(
-                f"P_inv_dc_net[{inv_name}]", T
-            )
-            Curtail = pulp.LpVariable.dicts(
-                f"Curtail_inv[{inv_name}]", T, lowBound=0, upBound=1, cat="Binary"
-            )
-
-            self.vars["P_inv_ac"][inv_name] = P_inv_ac
-            self.vars["P_inv_dc_net"][inv_name] = P_inv_dc_net
-            self.vars["Curtail_inv"][inv_name] = Curtail
-
-            # AC efficiency
-            eta_ac = inv_cfg.ac_efficiency_pct / 100.0
-            for t in T:
-                self.problem += (
-                    P_inv_ac[t] == eta_ac * P_inv_dc_net[t],
-                    f"inv_dc_ac_link[{inv_name}]_t{t}",
-                )
-
-            # PV on this inverter
-            pv_used_for_inv = {}
-            pv_available = self.resolved["pv_available"][inv_name]  # dict[j][t]
-
-            for j, pv_cfg in enumerate(inv_cfg.pv):
-                P_pv_used = pulp.LpVariable.dicts(
-                    f"P_pv_used[{inv_name},{j}]", T, lowBound=0
-                )
-                pv_used_for_inv[j] = P_pv_used
-
-                for t in T:
-                    P_avail = pv_available[j][t]
-                    self.problem += (
-                        P_pv_used[t] <= P_avail,
-                        f"pv_used_cap[{inv_name},{j}]_t{t}",
-                    )
-
-            self.vars["P_pv_used"][inv_name] = pv_used_for_inv
-
-            # Curtailment gating: sum(P_used) ≥ sum(P_avail) * (1 - Curtail)
-            for t in T:
-                total_used = sum(
-                    pv_used_for_inv[j][t] for j in pv_used_for_inv.keys()
-                )
-                total_avail = sum(
-                    pv_available[j][t] for j in pv_available.keys()
-                )
-                self.problem += (
-                    total_used >= total_avail * (1 - Curtail[t]),
-                    f"pv_curtail_gate[{inv_name}]_t{t}",
-                )
-
-            # DC bus balance gets finished after battery is built
-```
-
-### 7.3 Battery
-
-For the battery attached to an inverter:
-
-```python
-    def _build_batteries(self):
-        T = self.horizon.T
-        if "P_bat_charge" not in self.vars:
-            self.vars["P_bat_charge"] = {}
-            self.vars["P_bat_discharge"] = {}
-            self.vars["SOC"] = {}
-
-        for inv_cfg in self.plant_cfg.inverters:
-            inv_name = inv_cfg.name
-            bat_cfg = inv_cfg.battery
-            if bat_cfg is None:
-                continue
-            bat_id = f"{inv_name}_bat"
-
-            P_ch = pulp.LpVariable.dicts(
-                f"P_bat_charge[{bat_id}]", T, lowBound=0
-            )
-            P_dis = pulp.LpVariable.dicts(
-                f"P_bat_discharge[{bat_id}]", T, lowBound=0
-            )
-            SOC = pulp.LpVariable.dicts(
-                f"SOC[{bat_id}]", range(len(T)+1)  # SOC indexed 0..T
-            )
-
-            self.vars["P_bat_charge"][bat_id] = P_ch
-            self.vars["P_bat_discharge"][bat_id] = P_dis
-            self.vars["SOC"][bat_id] = SOC
-
-            cap = bat_cfg.capacity_kwh
-            min_soc = bat_cfg.min_soc_pct / 100.0 * cap
-            max_soc = bat_cfg.max_soc_pct / 100.0 * cap
-            reserve = bat_cfg.reserve_soc_pct / 100.0 * cap
-            soc_now_pct = self.resolved["battery_soc_pct"][bat_id]
-            soc_now_kwh = soc_now_pct / 100.0 * cap
-
-            # Initial SOC
-            self.problem += (
-                SOC[0] == soc_now_kwh,
-                f"soc_init[{bat_id}]",
-            )
-
-            # SOC bounds
-            for t in range(len(T)+1):
-                self.problem += (
-                    SOC[t] >= reserve,
-                    f"soc_reserve[{bat_id}]_t{t}",
-                )
-                self.problem += (
-                    SOC[t] <= max_soc,
-                    f"soc_max[{bat_id}]_t{t}",
-                )
-
-            # Dynamics
-            eta_ch = 1.0  # or config if you want
-            eta_dis = 1.0
-
-            for idx, t in enumerate(T):
-                dt = self.horizon.dt_hours(t)
-                self.problem += (
-                    SOC[idx+1]
-                    == SOC[idx]
-                       + eta_ch * P_ch[t] * dt
-                       - (1 / eta_dis) * P_dis[t] * dt,
-                    f"soc_dyn[{bat_id}]_t{t}",
-                )
-
-            # Terminal neutral constraint
-            terminal_lb = max(reserve, soc_now_kwh)
-            last_idx = len(T)
-            self.problem += (
-                SOC[last_idx] >= terminal_lb,
-                f"soc_terminal[{bat_id}]",
-            )
-```
-
-Then, in inverter DC balance:
-
-```python
-    def _finalise_inverter_dc_balance(self):
-        T = self.horizon.T
-        for inv_cfg in self.plant_cfg.inverters:
-            inv_name = inv_cfg.name
-            P_inv_dc = self.vars["P_inv_dc_net"][inv_name]
-            pv_used = self.vars["P_pv_used"][inv_name]
-
-            # Sum battery flows on this inverter
-            bat_id = f"{inv_name}_bat"
-            for t in T:
-                P_ch_sum = 0
-                P_dis_sum = 0
-                if bat_id in self.vars["P_bat_charge"]:
-                    P_ch_sum = self.vars["P_bat_charge"][bat_id][t]
-                    P_dis_sum = self.vars["P_bat_discharge"][bat_id][t]
-
-                total_pv_used = sum(
-                    pv_used[j][t] for j in pv_used.keys()
-                )
-
-                # DC balance: PV used + bat_discharge - bat_charge = P_inv_dc_net
-                self.problem += (
-                    total_pv_used + P_dis_sum - P_ch_sum
-                    == P_inv_dc[t],
-                    f"dc_balance[{inv_name}]_t{t}",
-                )
-```
-
-### 7.4 Load & EV
-
-Distinguish between:
-
-* **Non-controllable load** (parameter `P_load_total[t]` from resolved timeseries).
-* **Controlled EV load** with its own SoC.
-
-EV as example:
-
-```python
-    def _build_ev_loads(self):
-        T = self.horizon.T
-        self.vars["P_ev_charge"] = {}
-        self.vars["SOC_ev"] = {}
-
-        for ev_cfg in self.ev_cfgs:
-            ev_name = ev_cfg.name
-            P_ev = pulp.LpVariable.dicts(
-                f"P_ev_charge[{ev_name}]", T,
-                lowBound=ev_cfg.min_power_kw, upBound=ev_cfg.max_power_kw
-            )
-            SOC_ev = pulp.LpVariable.dicts(
-                f"SOC_ev[{ev_name}]", range(len(T)+1)
-            )
-
-            self.vars["P_ev_charge"][ev_name] = P_ev
-            self.vars["SOC_ev"][ev_name] = SOC_ev
-
-            cap = ev_cfg.energy_kwh
-            soc_now_pct = self.resolved["ev_soc_pct"][ev_name]
-            soc_now_kwh = soc_now_pct / 100.0 * cap
-
-            # Initial SoC
-            self.problem += (
-                SOC_ev[0] == soc_now_kwh,
-                f"ev_soc_init[{ev_name}]",
-            )
-
-            for t in range(len(T)+1):
-                self.problem += (
-                    SOC_ev[t] >= 0,
-                    f"ev_soc_min[{ev_name}]_t{t}",
-                )
-                self.problem += (
-                    SOC_ev[t] <= cap,
-                    f"ev_soc_max[{ev_name}]_t{t}",
-                )
-
-            for idx, t in enumerate(T):
-                dt = self.horizon.dt_hours(t)
-                self.problem += (
-                    SOC_ev[idx+1] == SOC_ev[idx] + P_ev[t] * dt,
-                    f"ev_soc_dyn[{ev_name}]_t{t}",
-                )
-
-            # AC bus will include P_ev_charge in balance
-```
+- `Horizon`: holds `now`, `start`, `slots`, `import_allowed`, and `T` range.
+- `HorizonSlot`: `index`, `start`, `end`, `duration_h`.
 
 ---
 
-## 8. Objective Builder
+## 6. Data resolution and forecast alignment
 
-```python
-# ems/model/objective.py
-import pulp
-from ..horizon.horizon import Horizon
+### 6.1 ValueResolver and HA sources
 
+`ValueResolver` (`src/hass_energy/lib/source_resolver/resolver.py`) resolves
+`EntitySource` instances by pulling data from `HassDataProvider`.
 
-def build_objective(problem: pulp.LpProblem, vars: dict, resolved: dict, horizon: Horizon):
-    T = horizon.T
-    P_import = vars["P_grid_import"]
-    P_export = vars["P_grid_export"]
+Supported source types:
 
-    price_import = resolved["price_import"]  # [t]
-    price_export = resolved["price_export"]  # [t]
+- `HomeAssistantEntitySource` (single entity)
+- `HomeAssistantMultiEntitySource` (multiple entities)
+- `HomeAssistantHistoryEntitySource` (history data)
 
-    J = 0
+Forecast sources map HA data into interval lists:
 
-    # Grid cost
-    for t in T:
-        dt = horizon.dt_hours(t)
-        J += (P_import[t] * price_import[t]
-              - P_export[t] * price_export[t]) * dt
+- **Price forecasts**: `HomeAssistantAmberElectricForecastSource` →
+  list[`PriceForecastInterval`]
+- **PV forecasts**: `HomeAssistantSolcastForecastSource` →
+  list[`PowerForecastInterval`]
+- **Load forecast**: `HomeAssistantHistoricalAverageForecastSource` →
+  list[`PowerForecastInterval`]
 
-    # Curtailment penalty
-    w_curtail = resolved.get("w_curtail", 0.0)
-    for inv_name, curt_dict in vars["Curtail_inv"].items():
-        for t in T:
-            J += w_curtail * curt_dict[t]
+### 6.2 Alignment to horizon
 
-    # Battery cycling penalty
-    w_cycle = resolved.get("w_cycle", 0.0)
-    for bat_id, P_ch in vars.get("P_bat_charge", {}).items():
-        P_dis = vars["P_bat_discharge"][bat_id]
-        for t in T:
-            dt = horizon.dt_hours(t)
-            J += w_cycle * (P_ch[t] + P_dis[t]) * dt
+`PowerForecastAligner` / `PriceForecastAligner`:
 
-    # EV terminal value (simple linear)
-    λ_ev = resolved.get("lambda_ev", 0.0)
-    for ev_name, SOC_ev in vars.get("SOC_ev", {}).items():
-        last_idx = len(T)
-        J -= λ_ev * SOC_ev[last_idx]
+- Convert forecast intervals into a per-slot series.
+- Require the forecast to **cover the full horizon**.
+- Allow a **missing slot 0** only when `first_slot_override` is provided.
+- For each slot, the aligner selects the first interval that overlaps the slot
+  (no interpolation or duration weighting).
 
-    problem += J
-```
+### 6.3 Realtime overrides
+
+The builder uses:
+
+- Load forecast + realtime load override for **slot 0**.
+- PV forecast + realtime PV override for **slot 0** (if realtime exists).
+- Price forecast + realtime price override for **slot 0**.
+
+If a forecast is missing and a realtime source exists, the series is filled with
+that realtime value for all slots (currently used only when a forecast is
+configured as optional, which is rare in EMS configs).
 
 ---
 
-## 9. Runtime Orchestration
+## 7. MILP model (variables and constraints)
 
-### 9.1 Solver Loop
+All MILP construction happens in `MILPBuilder`.
 
-```python
-# ems/runtime/solver.py
-from datetime import datetime
-import pulp
-from ..config.loader import load_config
-from ..horizon.horizon import Horizon
-from ..data.timeseries import resolve_all_timeseries
-from ..model.builder import MILPBuilder
+### 7.1 Variables (key sets)
 
+Grid:
 
-def run_optimisation_once(config_path: str):
-    cfg = load_config(config_path)
-    now = datetime.now()  # or injected clock
+- `P_grid_import[t]` (kW)
+- `P_grid_export[t]` (kW)
+- `P_grid_import_violation_kw[t]` (kW, slack for forbidden imports)
+- `Grid_import_on[t]` (binary selector)
 
-    horizon = Horizon(
-        now=now,
-        interval_minutes=cfg.ems.interval_duration,
-        num_intervals=cfg.ems.num_intervals,
-    )
+Inverters (per inverter):
 
-    resolved_data = resolve_all_timeseries(cfg, horizon)
+- `P_pv_kw[inv][t]` (PV output after curtailment)
+- `P_inv_ac_net_kw[inv][t]` (net AC flow)
+- `Curtail_inv[inv][t]` (binary when curtailment enabled)
 
-    builder = MILPBuilder(
-        plant_cfg=cfg.plant,
-        ev_cfgs=cfg.loads,
-        horizon=horizon,
-        resolved_data=resolved_data,
-    )
-    milp = builder.build()
+Batteries (per inverter):
 
-    # Solve
-    milp.problem.solve(pulp.PULP_CBC_CMD(msg=False))
+- `P_batt_charge_kw[inv][t]`
+- `P_batt_discharge_kw[inv][t]`
+- `E_batt_kwh[inv][t]` (SoC at slot boundaries, indexed 0..N)
+- `Batt_charge_mode[inv][t]` (binary; charge vs discharge)
 
-    # Extract actions for t=0
-    actions = extract_actions_for_t0(milp, cfg, horizon)
-    plan = extract_plan_for_visualisation(milp, cfg, horizon)
+EV loads (per EV):
 
-    return actions, plan
-```
+- `P_ev_charge_kw[ev][t]`
+- `E_ev_kwh[ev][t]` (SoC indexed 0..N)
+- `Ev_charge_ramp_kw[ev][t]` (absolute ramp magnitude)
+- `Ev_charge_anchor_kw[ev]` (absolute deviation from realtime power at t=0)
+- `Ev_*_incentive_*` (piecewise incentive segment variables)
 
-### 9.2 Applying actions
+### 7.2 Grid constraints
 
-`extract_actions_for_t0` should:
+- Import/export exclusivity via `Grid_import_on[t]`:
+  - `P_grid_import[t] <= max_import * Grid_import_on[t]`
+  - `P_grid_export[t] <= max_export * (1 - Grid_import_on[t])`
+- Import forbidden periods:
+  - `P_grid_import[t] <= max_import * import_allowed[t] + P_grid_import_violation[t]`
+  - `P_grid_import_violation[t]` keeps feasibility and is heavily penalized.
 
-* For each inverter:
+### 7.3 PV curtailment modes
 
-  * Derive desired **mode** (e.g. SelfUse, ForceCharge, ForceDischarge).
-  * Derive **target charge power** if relevant.
-* For Tessie:
+Per inverter, one of:
 
-  * Decide charging power setpoint (or on/off via wall connector).
+- **No curtailment** (`curtailment: null`):
+  - `P_pv_kw[t] == forecast[t]`
 
-Then map this to:
+- **Binary curtailment** (`curtailment: "binary"`):
+  - `P_pv_kw[t] == forecast[t] * (1 - Curtail_inv[t])`
+  - `Curtail_inv[t]` fully shuts PV off when 1.
 
-* Home Assistant service calls
-* Direct inverter/EV APIs if applicable
+- **Load-aware curtailment** (`curtailment: "load-aware"`):
+  - `P_pv_kw[t] <= forecast[t]`
+  - `P_pv_kw[t] >= forecast[t] * (1 - Curtail_inv[t])`
+  - `P_grid_export[t] <= max_export * (1 - Curtail_inv[t])`
 
-This mapping is intentionally separate from the MILP; it’s glue code.
+This makes `Curtail_inv[t] == 1` a signal that export is blocked and PV can be
+reduced below forecast.
+
+### 7.4 Inverter net AC flow
+
+- If no battery: `P_inv_ac_net_kw[t] == P_pv_kw[t]`
+- With battery: `P_inv_ac_net_kw[t] == P_pv_kw[t] + P_batt_discharge - P_batt_charge`
+
+No explicit DC/AC efficiency is modeled in EMS v3.
+
+### 7.5 Battery constraints
+
+Per inverter battery:
+
+- Charge/discharge limits (`max_charge_kw`, `max_discharge_kw`).
+- Binary mode selector prevents simultaneous charge + discharge:
+  - `P_charge[t] <= limit * mode[t]`
+  - `P_discharge[t] <= limit * (1 - mode[t])`
+- SoC bounds:
+  - min bound uses `max(min_soc_pct, reserve_soc_pct)`.
+  - max bound uses `max_soc_pct`.
+- SoC dynamics:
+  - `E[t+1] = E[t] + (P_charge * eta - P_discharge / eta) * dt`
+  - `eta = storage_efficiency_pct / 100`.
+- Terminal constraint:
+  - `E[end] >= E[start]` (non-decreasing across horizon).
+
+### 7.6 EV constraints
+
+For `controlled_ev` loads:
+
+- **Connection gating** (per slot):
+  - If `connected` is true, all slots are allowed.
+  - If `connected` is false and `can_connect` is false, no slots are allowed.
+  - Otherwise, slots are allowed only after `connect_grace_minutes` and within
+    `allowed_connect_times` windows (if provided).
+- **Min power handling**:
+  - If `min_power_kw > 0`, a binary `charge_on[t]` enforces either 0 or
+    `[min_power_kw, max_power_kw]`.
+  - If `min_power_kw == 0`, charging is fully continuous.
+- **Ramp penalty variables**:
+  - `Ev_charge_ramp_kw[t] >= |P_ev[t] - P_ev[t-1]|` for `t > 0`.
+- **Soft realtime anchor**:
+  - `Ev_charge_anchor_kw >= |P_ev[0] - realtime_power|`.
+- **SoC dynamics** (charge-only):
+  - `E_ev[t+1] = E_ev[t] + P_ev[t] * dt`.
+
+### 7.7 EV SoC incentives
+
+The EV terminal SoC is decomposed into piecewise segments:
+
+- Incentive targets must be **non-decreasing**.
+- Each segment covers a SoC range and has a per-kWh reward.
+- A trailing zero-incentive segment fills remaining capacity.
+- Constraint: `sum(segments) == E_ev[terminal]`.
+
+### 7.8 AC power balance
+
+System balance is enforced per slot:
+
+- `P_grid_import + sum(P_inv_ac_net) - P_grid_export == load_kw + controllable_loads`
+
+`load_kw` comes from the plant load forecast, and controllable loads currently
+include EV charge power.
 
 ---
 
-## 10. Testing Strategy
+## 8. Objective function (current terms)
 
-### 10.1 Unit tests
+The objective is a sum of:
 
-* `Horizon` time windows & `dt_hours` in edge cases.
-* `TimeSeriesHandle` mapping horizon → arrays.
-* Localised tests for each builder:
-
-  * Battery SoC dynamics with fixed P_ch, P_dis.
-  * PV curtailment gating logic.
-  * Grid import forbidden windows.
-
-### 10.2 Scenario tests (no HA)
-
-Create synthetic scenarios:
-
-* **Sunny day, midday price spike**:
-
-  * Expect: battery discharges at spike, recharges later.
-* **Negative prices overnight**:
-
-  * Expect: charge battery and EV overnight, discharge later.
-* **Zero FiT vs high FiT**:
-
-  * Expect: self-consume bias vs export preference.
-
-### 10.3 Integration tests (with HA stubbed)
-
-* Replace HA calls with in-memory fake sensors.
-* Validate full loop:
-
-  * config → resolved_data → MILP → actions.
+1. **Energy cost** (per slot):
+   - `import_cost - export_revenue`.
+   - If export price is exactly zero, a tiny **export bonus** (1e-4) is used
+     to prefer export over curtailment.
+2. **Forbidden import penalty**:
+   - Large penalty (`w_violation = 1e3`) on `P_grid_import_violation_kw`.
+3. **Early-flow tie-breaker**:
+   - Tiny negative weight on `(P_import + P_export) / (t+1)` to bias flow earlier.
+4. **Battery wear cost**:
+   - `throughput_cost_per_kwh * (charge + discharge)`.
+5. **Curtailment tie-breaker**:
+   - Small weighted bias on `Curtail_inv` to stabilize equivalent solutions.
+6. **EV incentive rewards**:
+   - Subtract incentive per kWh on terminal SoC segments.
+7. **EV ramp penalties**:
+   - Penalize `Ev_charge_ramp_kw[t]` for `t > 0`.
+8. **EV anchor penalty**:
+   - Penalize `Ev_charge_anchor_kw` at slot 0.
 
 ---
 
-## 11. Invariants to Keep in Mind
+## 9. MPC anchoring behavior
 
-* Every inverter:
+The EMS uses a standard MPC-style horizon but **anchors** some inputs at slot 0:
 
-  * has exactly one DC bus (internally),
-  * owns the DC↔AC conversion and `peak_power_kw` constraint.
-* All SoC is in **kWh** internally.
-* `t=0` is realtime / partial; `t≥1` is aligned forecast.
-* Only `t=0` actions are applied in the real world.
-* Over a full horizon (24h), the battery’s terminal SoC must be ≥ initial SoC (subject to reserve).
+- Load, PV, and prices override **slot 0** with realtime values.
+- Battery and EV SoC at `t=0` are set from realtime sensors.
+- EV charge power uses a **soft** anchor (penalty only) to remain near realtime power.
+- Grid realtime power is **not** used by the EMS builder.
+
+Note: Because the horizon start is floored to the interval boundary, slot 0 can
+cover time before `now`. The slot-0 override compensates for this in practice.
 
 ---
 
-If you’d like, I can next:
+## 10. Plan output format
 
-* Generate a more concrete `resolve_all_timeseries` skeleton tailored to your specific HA entities (Amber + Solcast), or
-* Zoom in on the action-mapping layer (e.g. how to turn MILP outputs into inverter “mode” + power setpoints consistent with FoxESS / Sungrow/Home Assistant controls).
+`solve_once()` returns a plan dict with:
+
+Top-level keys:
+
+- `generated_at` (epoch seconds)
+- `status` (solver status string)
+- `objective` (float)
+- `ev_connected` (map of EV -> bool)
+- `ev_realtime_power_kw` (map of EV -> realtime power)
+- `battery_capacity_kwh` (map of inverter -> capacity)
+- `ev_capacity_kwh` (map of EV -> capacity)
+- `slots` (list of per-slot records)
+
+Per-slot keys include:
+
+- Time: `index`, `start`, `end`, `duration_h`
+- Grid: `grid_import_kw`, `grid_export_kw`, `grid_import_violation_kw`, `grid_kw`
+- Load: `load_kw`, `load_total_kw`
+- Prices: `price_import`, `price_export`
+- Costs: `segment_cost`, `cumulative_cost`
+- PV: `pv_kw`, `pv_available_kw`, `pv_inverters`, `pv_inverters_available`
+- Battery: `battery_charge_kw`, `battery_discharge_kw`, `battery_soc_kwh`
+- EV: `ev_charge_kw`, `ev_soc_kwh`
+- Inverter: `inverter_ac_net_kw`
+- Curtailment: `curtail_inverters`, `curtail_any`
+- Import policy: `import_allowed`
+
+Note: `pv_available_*` fields currently mirror `pv_*` in EMS v3 (no separate
+"available" series is stored).
+
+---
+
+## 11. Plotting and visualization
+
+`plot_plan()` in `src/hass_energy/plotting/plan.py` renders:
+
+- Net grid, PV, inverter net AC, battery net, base load, and EV charge.
+- Price and cost panels when available.
+- SoC panel (battery + EV), using percent when capacities are available.
+
+---
+
+## 12. Testing
+
+EMS tests live under `tests/hass_energy/ems/`:
+
+- `test_builder.py`: core MILP behavior (prices, curtailment, alignment).
+- `test_forecast_alignment.py`: strict horizon coverage and slot-0 override.
+- `test_fixture_scenario.py`: snapshot test with HA fixture data.
+
+Fixtures can be recorded via:
+
+- `hass-energy ems record-fixture --name <scenario>`
+
+---
+
+## 13. Known limitations and future work
+
+Current gaps or intentional simplifications:
+
+- No actuation layer (EMS only produces plans).
+- No DC/AC efficiency or inverter loss modeling.
+- EV discharge is not modeled (charge-only).
+- No battery/EV ramp smoothing beyond current tie-breakers.
+- No explicit demand charges, peak power penalties, or block tariffs.
+- `nonvariable_load` is a placeholder (no constraints).
+- Grid realtime power is unused.
+- Forecast alignment is stepwise (no interpolation).
+- Horizon is fixed-size; no multi-day stitching logic.
