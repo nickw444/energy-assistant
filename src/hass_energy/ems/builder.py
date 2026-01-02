@@ -16,6 +16,7 @@ from hass_energy.models.loads import ControlledEvLoad, LoadConfig, NonVariableLo
 from hass_energy.models.plant import PlantConfig, TimeWindow
 
 _EV_RAMP_PENALTY_COST = 1e-4
+_EV_ANCHOR_PENALTY_COST = 0.05
 
 
 def _new_var_dict() -> dict[int, pulp.LpVariable]:
@@ -27,6 +28,10 @@ def _new_inverter_var_dict() -> dict[str, dict[int, pulp.LpVariable]]:
 
 
 def _new_load_var_dict() -> dict[str, dict[int, pulp.LpVariable]]:
+    return {}
+
+
+def _new_load_scalar_dict() -> dict[str, pulp.LpVariable]:
     return {}
 
 
@@ -85,6 +90,10 @@ class ModelVars:
     # Per-EV charge ramp magnitude (kW change) keyed by EV name then slot index.
     Ev_charge_ramp_kw: dict[str, dict[int, pulp.LpVariable]] = field(
         default_factory=_new_load_var_dict
+    )
+    # Per-EV realtime anchor deviation (kW) keyed by EV name.
+    Ev_charge_anchor_kw: dict[str, pulp.LpVariable] = field(
+        default_factory=_new_load_scalar_dict
     )
     # Per-EV incentive segments (kWh) with their per-kWh rewards.
     E_ev_incentive_segments: dict[str, list[tuple[pulp.LpVariable, float]]] = field(
@@ -479,6 +488,16 @@ class MILPBuilder:
             objective += pulp.lpSum(
                 ramp_penalty * ramp_series[t] for t in horizon.T if t > 0
             )
+        # EV soft anchor to realtime power for slot 0.
+        anchor_penalty = _EV_ANCHOR_PENALTY_COST
+        if horizon.num_intervals > 0:
+            for load in self._loads:
+                if not isinstance(load, ControlledEvLoad):
+                    continue
+                anchor_var = vars.Ev_charge_anchor_kw.get(load.name)
+                if anchor_var is None:
+                    continue
+                objective += anchor_penalty * anchor_var * horizon.dt_hours(0)
         problem += objective
 
     def _build_loads(
@@ -584,9 +603,22 @@ class MILPBuilder:
             lowBound=0,
         )
         vars.Ev_charge_ramp_kw[ev_name] = ramp_vars
+        anchor_var = pulp.LpVariable(
+            f"Ev_{ev_slug}_anchor_kw",
+            lowBound=0,
+        )
+        vars.Ev_charge_anchor_kw[ev_name] = anchor_var
         problem += (
             ramp_vars[0] == 0,
             f"ev_charge_ramp_init_{ev_slug}",
+        )
+        problem += (
+            anchor_var >= P_ev_charge[0] - realtime_power,
+            f"ev_anchor_up_{ev_slug}",
+        )
+        problem += (
+            anchor_var >= realtime_power - P_ev_charge[0],
+            f"ev_anchor_down_{ev_slug}",
         )
 
         for t in T:

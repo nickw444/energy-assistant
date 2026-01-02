@@ -1,0 +1,20 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "HASS Energy",
+        "description": "Configure the HASS Energy API endpoint.",
+        "data": {
+          "base_url": "Base URL"
+        }
+      }
+    }
+  },
+  "entity": {
+    "button": {
+      "hass_energy_run_button": {
+        "name": "Trigger EMS Run"
+      }
+    }
+  }
+}

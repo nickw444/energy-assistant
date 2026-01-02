@@ -1,0 +1,10 @@
+{
+  "domain": "hass_energy",
+  "name": "HASS Energy",
+  "version": "0.1.0",
+  "documentation": "https://github.com/",
+  "requirements": [],
+  "dependencies": [],
+  "codeowners": [],
+  "config_flow": true
+}

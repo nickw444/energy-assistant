@@ -62,10 +62,7 @@ def cli(ctx: click.Context, config: Path, log_level: str) -> int | None:
     hass_data_provider = HassDataProvider(hass_client=hass_client)
 
     resolver = ValueResolver(hass_data_provider=hass_data_provider)
-    resolver.mark_for_hydration(app_config)
-    resolver.hydrate()
-
-    worker = Worker(app_config=app_config, home_assistant_client=hass_client)
+    worker = Worker(app_config=app_config, resolver=resolver)
     shutdown_event = Event()
 
     def _handle_signal(signum: int, _frame: object) -> None:
@@ -76,7 +73,6 @@ def cli(ctx: click.Context, config: Path, log_level: str) -> int | None:
     signal.signal(signal.SIGINT, _handle_signal)
 
     app = create_app(app_config=app_config, worker=worker)
-    worker.start()
 
     server = uvicorn.Server(
         config=uvicorn.Config(
@@ -88,7 +84,18 @@ def cli(ctx: click.Context, config: Path, log_level: str) -> int | None:
         )
     )
 
-    server_task = server.serve()
+    async def _serve() -> None:
+        if worker:
+            logging.info("Starting worker from CLI")
+            worker.start()
+        try:
+            await server.serve()
+        finally:
+            if worker:
+                logging.info("Stopping worker from CLI")
+                worker.stop()
+
+    server_task = _serve()
     try:
         if inspect.iscoroutine(server_task):
             asyncio.run(server_task)
@@ -96,8 +103,6 @@ def cli(ctx: click.Context, config: Path, log_level: str) -> int | None:
             _ = server_task
     finally:
         shutdown_event.set()
-        if worker:
-            worker.stop()
     return 0
 
 
