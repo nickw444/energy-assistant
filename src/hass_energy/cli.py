@@ -15,7 +15,7 @@ import uvicorn
 
 from hass_energy.api.server import create_app
 from hass_energy.config import load_app_config
-from hass_energy.ems.solver import solve_once
+from hass_energy.ems.planner import EmsMilpPlanner
 from hass_energy.lib.home_assistant import HomeAssistantClient
 from hass_energy.lib.source_resolver.hass_provider import HassDataProvider
 from hass_energy.lib.source_resolver.models import PowerForecastInterval
@@ -173,10 +173,14 @@ def ems_solve(
         resolver.hydrate()
 
         click.echo("Solving EMS MILP...")
-        plan = solve_once(
-            app_config,
-            resolver=resolver,
+        plan = EmsMilpPlanner(app_config, resolver=resolver).generate_ems_plan(
             solver_msg=solver_msg,
+        )
+        timings = plan.timings
+        click.echo(
+            "Timings (s): build="
+            f"{timings.build_seconds:.3f} solve={timings.solve_seconds:.3f} "
+            f"total={timings.total_seconds:.3f}"
         )
     except Exception as exc:
         raise click.ClickException(traceback.format_exc()) from exc

@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from hass_energy.ems.solver import solve_once
-from hass_energy.lib.slug import slugify
+from hass_energy.ems.planner import EmsMilpPlanner
 from hass_energy.lib.home_assistant import HomeAssistantConfig
 from hass_energy.lib.source_resolver.hass_source import (
     HomeAssistantAmberElectricForecastSource,
@@ -98,6 +97,7 @@ def _make_config(
     if inverters is None:
         inverters = [
             InverterConfig(
+                id="inv",
                 name="Inv",
                 peak_power_kw=5.0,
                 curtailment=None,
@@ -179,7 +179,7 @@ def test_solver_exports_with_positive_price() -> None:
         },
     )
 
-    plan = solve_once(config, resolver=resolver, now=now)
+    plan = EmsMilpPlanner(config, resolver=resolver).generate_ems_plan(now=now)
     timesteps = plan.timesteps
     assert len(timesteps) == 2
     for step in timesteps:
@@ -223,7 +223,7 @@ def test_realtime_price_overrides_current_slot() -> None:
         },
     )
 
-    plan = solve_once(config, resolver=resolver, now=now)
+    plan = EmsMilpPlanner(config, resolver=resolver).generate_ems_plan(now=now)
     assert plan.timesteps[0].economics.price_import == 0.3
     assert plan.timesteps[1].economics.price_import == 0.2
 
@@ -293,7 +293,7 @@ def test_load_forecast_aligns_to_horizon() -> None:
         },
     )
 
-    plan = solve_once(config, resolver=resolver, now=now)
+    plan = EmsMilpPlanner(config, resolver=resolver).generate_ems_plan(now=now)
     timesteps = plan.timesteps
     assert abs(timesteps[0].loads.base_kw - 9.0) < 1e-6
     assert abs(timesteps[1].loads.base_kw - 2.0) < 1e-6
@@ -304,6 +304,7 @@ def test_pv_forecast_reused_per_inverter() -> None:
     now = datetime(2025, 12, 27, 8, 2, tzinfo=UTC)
     inverters = [
         InverterConfig(
+            id="a",
             name="A",
             peak_power_kw=5.0,
             curtailment=None,
@@ -318,6 +319,7 @@ def test_pv_forecast_reused_per_inverter() -> None:
             battery=None,
         ),
         InverterConfig(
+            id="b",
             name="B",
             peak_power_kw=5.0,
             curtailment=None,
@@ -374,10 +376,10 @@ def test_pv_forecast_reused_per_inverter() -> None:
         },
     )
 
-    plan = solve_once(config, resolver=resolver, now=now)
+    plan = EmsMilpPlanner(config, resolver=resolver).generate_ems_plan(now=now)
     step = plan.timesteps[0]
-    assert abs(step.inverters[slugify("A")].pv_kw - 1.5) < 1e-6
-    assert abs(step.inverters[slugify("B")].pv_kw - 1.5) < 1e-6
+    assert abs(step.inverters["a"].pv_kw - 1.5) < 1e-6
+    assert abs(step.inverters["b"].pv_kw - 1.5) < 1e-6
     pv_total = sum(inv.pv_kw or 0.0 for inv in step.inverters.values())
     assert abs(pv_total - 3.0) < 1e-6
     assert abs(step.grid.export_kw - 3.0) < 1e-6
@@ -386,6 +388,7 @@ def test_pv_forecast_reused_per_inverter() -> None:
 def test_load_aware_curtailment_blocks_export() -> None:
     now = datetime(2025, 12, 27, 9, 2, tzinfo=UTC)
     inverter = InverterConfig(
+        id="curtail",
         name="Curtail",
         peak_power_kw=5.0,
         curtailment="load-aware",
@@ -420,9 +423,9 @@ def test_load_aware_curtailment_blocks_export() -> None:
         },
     )
 
-    plan = solve_once(config, resolver=resolver, now=now)
+    plan = EmsMilpPlanner(config, resolver=resolver).generate_ems_plan(now=now)
     step = plan.timesteps[0]
-    assert step.inverters[slugify("Curtail")].curtailment is True
+    assert step.inverters["curtail"].curtailment is True
     assert abs(step.grid.export_kw) < 1e-6
     assert abs(step.grid.import_kw) < 1e-6
 
@@ -430,6 +433,7 @@ def test_load_aware_curtailment_blocks_export() -> None:
 def test_binary_curtailment_prefers_import_over_negative_export() -> None:
     now = datetime(2025, 12, 27, 9, 2, tzinfo=UTC)
     inverter = InverterConfig(
+        id="curtail",
         name="Curtail",
         peak_power_kw=5.0,
         curtailment="binary",
@@ -464,8 +468,8 @@ def test_binary_curtailment_prefers_import_over_negative_export() -> None:
         },
     )
 
-    plan = solve_once(config, resolver=resolver, now=now)
+    plan = EmsMilpPlanner(config, resolver=resolver).generate_ems_plan(now=now)
     step = plan.timesteps[0]
-    assert step.inverters[slugify("Curtail")].curtailment is True
+    assert step.inverters["curtail"].curtailment is True
     assert abs(step.grid.export_kw) < 1e-6
     assert abs(step.grid.import_kw - 0.5) < 1e-6

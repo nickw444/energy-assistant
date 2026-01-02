@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import re
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from hass_energy.lib.source_resolver.hass_source import (
     HomeAssistantBinarySensorEntitySource,
@@ -20,6 +21,7 @@ class SocIncentive(BaseModel):
 
 
 class ControlledEvLoad(BaseModel):
+    id: str = Field(min_length=1)
     name: str = Field(min_length=1)
     load_type: Literal["controlled_ev"]
     min_power_kw: float = Field(ge=0)
@@ -38,6 +40,13 @@ class ControlledEvLoad(BaseModel):
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
+    @field_validator("id")
+    @classmethod
+    def _validate_id(cls, value: str) -> str:
+        if not re.match(r"^[a-z][a-z0-9_]*$", value):
+            raise ValueError("id must be lowercase letters, numbers, and underscores")
+        return value
+
     @model_validator(mode="after")
     def _validate_power_bounds(self) -> "ControlledEvLoad":
         if self.min_power_kw > self.max_power_kw:
@@ -46,10 +55,18 @@ class ControlledEvLoad(BaseModel):
 
 
 class NonVariableLoad(BaseModel):
+    id: str = Field(min_length=1)
     name: str = Field(min_length=1)
     load_type: Literal["nonvariable_load"]
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    @field_validator("id")
+    @classmethod
+    def _validate_id(cls, value: str) -> str:
+        if not re.match(r"^[a-z][a-z0-9_]*$", value):
+            raise ValueError("id must be lowercase letters, numbers, and underscores")
+        return value
 
 
 LoadConfig = Annotated[ControlledEvLoad | NonVariableLoad, Field(discriminator="load_type")]

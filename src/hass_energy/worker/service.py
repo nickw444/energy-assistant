@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
 from typing import Literal
 
-from hass_energy.ems.solver import solve_once
+from hass_energy.ems.planner import EmsMilpPlanner
 from hass_energy.lib.source_resolver.resolver import ValueResolver
 from hass_energy.models.config import AppConfig
 from hass_energy.ems.models import EmsPlanOutput
@@ -157,7 +157,7 @@ class Worker:
 
     def _solve_once_blocking(self) -> EmsPlanOutput:
         self._resolver.hydrate()
-        return solve_once(self._app_config, resolver=self._resolver)
+        return EmsMilpPlanner(self._app_config, resolver=self._resolver).generate_ems_plan()
 
     async def _run_schedule(self) -> None:
         while not self._stop_event.is_set():

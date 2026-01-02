@@ -7,17 +7,17 @@ The EMS package models energy flows with a PuLP MILP and produces a
 time-stepped plan for plotting/inspection. The core code lives in:
 
 - `src/hass_energy/ems/builder.py` (builds the MILP)
-- `src/hass_energy/ems/solver.py` (solves and extracts plan output)
+- `src/hass_energy/ems/planner.py` (solves and extracts plan output)
 - `src/hass_energy/ems/horizon.py` (time horizon and slotting)
 - `src/hass_energy/ems/forecast_alignment.py` (forecast alignment)
-- `src/hass_energy/ems/models.py` (typed plan output models; `solve_once` returns `EmsPlanOutput`)
+- `src/hass_energy/ems/models.py` (typed plan output models; `EmsMilpPlanner.generate_ems_plan` returns `EmsPlanOutput`)
 
 ## EMS Design (Canonical)
 
 ### Data flow
 1. `build_horizon(...)` constructs time slots aligned to `EmsConfig.interval_duration`.
 2. `MILPBuilder.build()` resolves forecast series and builds the MILP.
-3. `solve_once(...)` solves the model (CBC) and extracts a plan.
+3. `EmsMilpPlanner.generate_ems_plan(...)` solves the model (CBC) and extracts a plan.
 4. `plot_plan(...)` visualizes series (net grid, PV, battery, prices, costs, SoC).
 
 ### Inputs & resolution
@@ -89,7 +89,7 @@ model at the start of the horizon:
   - Small time-decay bonus on total grid flow `(P_import + P_export)` favoring earlier slots.
 
 ### Outputs & plotting
-`solver.py` emits per-slot:
+`planner.py` emits per-slot:
 - `grid_import_kw`, `grid_export_kw`, `grid_kw`
 - `pv_kw`, `pv_inverters`, `curtail_inverters`
 - `battery_charge_kw`, `battery_discharge_kw`, `battery_soc_kwh`

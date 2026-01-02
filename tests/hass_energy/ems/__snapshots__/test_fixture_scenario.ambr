@@ -6341,5 +6341,10 @@
         'start': '2025-12-30T22:50:00+11:00',
       }),
     ]),
+    'timings': dict({
+      'build_seconds': 0.0,
+      'solve_seconds': 0.0,
+      'total_seconds': 0.0,
+    }),
   })
 # ---

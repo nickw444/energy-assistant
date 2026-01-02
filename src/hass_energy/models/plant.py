@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+import re
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from hass_energy.lib.source_resolver.hass_source import (
     HomeAssistantAmberElectricForecastSource,
@@ -72,6 +74,7 @@ class BatteryConfig(BaseModel):
 
 
 class InverterConfig(BaseModel):
+    id: str = Field(min_length=1)
     name: str = Field(min_length=1)
     peak_power_kw: float = Field(ge=0)
     curtailment: Literal["load-aware", "binary"] | None = None
@@ -80,6 +83,20 @@ class InverterConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
+    @field_validator("id")
+    @classmethod
+    def _validate_id(cls, value: str) -> str:
+        if not re.match(r"^[a-z][a-z0-9_]*$", value):
+            raise ValueError("id must be lowercase letters, numbers, and underscores")
+        return value
+
+    @field_validator("name")
+    @classmethod
+    def _validate_name(cls, value: str) -> str:
+        if not any(ch.isalpha() for ch in value):
+            raise ValueError("name must include at least one letter")
+        return value
+
 
 class PlantConfig(BaseModel):
     grid: GridConfig
@@ -87,3 +104,10 @@ class PlantConfig(BaseModel):
     inverters: list[InverterConfig]
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    @model_validator(mode="after")
+    def _validate_inverter_ids_unique(self) -> "PlantConfig":
+        ids = [inv.id for inv in self.inverters]
+        if len(ids) != len(set(ids)):
+            raise ValueError("inverter ids must be unique")
+        return self
