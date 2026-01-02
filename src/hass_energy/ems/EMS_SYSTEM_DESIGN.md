@@ -397,7 +397,7 @@ Top-level keys:
 
 Per-slot keys include:
 
-- Time: `index`, `start`, `end`, `duration_h`
+- Time: `index`, `start`, `end`, `duration_s`
 - Grid: `grid_import_kw`, `grid_export_kw`, `grid_import_violation_kw`, `grid_kw`
 - Load: `load_kw`, `load_total_kw`
 - Prices: `price_import`, `price_export`

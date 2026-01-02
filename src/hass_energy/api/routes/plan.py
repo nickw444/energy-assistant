@@ -9,7 +9,6 @@ from hass_energy.worker import PlanRunState, Worker
 from hass_energy.api.routes.plan_dto import (
     PlanAwaitResponseDto,
     PlanLatestResponseDto,
-    PlanResultDto,
     PlanRunResponseDto,
     PlanRunStateDto,
 )
@@ -56,7 +55,7 @@ async def latest_plan(
     run_state, plan = latest
     return PlanLatestResponseDto(
         run=_run_to_dto(run_state),
-        result=PlanResultDto.from_plan(plan),
+        plan=plan,
     )
 
 
@@ -95,5 +94,5 @@ async def await_plan(
     run_state, plan = latest
     return PlanAwaitResponseDto(
         run=_run_to_dto(run_state),
-        result=PlanResultDto.from_plan(plan),
+        plan=plan,
     )

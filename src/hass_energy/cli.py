@@ -181,11 +181,11 @@ def ems_solve(
     except Exception as exc:
         raise click.ClickException(traceback.format_exc()) from exc
 
-    output.write_text(json.dumps(plan, indent=2, sort_keys=True))
+    output.write_text(json.dumps(plan.model_dump(mode="json"), indent=2, sort_keys=True))
     click.echo(f"Wrote EMS plan to {output}")
 
     if stdout:
-        click.echo(json.dumps(plan, indent=2, sort_keys=True))
+        click.echo(json.dumps(plan.model_dump(mode="json"), indent=2, sort_keys=True))
     if plot:
         plot_plan(plan, title="EMS Plan", output=plot_output)
 
