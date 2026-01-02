@@ -156,7 +156,7 @@ class Worker:
             self._condition.notify_all()
 
     def _solve_once_blocking(self) -> EmsPlanOutput:
-        self._resolver.hydrate()
+        self._resolver.hydrate_all()
         return EmsMilpPlanner(self._app_config, resolver=self._resolver).generate_ems_plan()
 
     async def _run_schedule(self) -> None:
