@@ -1,7 +1,7 @@
 ## Ways of working
 - Use uv for dependency management and scripts. Keep tooling config in `pyproject.toml` and `pyrightconfig.json`.
 - Default to built-in exceptions unless a distinct custom type is justified.
-- Keep backend and worker logic modular; API is FastAPI, worker is a background thread. Worker code lives in `hass_energy/worker/` so it can grow into multiple modules. Avoid tight coupling so the future frontend can live alongside the backend at the repo root.
+- Keep backend and worker logic modular; API is FastAPI, worker runs background planning tasks (scheduled every minute) and is wired from `cli` with explicit dependencies. Worker code lives in `hass_energy/worker/` so it can grow into multiple modules. Avoid tight coupling so the future frontend can live alongside the backend at the repo root.
 - Persist config and runtime artifacts to the filesystem (`data_dir` from YAML config). The single YAML file (default `config.yaml`) stores server + Home Assistant + plant + energy settings; it is read once at startup and the API is read-only for config (no writes). Avoid destructive commands that would drop user data.
 - Shared helpers (e.g., Home Assistant client) live under `hass_energy/lib/` to keep worker/API code lean.
 - CLI accepts a YAML config (`--config`, default `config.yaml`) for static settings like host, port, and data_dir. Config is validated with Pydantic. Worker is always on; host/port flags were removed.
@@ -18,6 +18,7 @@
 - Planner now consumes a resolved payload (no source models). Resolved schemas live in `src/hass_energy/models/resolved.py`; resolution scaffolding/registry is under `src/hass_energy/lib/resolution/` for two-pass fetch→transform in the future.
 - EMS-specific guidance lives in `src/hass_energy/ems/AGENTS.md`.
 - `ConfigMapper` (`src/hass_energy/lib/resolver/__init__.py`) offers a recursive walk utility that calls a visitor for side effects and allows halting recursion by returning `False`.
+- Home Assistant integration (POC) lives under `custom_components/hass_energy`.
 
 ## Continuous learning
 - When you learn new project knowledge, coding style, or preferences during a session, update `AGENTS.md` (and `README.md` if it affects users) before finishing so the next agent benefits.
