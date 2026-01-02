@@ -58,6 +58,7 @@ class EmsMilpPlanner:
         model.problem.solve(pulp.PULP_CBC_CMD(msg=solver_msg))
         solve_seconds = time.perf_counter() - solve_start
 
+        objective_value = _objective_value(model)
         status, timesteps = _extract_plan(model, horizon)
         total_seconds = time.perf_counter() - total_start
         timings = EmsPlanTimings(
@@ -75,6 +76,7 @@ class EmsMilpPlanner:
         return EmsPlanOutput(
             generated_at=solve_time.astimezone(timezone.utc),
             status=status,
+            objective_value=objective_value,
             timings=timings,
             timesteps=timesteps,
         )
@@ -203,4 +205,11 @@ def _value(var: Any) -> float:
     value = pulp.value(var)
     if value is None:
         return 0.0
+    return float(value)
+
+
+def _objective_value(model: MILPModel) -> float | None:
+    value = pulp.value(model.problem.objective)
+    if value is None:
+        return None
     return float(value)

@@ -103,6 +103,7 @@ class EmsPlanTimings(BaseModel):
 class EmsPlanOutput(BaseModel):
     generated_at: datetime
     status: EmsPlanStatus
+    objective_value: Rounded3Opt = None
     timings: EmsPlanTimings
     timesteps: list[TimestepPlan]
 

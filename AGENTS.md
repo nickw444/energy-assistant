@@ -17,6 +17,8 @@
 - Tests should mirror the `src/hass_energy` package structure under `tests/` (e.g., `tests/hass_energy/ems/`).
 - Planner now consumes a resolved payload (no source models). Resolved schemas live in `src/hass_energy/models/resolved.py`; resolution scaffolding/registry is under `src/hass_energy/lib/resolution/` for two-pass fetch→transform in the future.
 - EMS-specific guidance lives in `src/hass_energy/ems/AGENTS.md`.
+- EMS plan `EconomicsTimestepPlan` costs are grid import/export only and exclude other objective terms (EV incentives, penalties, curtailment tie-breaks, violation penalties, battery wear).
+- `EmsPlanOutput` now includes `objective_value` with the solver objective (may be negative/None).
 - `ConfigMapper` (`src/hass_energy/lib/resolver/__init__.py`) offers a recursive walk utility that calls a visitor for side effects and allows halting recursion by returning `False`.
 - Home Assistant integration (POC) lives under `custom_components/hass_energy`.
 
