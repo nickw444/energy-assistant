@@ -170,7 +170,7 @@ def ems_solve(
 
         resolver = ValueResolver(hass_data_provider=hass_data_provider)
         resolver.mark_for_hydration(app_config)
-        resolver.hydrate()
+        resolver.hydrate_all()
 
         click.echo("Solving EMS MILP...")
         plan = EmsMilpPlanner(app_config, resolver=resolver).generate_ems_plan(
@@ -227,7 +227,7 @@ def ems_record_fixture(ctx: click.Context, output: Path | None, name: str | None
 
         resolver = ValueResolver(hass_data_provider=hass_data_provider)
         resolver.mark_for_hydration(app_config)
-        resolver.hydrate()
+        resolver.hydrate_all()
     except Exception as exc:
         raise click.ClickException(traceback.format_exc()) from exc
 
@@ -260,7 +260,7 @@ def hydrate_load_forecast(ctx: click.Context, limit: int) -> None:
 
         resolver = ValueResolver(hass_data_provider=hass_data_provider)
         resolver.mark_for_hydration(app_config)
-        resolver.hydrate()
+        resolver.hydrate_all()
 
         resolved = resolver.resolve(load_forecast)
     except Exception as exc:

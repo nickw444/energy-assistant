@@ -31,13 +31,31 @@ class HassDataProvider:
         self._history_data: dict[str, list[HomeAssistantHistoryStateDict]] = {}
 
     def fetch(self) -> None:
-        # TODO(NW): Fetch subset of data for marked entities only
+        self.fetch_states()
+        self.fetch_history()
+
+    def fetch_states(self) -> None:
+        if not self.marked_entities:
+            return
         resp = self._hass_client.fetch_realtime_state()
-        self._data = {item["entity_id"]: item for item in resp}
+        data: dict[str, HomeAssistantStateDict] = {}
+        for item in resp:
+            if not isinstance(item, dict):
+                continue
+            entity_id = item.get("entity_id")
+            if not isinstance(entity_id, str):
+                continue
+            if entity_id not in self.marked_entities:
+                continue
+            data[entity_id] = item
+        self._data = data
+
+    def fetch_history(self) -> None:
         if not self.marked_history_entities:
             return
 
         now = dt.datetime.now().astimezone()
+        history_data: dict[str, list[HomeAssistantHistoryStateDict]] = {}
         for entity_id, history_days in self.marked_history_entities.items():
             start_time = now - dt.timedelta(days=history_days)
             history = self._hass_client.fetch_entity_history(
@@ -47,9 +65,10 @@ class HassDataProvider:
                 minimal_response=True,
                 no_attributes=True,
             )
-            self._history_data[entity_id] = [
+            history_data[entity_id] = [
                 item for item in history if isinstance(item, dict)
             ]
+        self._history_data = history_data
 
     def snapshot(self) -> dict[str, object]:
         return {
@@ -58,7 +77,6 @@ class HassDataProvider:
         }
 
     def get(self, entity_id: str) -> HomeAssistantStateDict:
-        # Simulate fetching data from Home Assistant
         return self._data[entity_id]
 
     def get_history(self, entity_id: str) -> list[HomeAssistantHistoryStateDict]:

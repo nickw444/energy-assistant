@@ -42,11 +42,17 @@ class FixtureHassDataProvider:
         # Fixtures are pre-hydrated; nothing to fetch.
         return
 
+    def fetch_history(self) -> None:
+        return
+
+    def fetch_states(self) -> None:
+        return
+
     def get(self, entity_id: str) -> HomeAssistantStateDict:
         return self.states[entity_id]
 
     def get_history(self, entity_id: str) -> list[HomeAssistantHistoryStateDict]:
-        return self.history.get(entity_id, [])
+        return self.history[entity_id]
 
     def mark(self, _entity_id: str) -> None:
         # Fixtures are static; no-op to satisfy resolver interface.

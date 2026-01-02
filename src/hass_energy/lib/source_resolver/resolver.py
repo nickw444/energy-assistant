@@ -20,12 +20,18 @@ class ValueResolver:
     def mark_for_hydration(self, value: object) -> None:
         walk_and_mark_recursively(value, self)
 
-    def hydrate(self) -> None:
-        self._hass_data_provider.fetch()
+    def hydrate_all(self) -> None:
+        self._hass_data_provider.fetch_states()
+        self._hass_data_provider.fetch_history()
+
+    def hydrate_history(self) -> None:
+        self._hass_data_provider.fetch_history()
+
+    def hydrate_states(self) -> None:
+        self._hass_data_provider.fetch_states()
 
     def resolve(self, source: EntitySource[Q, R]) -> R:
         if isinstance(source, HomeAssistantEntitySource):
-            # Simulate fetching data from Home Assistant
             state = self._hass_data_provider.get(source.entity)
             try:
                 return source.mapper(state)

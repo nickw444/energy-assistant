@@ -41,7 +41,7 @@ def test_fixture_scenario_snapshot(snapshot: object, monkeypatch: pytest.MonkeyP
     _freeze_hass_source_time(monkeypatch, now)
     resolver = ValueResolver(hass_data_provider=provider)
     resolver.mark_for_hydration(app_config)
-    resolver.hydrate()
+    resolver.hydrate_all()
 
     plan = EmsMilpPlanner(app_config, resolver=resolver).generate_ems_plan(now=now)
     payload = plan.model_dump(mode="json")
