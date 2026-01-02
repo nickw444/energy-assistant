@@ -2,6 +2,7 @@
 # name: test_fixture_scenario_snapshot
   dict({
     'generated_at': '2025-12-29T23:56:36.875335Z',
+    'objective_value': -5.844,
     'status': 'Optimal',
     'timesteps': list([
       dict({

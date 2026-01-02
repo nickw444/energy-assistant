@@ -97,6 +97,9 @@ model at the start of the horizon:
 - `inverter_ac_net_kw`
 - `price_import`, `price_export`, `segment_cost`, `cumulative_cost`
 
+Top-level output:
+- `objective_value` (solver objective value; may be `None` if no value is available)
+
 Plotting (`src/hass_energy/plotting/plan.py`):
 - Main panel includes net grid, PV, net battery, inverter net AC, base load, and EV charge.
 - Price and cost panels render with hover tooltips.
