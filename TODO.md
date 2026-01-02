@@ -1,16 +1,26 @@
 ## EMS
 
-- [ ] Improve output models to reflect plant heirarchy
-- [ ] Better/explicit data passing between builders, rather than shared mutations
-- [ ] Refactoring to improve readability (Less AI Slop)
+- [x] Improve output models to reflect plant heirarchy
+- [x] Better/explicit data passing between builders, rather than shared mutations
+- [x] Refactoring to improve readability (Less AI Slop)
+- [x] Implement a class for the solver instead of using adhoc module level functions
+- [x] Remove import forbidden periods from the horizon 
+- [x] Verify that incentives don't show in total (real) cost values
+- [x] model outputs should round to 3dp.
+- [ ] Implement more modular way to handle objective function
 - [ ] Implement slot -1 (pre-MPC slot) as model inputs
 - [ ] Better curtailment behaviour: Encourage curtailment even when export is going to be 0, when price is negative.
-- [x] Remove import forbidden periods from the horizon 
-- [ ] Verify that incentives don't show in total (real) cost values
-- [ ] Implement a class for the solver instead of using adhoc module level functions
+- [ ] cache Home Assistant history values used for forecasts so we can generate a plan faster.
+- [ ] dynamically set horizon to shortest forecast length
+- [ ] Implement new load types: constant/nonvariable load.
+
+## Worker
+
+- [ ] Based on configuration, eagerly re-plan when realtime cost changes.
 
 ## Home Assistant Integration
 
+- [ ] Review/Unslopify the Home Assistant integration
 - [ ] Main Device returning slot parameters
     - MPC values from Slot 0
 - [ ] Sub-Devices for Loads
@@ -19,9 +29,10 @@
         - [ ] Connect Requested By (e.g. the time charge will start based on the plan)
 - [ ] Graphing outputs (camera entity?)
 
+
 ## Home Assistant Automations/Integrations
 
-- [ ] Review/Unslopify the Home Assistant integration
+
 - [ ] Control inverter curtailment
 - [ ] Control inverter work modes
 - [ ] Notify when EV connect is requested
@@ -34,6 +45,11 @@
 ## Web UI
 
 - [ ] Implement a modern/sleek looking Web UI for setup/configuration, instead of relying on config file.
+- [ ] Setup Wizard / Configuration
+    - Connect Home Assistant
+    - Plant Setup (Connect Hass Entities)
+    - Loads Setup
+- [ ] Main View: Realtime History, Plan & Outputs View
 
 
 ## Predictions
