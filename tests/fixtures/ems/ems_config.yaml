@@ -103,8 +103,6 @@ plant:
         realtime_power:
           type: home_assistant
           entity: sensor.hass_energy_battery_power_smoothed_1m
-
-        # dc_efficiency_pct: 98.0 # PV to battery efficiency - omitted, assume 100% efficiency of PV to battery
     
     # AC coupled PV inverter example.
     # - name: Sungrow

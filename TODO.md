@@ -4,6 +4,8 @@
 - [ ] Implement slot -1 (pre-MPC slot) as model inputs
 - [ ] Better curtailment behaviour: Encourage curtailment even when export is going to be 0, when price is negative.
 - [ ] Improve output models to reflect plant heirarchy
+- [ ] Remove import forbidden periods from the horizon 
+- [ ] Verify that incentives don't show in total (real) cost values
 
 ## Home Assistant Integration
 
@@ -35,6 +37,8 @@
 ## Predictions
 
 - [ ] Predict longer term pricing forecasts based on historical data with an ML model
+    - Note: Sometimes Amber and AEMO forecasts are truncated? So ML based forecast predictor will be necessary to produce a good plan.
+    - If price forecast is truncated, then we could allow % based terminal SoC? e.g. 12hr forecast -> 50% of current SoC.?
 - [ ] Linearly interpolate realtime load value into load forecast so that high realtime loads are factored into forecast.
 
 ## Tests

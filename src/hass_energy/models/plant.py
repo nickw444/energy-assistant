@@ -59,7 +59,6 @@ class BatteryConfig(BaseModel):
     max_discharge_kw: float | None = Field(default=None, ge=0)
     state_of_charge_pct: HomeAssistantPercentageEntitySource
     realtime_power: HomeAssistantPowerKwEntitySource
-    dc_efficiency_pct: float | None = Field(default=None, ge=0, le=100)
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
