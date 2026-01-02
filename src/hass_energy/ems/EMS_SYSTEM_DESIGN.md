@@ -451,3 +451,35 @@ Current gaps or intentional simplifications:
 - Grid realtime power is unused.
 - Forecast alignment is stepwise (no interpolation).
 - Horizon is fixed-size; no multi-day stitching logic.
+
+## 14. Unimplemented items from the original design
+
+Items that were proposed in the original design but remain unimplemented in the
+current EMS stack:
+
+- **Non-variable/deferrable loads**: `nonvariable_load` exists but adds no
+  constraints or scheduling logic yet.
+- **Action application layer**: there is no mapping of slot-0 decisions into
+  Home Assistant service calls or inverter/EV commands.
+- **Pre-MPC slot / partial slot handling**: no slot `-1` or partial lead-in is
+  modeled; slot 0 is a full interval starting at the floored boundary.
+- **Explicit DC bus + AC efficiency modeling**: the model uses a simplified
+  AC net equation without inverter/DC efficiency losses.
+- **EV departure targets & switching penalties**: no explicit departure-time
+  constraints or on/off switching penalty beyond the current soft ramp penalty.
+- **Improved curtailment behavior**: no explicit incentive to curtail when
+  export price is negative or zero beyond the small export bonus.
+- **Output hierarchy**: plan output is a flat per-slot dict; no structured
+  plant hierarchy in the plan payload.
+- **Cost reporting clarity**: incentives are included in the objective, and
+  there's a TODO to ensure they don't appear in “real” cost totals.
+- **Forecast conditioning**: no interpolation or blending of realtime load into
+  the load forecast beyond slot-0 override.
+
+## 15. EMS TODOs
+
+Tracked TODOs in the EMS package:
+
+- `horizon.py`: `import_allowed` currently lives on `Horizon` even though it is an
+  input derived from plant config; TODO is to move it out so `Horizon` only owns
+  time geometry and slotting.
