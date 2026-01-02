@@ -51,6 +51,10 @@ def _new_float_list() -> list[float]:
     return []
 
 
+def _new_bool_list() -> list[bool]:
+    return []
+
+
 @dataclass(slots=True)
 class ModelVars:
     # Grid import decision variables (kW) keyed by slot index.
@@ -105,6 +109,8 @@ class ModelVars:
 class ModelSeries:
     # Resolved load series (kW) aligned to horizon slots.
     load_kw: list[float] = field(default_factory=_new_float_list)
+    # Allowed grid import per slot.
+    import_allowed: list[bool] = field(default_factory=_new_bool_list)
     # Resolved import price series ($/kWh) aligned to horizon slots.
     price_import: list[float] = field(default_factory=_new_float_list)
     # Resolved export price series ($/kWh) aligned to horizon slots.
@@ -146,7 +152,7 @@ class MILPBuilder:
         vars = ModelVars()
         series = self._resolve_series(self._horizon)
 
-        self._build_grid(problem, vars, self._horizon)
+        self._build_grid(problem, vars, series, self._horizon)
         self._build_inverters(problem, vars, series, self._horizon)
         load_contribs = self._build_loads(problem, vars, series, self._horizon)
         self._build_ac_balance(problem, vars, series, load_contribs, self._horizon)
@@ -154,7 +160,13 @@ class MILPBuilder:
 
         return MILPModel(problem, vars, series)
 
-    def _build_grid(self, problem: pulp.LpProblem, vars: ModelVars, horizon: Horizon) -> None:
+    def _build_grid(
+        self,
+        problem: pulp.LpProblem,
+        vars: ModelVars,
+        series: ModelSeries,
+        horizon: Horizon,
+    ) -> None:
         T = horizon.T
         cfg = self._plant.grid
 
@@ -192,7 +204,7 @@ class MILPBuilder:
             # in the objective, keeping the model feasible while discouraging forbidden imports.
             problem += (
                 vars.P_grid_import[t]
-                <= cfg.max_import_kw * float(horizon.import_allowed[t])
+                <= cfg.max_import_kw * float(series.import_allowed[t])
                 + vars.P_grid_import_violation_kw[t],
                 f"grid_import_forbidden_or_violation_t{t}",
             )
@@ -772,6 +784,25 @@ class MILPBuilder:
             first_slot_override=realtime_value,
         )
 
+    def _resolve_import_allowed(self, horizon: Horizon) -> list[bool]:
+        forbidden = self._plant.grid.import_forbidden_periods
+        if not forbidden:
+            return [True] * horizon.num_intervals
+        allowed: list[bool] = []
+        for slot in horizon.slots:
+            minute_of_day = slot.start.hour * 60 + slot.start.minute
+            is_forbidden = False
+            for window in forbidden:
+                start = _parse_hhmm(window.start)
+                end = _parse_hhmm(window.end)
+                if _minute_in_window(minute_of_day, start, end):
+                    is_forbidden = True
+                    break
+            allowed.append(not is_forbidden)
+        if len(allowed) != horizon.num_intervals:
+            raise ValueError("import_allowed series length mismatch")
+        return allowed
+
     def _resolve_power_series[TForecast, TRealtime](
         self,
         horizon: Horizon,
@@ -812,8 +843,10 @@ class MILPBuilder:
             forecast_source=load_forecast,
             realtime_source=self._plant.load.realtime_load_power,
         )
+        import_allowed = self._resolve_import_allowed(horizon)
         return ModelSeries(
             load_kw=load_series,
+            import_allowed=import_allowed,
             price_import=self._resolve_price_series(
                 horizon,
                 self._plant.grid.price_import_forecast,

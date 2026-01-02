@@ -6,6 +6,7 @@
 - [ ] Improve output models to reflect plant heirarchy
 - [ ] Remove import forbidden periods from the horizon 
 - [ ] Verify that incentives don't show in total (real) cost values
+- [ ] Better/explicit data passing between builders, rather than shared mutations
 
 ## Home Assistant Integration
 
