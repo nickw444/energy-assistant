@@ -3,7 +3,7 @@
   "name": "HASS Energy",
   "version": "0.1.0",
   "documentation": "https://github.com/",
-  "requirements": [],
+  "requirements": ["pydantic>=2.5.0,<3.0.0"],
   "dependencies": [],
   "codeowners": [],
   "config_flow": true

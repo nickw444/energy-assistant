@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-import aiohttp
-import async_timeout
-
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import CONF_BASE_URL, CONF_TIMEOUT, DEFAULT_BASE_URL, DEFAULT_TIMEOUT
+from . import HassEnergyRuntimeData
+from .hass_energy_client import HassEnergyApiClient
 
 
 class HassEnergyRunButton(ButtonEntity):
@@ -18,26 +16,18 @@ class HassEnergyRunButton(ButtonEntity):
     _attr_translation_key = "hass_energy_run_button"
     _attr_unique_id = "hass_energy_trigger_run"
 
-    def __init__(self, session: aiohttp.ClientSession, base_url: str, timeout: int) -> None:
-        self._session = session
-        self._base_url = base_url.rstrip("/")
-        self._timeout = timeout
+    def __init__(self, client: HassEnergyApiClient) -> None:
+        self._client = client
 
     async def async_press(self) -> None:
-        url = f"{self._base_url}/plan/run"
-        async with async_timeout.timeout(self._timeout):
-            async with self._session.post(url) as resp:
-                resp.raise_for_status()
-                _ = await resp.json()
+        await self._client.run_plan()
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
-    async_add_entities,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
-    session = async_get_clientsession(hass)
-    base_url = entry.data.get(CONF_BASE_URL, DEFAULT_BASE_URL)
-    timeout = entry.data.get(CONF_TIMEOUT, DEFAULT_TIMEOUT)
-
-    async_add_entities([HassEnergyRunButton(session, base_url, timeout)])
+    runtime: HassEnergyRuntimeData = entry.runtime_data
+    client: HassEnergyApiClient = runtime.client
+    async_add_entities([HassEnergyRunButton(client)])

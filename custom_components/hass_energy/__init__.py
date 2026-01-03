@@ -2,12 +2,31 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import DOMAIN
+from .const import (
+    CONF_BASE_URL,
+    CONF_TIMEOUT,
+    DEFAULT_BASE_URL,
+    DEFAULT_SCAN_INTERVAL,
+    DEFAULT_TIMEOUT,
+    DOMAIN,
+)
+from .coordinator import HassEnergyCoordinator
+from .hass_energy_client import HassEnergyApiClient
 
-PLATFORMS = ["sensor", "button"]
+PLATFORMS = ["sensor", "binary_sensor", "button"]
+
+
+@dataclass(slots=True)
+class HassEnergyRuntimeData:
+    client: HassEnergyApiClient
+    coordinator: HassEnergyCoordinator
+    base_url: str
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
@@ -18,10 +37,28 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Hass Energy from a config entry."""
+    session = async_get_clientsession(hass)
+    base_url = entry.data.get(CONF_BASE_URL, DEFAULT_BASE_URL).rstrip("/")
+    timeout = entry.data.get(CONF_TIMEOUT, DEFAULT_TIMEOUT)
+    client = HassEnergyApiClient(session, base_url, timeout)
+    coordinator = HassEnergyCoordinator(
+        hass,
+        client,
+        DEFAULT_SCAN_INTERVAL,
+    )
+    await coordinator.async_config_entry_first_refresh()
+    entry.runtime_data = HassEnergyRuntimeData(
+        client=client,
+        coordinator=coordinator,
+        base_url=base_url,
+    )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unload_ok:
+        entry.runtime_data = None
+    return unload_ok
