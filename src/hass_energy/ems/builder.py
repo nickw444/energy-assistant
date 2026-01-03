@@ -16,6 +16,7 @@ from hass_energy.models.plant import PlantConfig, TimeWindow
 
 _EV_RAMP_PENALTY_COST = 1e-4
 _EV_ANCHOR_PENALTY_COST = 0.05
+_EV_ANCHOR_ACTIVE_THRESHOLD_KW = 0.1
 
 
 @dataclass(slots=True)
@@ -511,6 +512,9 @@ class MILPBuilder:
         if horizon.num_intervals > 0:
             for load in self._loads:
                 if not isinstance(load, ControlledEvLoad):
+                    continue
+                realtime_power = float(self._resolver.resolve(load.realtime_power))
+                if abs(realtime_power) < _EV_ANCHOR_ACTIVE_THRESHOLD_KW:
                     continue
                 ev_vars = ev_by_id.get(load.id)
                 if ev_vars is None:
