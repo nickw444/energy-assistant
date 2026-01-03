@@ -31,7 +31,7 @@ time-stepped plan for plotting/inspection. The core code lives in:
 - Plant load forecasts/realtime values should exclude controlled loads; controllable loads are added separately in the MILP.
 - Controlled EV loads can assume future connectivity using `connect_grace_minutes` plus optional `can_connect` and `allowed_connect_times` constraints.
 - Controlled EV loads apply a small internal ramp penalty to discourage large per-slot changes in charge power.
-- Controlled EV loads include a soft anchor penalty that keeps slot 0 close to realtime charge power.
+- Controlled EV loads include a soft anchor penalty that keeps slot 0 close to realtime charge power; when realtime power is near zero (below 0.1 kW), the anchor penalty is skipped so charging can start immediately.
 
 ### MPC anchoring behavior
 Slot 0 is used as the MPC decision window, but some realtime inputs anchor the
@@ -40,7 +40,8 @@ model at the start of the horizon:
   forecasts are available. This constrains exogenous inputs for slot 0 but does
   not directly set decision variables.
 - EV charge power has a **soft** slot-0 anchor (penalty on deviation from
-  realtime power). It biases the decision but does not force equality.
+  realtime power). When realtime power is near zero (< 0.1 kW), the anchor
+  penalty is skipped so slot 0 can start charging without bias.
 - Battery/EV SoC initialize `E_*[0]` using realtime sensors, and EV
   connectivity gates charging. These are feasibility anchors across the horizon.
 - Realtime grid power is **not** used by the EMS builder.
