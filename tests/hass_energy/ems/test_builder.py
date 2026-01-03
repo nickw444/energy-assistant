@@ -430,6 +430,51 @@ def test_load_aware_curtailment_blocks_export() -> None:
     assert abs(step.grid.import_kw) < 1e-6
 
 
+def test_load_aware_curtailment_active_with_negative_price_without_export() -> None:
+    now = datetime(2025, 12, 27, 9, 2, tzinfo=UTC)
+    inverter = InverterConfig(
+        id="curtail",
+        name="Curtail",
+        peak_power_kw=5.0,
+        curtailment="load-aware",
+        pv=PvConfig(
+            realtime_power=None,
+            forecast=HomeAssistantSolcastForecastSource(
+                type="home_assistant",
+                platform="solcast",
+                entities=["pv_forecast"],
+            ),
+        ),
+        battery=None,
+    )
+    config = _make_config(inverters=[inverter], num_intervals=1)
+    slot0 = now.replace(minute=0, second=0, microsecond=0)
+    slot_end = slot0 + timedelta(minutes=config.ems.interval_duration)
+    pv_intervals = [PowerForecastInterval(start=slot0, end=slot_end, value=0.4)]
+    price_import = [PriceForecastInterval(start=slot0, end=slot_end, value=0.2)]
+    price_export = [PriceForecastInterval(start=slot0, end=slot_end, value=-0.1)]
+    resolver = DummyResolver(
+        price_forecasts={
+            "price_import_forecast": price_import,
+            "price_export_forecast": price_export,
+        },
+        pv_forecasts={"pv_forecast": pv_intervals},
+        load_forecasts={"load_forecast": _load_intervals(now, config, value=0.5)},
+        realtime_values={
+            "load": 0.5,
+            "price_import": 0.2,
+            "price_export": -0.1,
+            "grid": 0.0,
+        },
+    )
+
+    plan = EmsMilpPlanner(config, resolver=resolver).generate_ems_plan(now=now)
+    step = plan.timesteps[0]
+    assert step.inverters["curtail"].curtailment is True
+    assert abs(step.grid.export_kw) < 1e-6
+    assert abs(step.grid.import_kw - 0.1) < 1e-6
+
+
 def test_binary_curtailment_prefers_import_over_negative_export() -> None:
     now = datetime(2025, 12, 27, 9, 2, tzinfo=UTC)
     inverter = InverterConfig(

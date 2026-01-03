@@ -32,6 +32,7 @@ time-stepped plan for plotting/inspection. The core code lives in:
 - Controlled EV loads can assume future connectivity using `connect_grace_minutes` plus optional `can_connect` and `allowed_connect_times` constraints.
 - Controlled EV loads apply a small internal ramp penalty to discourage large per-slot changes in charge power.
 - Controlled EV loads include a soft anchor penalty that keeps slot 0 close to realtime charge power; when realtime power is near zero (below 0.1 kW), the anchor penalty is skipped so charging can start immediately.
+- Load-aware curtailment is forced on whenever export price is negative so PV can follow load and export is blocked for those slots.
 
 ### MPC anchoring behavior
 Slot 0 is used as the MPC decision window, but some realtime inputs anchor the
@@ -42,6 +43,7 @@ model at the start of the horizon:
 - EV charge power has a **soft** slot-0 anchor (penalty on deviation from
   realtime power). When realtime power is near zero (< 0.1 kW), the anchor
   penalty is skipped so slot 0 can start charging without bias.
+- Load-aware curtailment is forced on when export prices go negative, making PV output flexible and blocking export in those slots.
 - Battery/EV SoC initialize `E_*[0]` using realtime sensors, and EV
   connectivity gates charging. These are feasibility anchors across the horizon.
 - Realtime grid power is **not** used by the EMS builder.
