@@ -1,7 +1,9 @@
 {
-  "include": ["src"],
+  "include": ["src", "custom_components"],
   "typeCheckingMode": "strict",
   "reportMissingImports": true,
   "reportMissingTypeStubs": false,
-  "pythonVersion": "3.13"
+  "pythonVersion": "3.13",
+  "venvPath": ".",
+  "venv": ".venv"
 }

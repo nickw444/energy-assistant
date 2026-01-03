@@ -5,6 +5,7 @@
 - Persist config and runtime artifacts to the filesystem (`data_dir` from YAML config). The single YAML file (default `config.yaml`) stores server + Home Assistant + plant + energy settings; it is read once at startup and the API is read-only for config (no writes). Avoid destructive commands that would drop user data.
 - Shared helpers (e.g., Home Assistant client) live under `hass_energy/lib/` to keep worker/API code lean.
 - CLI accepts a YAML config (`--config`, default `config.yaml`) for static settings like host, port, and data_dir. Config is validated with Pydantic. Worker is always on; host/port flags were removed.
+- Systemd units should use an absolute path to `uv` in `ExecStart` when `uv` is installed under a user-local path (e.g., `/root/.local/bin/uv`), because systemd only searches a limited set of system paths.
 - Routes are split by domain under `hass_energy/api/routes/` (e.g., `plan`, `settings`). Settings endpoint surfaces runtime energy settings (read-only; user edits YAML).
 - MILP logic lives under `hass_energy/worker/milp/` using PuLP; planner/compiler are placeholders awaiting real constraints.
 - MILP v2 scaffolding lives under `src/hass_energy/milp_v2/` with a compile phase (config + `ValueResolver` -> `CompiledModel`) and an execute phase (solve -> `PlanResult`).
@@ -19,8 +20,13 @@
 - EMS-specific guidance lives in `src/hass_energy/ems/AGENTS.md`.
 - EMS plan `EconomicsTimestepPlan` costs are grid import/export only and exclude other objective terms (EV incentives, penalties, curtailment tie-breaks, violation penalties, battery wear).
 - `EmsPlanOutput` now includes `objective_value` with the solver objective (may be negative/None).
+- Load-aware curtailment is forced on whenever export price is negative, enabling PV to follow load and blocking export for those slots.
 - `ConfigMapper` (`src/hass_energy/lib/resolver/__init__.py`) offers a recursive walk utility that calls a visitor for side effects and allows halting recursion by returning `False`.
 - Home Assistant integration (POC) lives under `custom_components/hass_energy`.
+- Home Assistant integration guidance lives in `custom_components/hass_energy/AGENTS.md`.
+- Home Assistant integration uses `custom_components/hass_energy/hass_energy_client/` for the lightweight aiohttp + Pydantic API client aligned with the FastAPI OpenAPI responses.
+- Home Assistant integration shares a single API client and data update coordinator via `entry.runtime_data`, and prefers typed model access over dynamic path traversal where possible.
+- Any FastAPI contract changes must be reflected in `custom_components/hass_energy/hass_energy_client/`, and the Home Assistant custom integration should be refactored as needed to keep it in sync.
 
 ## Continuous learning
 - When you learn new project knowledge, coding style, or preferences during a session, update `AGENTS.md` (and `README.md` if it affects users) before finishing so the next agent benefits.
