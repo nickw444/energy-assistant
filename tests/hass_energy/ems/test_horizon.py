@@ -87,6 +87,35 @@ def test_high_res_window_can_be_entire_horizon() -> None:
     assert horizon.slots[-1].end == now + timedelta(minutes=60)
 
 
+def test_high_res_window_clamps_to_total_minutes() -> None:
+    now = datetime(2025, 12, 27, 0, 0, tzinfo=UTC)
+    horizon = build_horizon(
+        now=now,
+        timestep_minutes=30,
+        high_res_timestep_minutes=5,
+        high_res_horizon_minutes=90,
+        total_minutes=60,
+    )
+
+    durations = {slot.duration_m for slot in horizon.slots}
+    assert durations == {5}
+    assert horizon.slots[-1].end == now + timedelta(minutes=60)
+
+
+def test_high_res_start_floors_to_high_res_boundary() -> None:
+    now = datetime(2025, 12, 27, 3, 29, tzinfo=UTC)
+    horizon = build_horizon(
+        now=now,
+        timestep_minutes=30,
+        high_res_timestep_minutes=5,
+        high_res_horizon_minutes=10,
+        total_minutes=40,
+    )
+
+    assert horizon.start.minute == 25
+    assert horizon.slots[0].start.minute == 25
+
+
 def test_default_horizon_uses_single_resolution() -> None:
     now = datetime(2025, 12, 27, 0, 2, tzinfo=UTC)
     horizon = build_horizon(

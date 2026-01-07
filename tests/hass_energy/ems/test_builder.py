@@ -60,6 +60,8 @@ def _make_config(
     load: PlantLoadConfig | None = None,
     timestep_minutes: int = 5,
     min_horizon_minutes: int | None = None,
+    high_res_timestep_minutes: int | None = None,
+    high_res_horizon_minutes: int | None = None,
 ) -> AppConfig:
     if min_horizon_minutes is None:
         min_horizon_minutes = timestep_minutes * 2
@@ -121,6 +123,8 @@ def _make_config(
     ems = EmsConfig(
         timestep_minutes=timestep_minutes,
         min_horizon_minutes=min_horizon_minutes,
+        high_res_timestep_minutes=high_res_timestep_minutes,
+        high_res_horizon_minutes=high_res_horizon_minutes,
     )
     return AppConfig(
         server=ServerConfig(),
@@ -574,6 +578,120 @@ def test_horizon_errors_when_shorter_than_min_horizon_minutes() -> None:
 
     with pytest.raises(ValueError, match="min_horizon_minutes"):
         EmsMilpPlanner(config, resolver=resolver).generate_ems_plan(now=now)
+
+
+def test_min_horizon_minutes_uses_high_res_interval() -> None:
+    now = datetime(2025, 12, 27, 10, 2, tzinfo=UTC)
+    config = _make_config(
+        timestep_minutes=30,
+        min_horizon_minutes=15,
+        high_res_timestep_minutes=5,
+        high_res_horizon_minutes=20,
+    )
+    interval_minutes = config.ems.high_res_timestep_minutes or config.ems.timestep_minutes
+    start = now.replace(
+        minute=(now.minute // interval_minutes) * interval_minutes,
+        second=0,
+        microsecond=0,
+    )
+
+    resolver = DummyResolver(
+        price_forecasts={
+            "price_import_forecast": _price_intervals(
+                start,
+                interval_minutes=interval_minutes,
+                num_intervals=2,
+                value=0.1,
+            ),
+            "price_export_forecast": _price_intervals(
+                start,
+                interval_minutes=interval_minutes,
+                num_intervals=2,
+                value=0.1,
+            ),
+        },
+        pv_forecasts={
+            "pv_forecast": _power_intervals(
+                start,
+                interval_minutes=interval_minutes,
+                num_intervals=2,
+                value=1.0,
+            )
+        },
+        load_forecasts={
+            "load_forecast": _power_intervals(
+                start,
+                interval_minutes=interval_minutes,
+                num_intervals=2,
+                value=0.5,
+            )
+        },
+        realtime_values={
+            "load": 0.5,
+            "price_import": 0.1,
+            "price_export": 0.1,
+            "grid": 0.0,
+        },
+    )
+
+    with pytest.raises(ValueError, match="min_horizon_minutes"):
+        EmsMilpPlanner(config, resolver=resolver).generate_ems_plan(now=now)
+
+
+def test_variable_horizon_averages_into_coarse_slot() -> None:
+    now = datetime(2025, 12, 27, 0, 2, tzinfo=UTC)
+    config = _make_config(
+        timestep_minutes=30,
+        min_horizon_minutes=60,
+        high_res_timestep_minutes=5,
+        high_res_horizon_minutes=20,
+    )
+    interval_minutes = config.ems.high_res_timestep_minutes or config.ems.timestep_minutes
+    start = now.replace(
+        minute=(now.minute // interval_minutes) * interval_minutes,
+        second=0,
+        microsecond=0,
+    )
+    price_import_intervals = [
+        PriceForecastInterval(
+            start=start + timedelta(minutes=interval_minutes * idx),
+            end=start + timedelta(minutes=interval_minutes * (idx + 1)),
+            value=float(idx + 1),
+        )
+        for idx in range(12)
+    ]
+
+    resolver = DummyResolver(
+        price_forecasts={
+            "price_import_forecast": price_import_intervals,
+            "price_export_forecast": _price_intervals(
+                start,
+                interval_minutes=interval_minutes,
+                num_intervals=12,
+                value=0.0,
+            ),
+        },
+        pv_forecasts={
+            "pv_forecast": _power_intervals(
+                start,
+                interval_minutes=interval_minutes,
+                num_intervals=12,
+                value=0.0,
+            )
+        },
+        load_forecasts={"load_forecast": _load_intervals(now, config, value=0.5)},
+        realtime_values={
+            "load": 0.5,
+            "price_import": 1.0,
+            "price_export": 0.0,
+            "grid": 0.0,
+        },
+    )
+
+    plan = EmsMilpPlanner(config, resolver=resolver).generate_ems_plan(now=now)
+    durations = [step.duration_s for step in plan.timesteps]
+    assert durations == [300.0] * 6 + [1800.0]
+    assert plan.timesteps[-1].economics.price_import == pytest.approx(9.5)
 
 
 def test_load_aware_curtailment_active_with_negative_price_without_export() -> None:
