@@ -78,7 +78,6 @@ def _align_intervals[T: ForecastInterval](
         raise ValueError("forecast series does not cover the full horizon")
 
     ordered = sorted(intervals, key=lambda interval: interval.start)
-    starts = [interval.start for interval in ordered]
     series: list[float] = []
 
     first_start = ordered[0].start
@@ -93,23 +92,40 @@ def _align_intervals[T: ForecastInterval](
     if horizon_end > last_end:
         raise ValueError("forecast series does not cover the full horizon")
 
+    idx = 0
     for slot in horizon.slots:
         slot_start = slot.start
         slot_end = slot.end
-        idx = bisect.bisect_right(starts, slot_start) - 1
-        value: float | None = None
-        for candidate in (idx, idx + 1):
-            if 0 <= candidate < len(ordered):
-                interval = ordered[candidate]
-                if interval.start < slot_end and interval.end > slot_start:
-                    value = float(interval.value)
-                    break
-        if value is None:
+        slot_seconds = (slot_end - slot_start).total_seconds()
+        while idx < len(ordered) and ordered[idx].end <= slot_start:
+            idx += 1
+        total_overlap = 0.0
+        weighted_sum = 0.0
+        scan = idx
+        while scan < len(ordered) and ordered[scan].start < slot_end:
+            interval = ordered[scan]
+            overlap_start = max(slot_start, interval.start)
+            overlap_end = min(slot_end, interval.end)
+            overlap = (overlap_end - overlap_start).total_seconds()
+            if overlap > 0:
+                total_overlap += overlap
+                weighted_sum += float(interval.value) * overlap
+            if interval.end <= slot_end:
+                scan += 1
+            else:
+                break
+        if total_overlap <= 0:
             if first_slot_override is not None and slot.index == 0:
                 series.append(0.0)
                 continue
             raise ValueError("forecast series does not cover the full horizon")
-        series.append(value)
+        coverage_gap = slot_seconds - total_overlap
+        if coverage_gap > 1.0:
+            if first_slot_override is not None and slot.index == 0:
+                series.append(0.0)
+                continue
+            raise ValueError("forecast series does not cover the full horizon")
+        series.append(weighted_sum / total_overlap)
     if first_slot_override is not None:
         series[0] = float(first_slot_override)
     if len(series) != horizon.num_intervals:

@@ -9,10 +9,8 @@ homeassistant:
   verify_tls: true
 
 ems:
-  interval_duration: 5
-  # min_intervals: 288
-  # min_intervals: 276 # 23 hours minimum; solver uses the shortest forecast length.
-  min_intervals: 144
+  timestep_minutes: 5
+  min_horizon_minutes: 720 # 12 hours minimum; solver uses the shortest forecast length.
 
 plant:
   grid:

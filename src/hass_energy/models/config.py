@@ -10,10 +10,35 @@ from hass_energy.models.plant import PlantConfig
 
 
 class EmsConfig(BaseModel):
-    interval_duration: int = Field(default=5, ge=1, le=1440)
-    min_intervals: int = Field(default=24, ge=1, le=10000)
+    timestep_minutes: int = Field(default=5, ge=1, le=1440)
+    min_horizon_minutes: int = Field(default=120, ge=1, le=525600)
+    high_res_timestep_minutes: int | None = Field(default=None, ge=1, le=1440)
+    high_res_horizon_minutes: int | None = Field(default=None, ge=1, le=525600)
 
     model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="after")
+    def _validate_interval_settings(self) -> EmsConfig:
+        if (
+            self.high_res_timestep_minutes is None
+            and self.high_res_horizon_minutes is None
+        ):
+            return self
+        if (
+            self.high_res_timestep_minutes is None
+            or self.high_res_horizon_minutes is None
+        ):
+            raise ValueError(
+                "high_res_timestep_minutes and high_res_horizon_minutes must be set together"
+            )
+        if (
+            self.high_res_horizon_minutes is not None
+            and self.high_res_horizon_minutes % self.high_res_timestep_minutes != 0
+        ):
+            raise ValueError(
+                "high_res_horizon_minutes must be a multiple of high_res_timestep_minutes"
+            )
+        return self
 
 
 class ServerConfig(BaseModel):

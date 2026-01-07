@@ -16,13 +16,16 @@ time-stepped plan for plotting/inspection. The core code lives in:
 
 ### Data flow
 1. `MILPBuilder.resolve_forecasts(...)` resolves forecast series into `ResolvedForecasts`, including the shortest coverage length.
-2. `build_horizon(...)` constructs time slots aligned to `EmsConfig.interval_duration`, sized to the shortest forecast horizon (bounded by `EmsConfig.min_intervals`).
+2. `build_horizon(...)` constructs time slots aligned to `EmsConfig.timestep_minutes`, sized to the shortest forecast horizon (bounded by `EmsConfig.min_horizon_minutes`). If `high_res_horizon_minutes` / `high_res_timestep_minutes` are set, slots run at higher resolution before switching back to the default timestep.
 3. `MILPBuilder.build(...)` builds the MILP using the resolved forecasts.
 4. `EmsMilpPlanner.generate_ems_plan(...)` solves the model (CBC) and extracts a plan.
 5. `plot_plan(...)` visualizes series (net grid, PV, battery, prices, costs, SoC).
 
 ### Inputs & resolution
-- `PlantConfig` + `LoadConfig` + `EmsConfig` define topology; horizon length shrinks to the shortest forecast horizon but must be ≥ `EmsConfig.min_intervals`.
+- `PlantConfig` + `LoadConfig` + `EmsConfig` define topology; horizon length shrinks to the shortest forecast horizon but must be ≥ `EmsConfig.min_horizon_minutes`.
+- `EmsConfig.timestep_minutes` plus optional `high_res_timestep_minutes` and `high_res_horizon_minutes` define multi-resolution horizons (e.g., 30-minute slots by default, with 5-minute slots for the first 2 hours).
+  - When switching to a new interval size, the boundary is snapped forward to the next slot boundary for that interval to keep coarse slots aligned to the wall clock.
+  - If the remaining horizon length does not divide evenly into the final slot size, the last slot is shortened to fit the forecast coverage.
 - Forecasts resolve through `MILPBuilder.resolve_forecasts(...)` into `ResolvedForecasts`
   (defined in `src/hass_energy/ems/models.py`) containing `PowerForecastInterval` and
   `PriceForecastInterval` sequences.
@@ -30,7 +33,8 @@ time-stepped plan for plotting/inspection. The core code lives in:
 - Realtime override values are resolved during `MILPBuilder.build(...)`, not stored in `ResolvedForecasts`.
 - Alignment:
   - `PowerForecastAligner` / `PriceForecastAligner` align intervals to the horizon.
-  - Alignment is strict: forecasts must fully cover the horizon (no wrapping).
+  - Alignment is strict: forecasts must fully cover the horizon (no wrapping), with a small tolerance for sub-minute gaps.
+  - Slot alignment uses a time-weighted average when horizon slots are longer than forecast intervals.
   - `first_slot_override` replaces the first slot with a realtime value.
 - Plant load forecasts/realtime values should exclude controlled loads; controllable loads are added separately in the MILP.
 - Historical-average load forecasts support `forecast_horizon_hours` to repeat the daily profile beyond 24h.

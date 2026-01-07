@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import logging
 import time
+import math
 from typing import Any, cast
 
 import pulp
@@ -48,23 +49,41 @@ class EmsMilpPlanner:
             loads=self._app_config.loads,
             resolver=self._resolver,
         )
+        high_res_timestep = self._app_config.ems.high_res_timestep_minutes
+        high_res_horizon = self._app_config.ems.high_res_horizon_minutes
+        # Base interval used to size the forecast horizon and align forecasts into slots.
+        base_interval_minutes = (
+            high_res_timestep or self._app_config.ems.timestep_minutes
+        )
         forecasts = builder.resolve_forecasts(
             now=solve_time,
-            interval_minutes=self._app_config.ems.interval_duration,
+            interval_minutes=base_interval_minutes,
         )
         horizon_intervals = self._validate_min_horizon_intervals(
-            forecasts.min_coverage_intervals
+            forecasts.min_coverage_intervals,
+            base_interval_minutes,
         )
+        total_minutes = horizon_intervals * base_interval_minutes
         horizon = build_horizon(
             now=solve_time,
-            interval_minutes=self._app_config.ems.interval_duration,
+            timestep_minutes=self._app_config.ems.timestep_minutes,
             num_intervals=horizon_intervals,
+            high_res_timestep_minutes=high_res_timestep,
+            high_res_horizon_minutes=high_res_horizon,
+            total_minutes=total_minutes,
+        )
+        schedule_info = _format_schedule(
+            high_res_timestep,
+            high_res_horizon,
+            self._app_config.ems.timestep_minutes,
         )
         logger.info(
-            "EMS horizon: intervals=%s interval_minutes=%s start=%s",
+            "EMS horizon: intervals=%s base_interval_minutes=%s total_minutes=%s start=%s schedule=%s",
             horizon.num_intervals,
-            horizon.interval_minutes,
+            base_interval_minutes,
+            total_minutes,
             horizon.start.isoformat(),
+            schedule_info,
         )
         build_start = time.perf_counter()
         model = builder.build(horizon=horizon, forecasts=forecasts)
@@ -101,12 +120,19 @@ class EmsMilpPlanner:
     def last_timings(self) -> EmsPlanTimings | None:
         return self._last_timings
 
-    def _validate_min_horizon_intervals(self, min_coverage_intervals: int) -> int:
-        min_intervals = self._app_config.ems.min_intervals
+    def _validate_min_horizon_intervals(
+        self,
+        min_coverage_intervals: int,
+        base_interval_minutes: int,
+    ) -> int:
+        min_minutes = self._app_config.ems.min_horizon_minutes
+        min_intervals = math.ceil(min_minutes / base_interval_minutes)
         if min_coverage_intervals < min_intervals:
+            coverage_minutes = min_coverage_intervals * base_interval_minutes
             raise ValueError(
                 "Shortest forecast horizon "
-                f"({min_coverage_intervals} intervals) is below min_intervals={min_intervals}"
+                f"({min_coverage_intervals} intervals, {coverage_minutes} minutes) "
+                f"is below min_horizon_minutes={min_minutes}"
             )
         return min_coverage_intervals
 
@@ -238,3 +264,13 @@ def _objective_value(model: MILPModel) -> float | None:
     if value is None:
         return None
     return float(value)
+
+
+def _format_schedule(
+    high_res_interval: int | None,
+    high_res_horizon: int | None,
+    timestep_minutes: int,
+) -> str:
+    if high_res_interval is None or high_res_horizon is None:
+        return f"{timestep_minutes}m/rest"
+    return f"{high_res_interval}m/{high_res_horizon}m, {timestep_minutes}m/rest"

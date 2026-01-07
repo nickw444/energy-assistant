@@ -10,7 +10,7 @@
 - MILP logic lives under `hass_energy/worker/milp/` using PuLP; planner/compiler are placeholders awaiting real constraints.
 - MILP v2 scaffolding lives under `src/hass_energy/milp_v2/` with a compile phase (config + `ValueResolver` -> `CompiledModel`) and an execute phase (solve -> `PlanResult`).
 - CLI `hass-energy milp` now wires the MILP v2 planner (compiler + executor); it currently fails until those phases are implemented.
-- MILP v2 slotting uses `EmsConfig.interval_duration` with a horizon length derived from the shortest forecast, bounded by `EmsConfig.min_intervals`, to align forecast slots to the current block start.
+- MILP v2 slotting uses `EmsConfig.timestep_minutes` with a horizon length derived from the shortest forecast, bounded by `EmsConfig.min_horizon_minutes`, to align forecast slots to the current block start.
 - Plotting helpers live in `src/hass_energy/plotting/` and are shared by CLI.
 - A lightweight plan checker lives at `hass_energy/worker/milp/checker.py` with pytest coverage in `tests/`.
 - `hass_energy/worker/milp/ha_dump.py` now emits a single-battery stub in realtime inputs when `battery_soc` is available (capacity/limits are currently constants).
@@ -22,6 +22,7 @@
 - EMS plan `EconomicsTimestepPlan` costs are grid import/export only and exclude other objective terms (EV incentives, penalties, curtailment tie-breaks, violation penalties, battery wear).
 - `EmsPlanOutput` now includes `objective_value` with the solver objective (may be negative/None).
 - Load-aware curtailment is forced on whenever export price is negative, enabling PV to follow load and blocking export for those slots.
+- EMS horizons can use `EmsConfig.timestep_minutes` plus `high_res_timestep_minutes` / `high_res_horizon_minutes` to run a higher-resolution window before switching to the default timestep; boundaries snap to the next interval boundary for aligned coarse slots and alignment uses time-weighted averages for variable slot sizes.
 - Historical-average load forecasts can repeat daily averages beyond 24h via `forecast_horizon_hours` (default 24).
 - `ConfigMapper` (`src/hass_energy/lib/resolver/__init__.py`) offers a recursive walk utility that calls a visitor for side effects and allows halting recursion by returning `False`.
 - Home Assistant integration (POC) lives under `custom_components/hass_energy`.

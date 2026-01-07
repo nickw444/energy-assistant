@@ -132,7 +132,9 @@ class PlanAwaitResponse(BaseModel):
 
 
 class EmsConfig(BaseModel):
-    interval_duration: int
-    min_intervals: int
+    timestep_minutes: int
+    min_horizon_minutes: int
+    high_res_timestep_minutes: int | None = None
+    high_res_horizon_minutes: int | None = None
 
     model_config = ConfigDict(extra="forbid")

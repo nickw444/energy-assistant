@@ -25,8 +25,8 @@ Energy management system that pulls Home Assistant data, plans using MILP (stub 
      verify_tls: true
      timeout_seconds: 30
    ems:
-     interval_duration: 60
-     min_intervals: 24
+     timestep_minutes: 60
+     min_horizon_minutes: 1440
    plant:
      grid:
        max_import_kw: 0.0
@@ -63,6 +63,15 @@ Energy management system that pulls Home Assistant data, plans using MILP (stub 
          # forecast_horizon_hours: 48
      inverters: []
    loads: []
+   ```
+   Optional multi-resolution horizon (higher resolution near-term, then coarser):
+   ```yaml
+   ems:
+     min_horizon_minutes: 120
+     timestep_minutes: 30
+     high_res_timestep_minutes: 5
+     high_res_horizon_minutes: 120
+   # Coarser intervals snap to their natural clock boundaries (e.g., 30-min slots on :00/:30).
    ```
 4) Run the API + worker (always on): `uv run hass-energy --config config.yaml`.
 5) Run the MILP v2 CLI (wired but not implemented yet): `uv run hass-energy milp --config config.yaml`.
