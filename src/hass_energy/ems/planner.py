@@ -60,6 +60,12 @@ class EmsMilpPlanner:
             interval_minutes=self._app_config.ems.interval_duration,
             num_intervals=horizon_intervals,
         )
+        logger.info(
+            "EMS horizon: intervals=%s interval_minutes=%s start=%s",
+            horizon.num_intervals,
+            horizon.interval_minutes,
+            horizon.start.isoformat(),
+        )
         build_start = time.perf_counter()
         model = builder.build(horizon=horizon, forecasts=forecasts)
         build_seconds = time.perf_counter() - build_start

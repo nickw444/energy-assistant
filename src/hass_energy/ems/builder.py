@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+import logging
 
 import pulp
 
@@ -21,6 +22,8 @@ _EV_RAMP_PENALTY_COST = 1e-4
 _EV_ANCHOR_PENALTY_COST = 0.05
 _EV_ANCHOR_ACTIVE_THRESHOLD_KW = 0.1
 _NEGATIVE_EXPORT_PRICE_THRESHOLD = -1e-9
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -137,30 +140,24 @@ class MILPBuilder:
             self._plant.grid.price_export_forecast
         )
 
-        coverage_lengths: list[int] = []
-        coverage_lengths.append(
-            forecast_coverage_slots(
-                start,
-                interval_minutes,
-                load_intervals,
-                allow_first_slot_missing=True,
-            )
+        coverage_by_series: dict[str, int] = {}
+        coverage_by_series["load"] = forecast_coverage_slots(
+            start,
+            interval_minutes,
+            load_intervals,
+            allow_first_slot_missing=True,
         )
-        coverage_lengths.append(
-            forecast_coverage_slots(
-                start,
-                interval_minutes,
-                price_import_intervals,
-                allow_first_slot_missing=True,
-            )
+        coverage_by_series["price_import"] = forecast_coverage_slots(
+            start,
+            interval_minutes,
+            price_import_intervals,
+            allow_first_slot_missing=True,
         )
-        coverage_lengths.append(
-            forecast_coverage_slots(
-                start,
-                interval_minutes,
-                price_export_intervals,
-                allow_first_slot_missing=True,
-            )
+        coverage_by_series["price_export"] = forecast_coverage_slots(
+            start,
+            interval_minutes,
+            price_export_intervals,
+            allow_first_slot_missing=True,
         )
 
         inverter_forecasts: dict[str, list[PowerForecastInterval]] = {}
@@ -170,19 +167,28 @@ class MILPBuilder:
             if inverter.pv.realtime_power is not None:
                 allow_first_slot_missing = True
             inverter_forecasts[inverter.id] = pv_intervals
-            coverage_lengths.append(
-                forecast_coverage_slots(
-                    start,
-                    interval_minutes,
-                    pv_intervals,
-                    allow_first_slot_missing=allow_first_slot_missing,
-                )
+            coverage_by_series[f"pv:{inverter.id}"] = forecast_coverage_slots(
+                start,
+                interval_minutes,
+                pv_intervals,
+                allow_first_slot_missing=allow_first_slot_missing,
             )
 
-        if not coverage_lengths:
+        if not coverage_by_series:
             raise ValueError("No forecasts available to determine planning horizon")
 
-        min_coverage = min(coverage_lengths)
+        min_coverage = min(coverage_by_series.values())
+        limiting = sorted(
+            name for name, length in coverage_by_series.items() if length == min_coverage
+        )
+        coverage_summary = ", ".join(
+            f"{name}={length}" for name, length in sorted(coverage_by_series.items())
+        )
+        logger.info(
+            "Forecast coverage (intervals): %s; limiting=%s",
+            coverage_summary,
+            ", ".join(limiting),
+        )
         return ResolvedForecasts(
             grid_price_import=price_import_intervals,
             grid_price_export=price_export_intervals,

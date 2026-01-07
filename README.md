@@ -52,6 +52,15 @@ Energy management system that pulls Home Assistant data, plans using MILP (stub 
        realtime_load_power:
          type: home_assistant
          entity: sensor.load_power
+       forecast:
+         type: home_assistant
+         platform: historical_average
+         entity: sensor.load_power_15m
+         history_days: 3
+         interval_duration: 60
+         unit: W
+         # Optional: repeat the daily profile for longer horizons.
+         # forecast_horizon_hours: 48
      inverters: []
    loads: []
    ```

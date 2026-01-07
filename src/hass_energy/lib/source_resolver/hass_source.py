@@ -69,15 +69,11 @@ def _amber_price_value(
 ) -> float | None:
     if use_advanced:
         if "advanced_price_predicted" in item:
-            try:
-                return required_float(cast(object, item.get("advanced_price_predicted")))
-            except (TypeError, ValueError):
-                return None
+            raw = item.get("advanced_price_predicted")
+            if raw is not None:
+                return required_float(raw)
     if "per_kwh" in item:
-        try:
-            return required_float(cast(object, item.get("per_kwh")))
-        except (TypeError, ValueError):
-            return None
+        return required_float(item.get("per_kwh"))
     return None
 
 
@@ -206,17 +202,19 @@ class HomeAssistantSolcastForecastSource(
 class HomeAssistantHistoricalAverageForecastSource(
     HomeAssistantHistoryEntitySource[list[PowerForecastInterval]]
 ):
-    """Build a 24-hour average forecast from historical state values.
+    """Build a rolling average forecast from historical state values.
 
     Uses the last `history_days` of state history to compute a time-of-day
-    average for each `interval_duration` bucket. The output is a 24-hour
-    forecast starting at the top of the current hour, aligned to the bucket
-    interval size. The history state unit is provided by `unit`.
+    average for each `interval_duration` bucket. The output repeats that
+    daily profile for `forecast_horizon_hours`, starting at the top of the
+    current hour and aligned to the bucket interval size. The history state
+    unit is provided by `unit`.
     """
 
     platform: Literal["historical_average"]
     unit: str = Field(min_length=1)
     interval_duration: int = Field(default=5, ge=1, le=60)
+    forecast_horizon_hours: int = Field(default=24, ge=1)
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -291,8 +289,10 @@ class HomeAssistantHistoricalAverageForecastSource(
         ]
 
         start_time = now.replace(minute=0, second=0, microsecond=0)
+        horizon_minutes = self.forecast_horizon_hours * 60
+        num_intervals = horizon_minutes // interval_minutes
         intervals: list[PowerForecastInterval] = []
-        for offset in range(buckets_per_day):
+        for offset in range(num_intervals):
             interval_start = start_time + datetime.timedelta(minutes=offset * interval_minutes)
             interval_end = interval_start + datetime.timedelta(minutes=interval_minutes)
             bucket = (interval_start.hour * 60 + interval_start.minute) // interval_minutes
