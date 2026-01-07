@@ -295,8 +295,10 @@ Per inverter battery:
   - `P_charge[t] <= limit * mode[t]`
   - `P_discharge[t] <= limit * (1 - mode[t])`
 - SoC bounds:
-  - min bound uses `max(min_soc_pct, reserve_soc_pct)`.
+  - min bound uses `min_soc_pct`.
   - max bound uses `max_soc_pct`.
+- Export reserve:
+  - Grid export is blocked unless SoC stays above `reserve_soc_pct` for the slot.
 - SoC dynamics:
   - `E[t+1] = E[t] + (P_charge * eta - P_discharge / eta) * dt`
   - `eta = storage_efficiency_pct / 100`.

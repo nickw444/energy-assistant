@@ -405,9 +405,10 @@ class MILPBuilder:
             )
             discharge_limit = min(discharge_limit, inverter.peak_power_kw)
 
-            soc_min_pct = max(battery.min_soc_pct, battery.reserve_soc_pct)
+            soc_min_pct = battery.min_soc_pct
             soc_min_kwh = battery.capacity_kwh * soc_min_pct / 100.0
             soc_max_kwh = battery.capacity_kwh * battery.max_soc_pct / 100.0
+            reserve_kwh = battery.capacity_kwh * battery.reserve_soc_pct / 100.0
             storage_efficiency = battery.storage_efficiency_pct / 100.0
 
             P_batt_charge = pulp.LpVariable.dicts(
@@ -437,6 +438,14 @@ class MILPBuilder:
                 lowBound=soc_min_kwh,
                 upBound=soc_max_kwh,
             )
+            export_ok = pulp.LpVariable.dicts(
+                f"Export_ok_{inv_id}",
+                T,
+                lowBound=0,
+                upBound=1,
+                cat="Binary",
+            )
+            export_soc_m = soc_max_kwh - soc_min_kwh
 
             initial_soc_pct = self._resolver.resolve(battery.state_of_charge_pct)
             initial_soc_kwh = battery.capacity_kwh * float(initial_soc_pct) / 100.0
@@ -450,6 +459,22 @@ class MILPBuilder:
             )
 
             for t in T:
+                # Block grid export unless battery stays above reserve SoC for this slot.
+                problem += (
+                    E_batt_kwh[t]
+                    >= reserve_kwh - export_soc_m * (1 - export_ok[t]),
+                    f"batt_export_reserve_start_{inv_id}_t{t}",
+                )
+                problem += (
+                    E_batt_kwh[t + 1]
+                    >= reserve_kwh - export_soc_m * (1 - export_ok[t]),
+                    f"batt_export_reserve_end_{inv_id}_t{t}",
+                )
+                problem += (
+                    grid.P_export[t]
+                    <= self._plant.grid.max_export_kw * export_ok[t],
+                    f"grid_export_reserve_{inv_id}_t{t}",
+                )
                 # Select charge vs discharge mode (idle is allowed in either mode).
                 problem += (
                     P_batt_charge[t] <= charge_limit * batt_charge_mode[t],
