@@ -128,10 +128,6 @@ class MILPBuilder:
         start = floor_to_interval_boundary(now, interval_minutes)
 
         load_forecast = self._plant.load.forecast
-        if load_forecast.interval_duration != interval_minutes:
-            raise ValueError(
-                "Load forecast interval_duration must match EMS interval_duration"
-            )
         load_intervals = self._resolver.resolve(load_forecast)
         price_import_intervals = self._resolver.resolve(
             self._plant.grid.price_import_forecast

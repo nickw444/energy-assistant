@@ -79,8 +79,9 @@ Supporting runtime pieces:
 The EMS consumes `AppConfig` from `src/hass_energy/models/config.py`:
 
 - `ems`: `EmsConfig`
-  - `interval_duration` (minutes)
-  - `min_intervals` (minimum forecast horizon; solver uses the shortest forecast length)
+  - `timestep_minutes` (default slot size)
+  - `high_res_timestep_minutes`, `high_res_horizon_minutes` (optional; run a higher-resolution window before switching to the default timestep)
+  - `min_horizon_minutes` (minimum forecast horizon; solver uses the shortest forecast length)
   - `timezone` (optional)
 - `plant`: `PlantConfig`
   - `grid`: `GridConfig`
@@ -104,7 +105,9 @@ Note: `realtime_grid_power` exists in config but is **not used** by the EMS solv
 - `realtime_load_power`
 - `forecast` (historical average)
 
-The load forecast **must** use the same `interval_duration` as `ems.interval_duration`
+Load forecasts are aligned to the horizon via time-weighted overlap, so the
+source interval does not have to match `ems.timestep_minutes` (though matching
+intervals can reduce unintended smoothing).
 (enforced in `MILPBuilder._resolve_load_series`). The plant load should **exclude
 controllable loads** (EV charging), which are modeled separately.
 
@@ -156,8 +159,9 @@ slots used by the MILP.
   - If `ems.timezone` is set, it is used.
   - Otherwise uses `now.tzinfo` or system local timezone.
 - **Slotting**:
-  - Horizon start is floored to the current interval boundary.
-  - Slots are **fixed-length** intervals of `interval_duration` minutes.
+  - Horizon start is floored to the base timestep boundary (high-res if configured).
+  - Slots are **fixed-length** intervals of `timestep_minutes` minutes by default, or
+    multi-resolution when the high-res interval fields are configured.
   - There is **no partial slot** at `t=0`; the first slot may partially precede `now`.
 - **Import forbidden periods**:
   - `import_allowed[t]` is computed in the builder per slot by comparing the slot
