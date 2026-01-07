@@ -79,7 +79,8 @@ model at the start of the horizon:
 - Battery:
   - Charge/discharge limits (optional overrides).
   - Single binary charge/discharge mode selector.
-  - SoC bounds from `min_soc_pct`, `reserve_soc_pct`, `max_soc_pct`.
+  - SoC bounds from `min_soc_pct` and `max_soc_pct`.
+  - Grid export is blocked when SoC is below `reserve_soc_pct` (self-consumption can still discharge to `min_soc_pct`).
   - SoC update uses `storage_efficiency_pct`.
   - Terminal SoC constraint: `E_batt[end] >= E_batt[start]`.
 - AC balance (system):
