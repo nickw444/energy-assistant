@@ -23,7 +23,8 @@ def plot_plan(
     timesteps = plan.timesteps
     if not timesteps:
         raise ValueError("Plan has no timesteps to plot.")
-    times = [_normalize_time(step.start, local_tz=local_tz) for step in timesteps]
+    time_edges = [_normalize_time(step.start, local_tz=local_tz) for step in timesteps]
+    time_edges.append(_normalize_time(timesteps[-1].end, local_tz=local_tz))
     durations = [float(step.duration_s) / 3600.0 for step in timesteps]
     grid_import = [float(step.grid.import_kw) for step in timesteps]
     grid_export = [float(step.grid.export_kw) for step in timesteps]
@@ -177,61 +178,112 @@ def plot_plan(
         ax_price = None
         ax_cost = None
         ax_soc = None
-        ax_cost_right = None
+    ax_cost_right = None
 
     lines: list[Any] = []
     if _has_any(grid_net):
-        (line,) = ax.plot(times, grid_net, label="grid_kw")
+        (line,) = ax.step(
+            time_edges,
+            _extend_step_values(grid_net),
+            where="post",
+            label="grid_kw",
+        )
         lines.append(line)
     if _has_any(pv_kw):
-        (line,) = ax.plot(times, pv_kw, label="pv_kw")
+        (line,) = ax.step(
+            time_edges,
+            _extend_step_values(pv_kw),
+            where="post",
+            label="pv_kw",
+        )
         lines.append(line)
     if _has_any(pv_available_kw) and not _series_equal(pv_available_kw, pv_kw):
-        (line,) = ax.plot(times, pv_available_kw, label="pv_available_kw", linestyle=":")
+        (line,) = ax.step(
+            time_edges,
+            _extend_step_values(pv_available_kw),
+            where="post",
+            label="pv_available_kw",
+            linestyle=":",
+        )
         lines.append(line)
     for name, series in pv_inverters.items():
         if _has_any(series):
-            (line,) = ax.plot(times, series, label=f"pv_{name}_kw", linestyle="--")
+            (line,) = ax.step(
+                time_edges,
+                _extend_step_values(series),
+                where="post",
+                label=f"pv_{name}_kw",
+                linestyle="--",
+            )
             lines.append(line)
     for name, series in pv_inverters_available.items():
         base_series = pv_inverters.get(name)
         if base_series is not None and _series_equal(series, base_series):
             continue
         if _has_any(series):
-            (line,) = ax.plot(
-                times,
-                series,
+            (line,) = ax.step(
+                time_edges,
+                _extend_step_values(series),
+                where="post",
                 label=f"pv_{name}_available_kw",
                 linestyle=":",
             )
             lines.append(line)
     for name, series in batt_net.items():
         if _has_any(series):
-            (line,) = ax.plot(times, series, label=f"batt_{name}_net_kw", linestyle=":")
+            (line,) = ax.step(
+                time_edges,
+                _extend_step_values(series),
+                where="post",
+                label=f"batt_{name}_net_kw",
+                linestyle=":",
+            )
             lines.append(line)
     for name, series in inverter_ac_net.items():
         if _has_any(series):
-            (line,) = ax.plot(times, series, label=f"inv_{name}_ac_net_kw", linestyle="-.")
+            (line,) = ax.step(
+                time_edges,
+                _extend_step_values(series),
+                where="post",
+                label=f"inv_{name}_ac_net_kw",
+                linestyle="-.",
+            )
             lines.append(line)
     for name, series in ev_charge.items():
-        (line,) = ax.plot(
-            times,
-            series,
+        (line,) = ax.step(
+            time_edges,
+            _extend_step_values(series),
+            where="post",
             label=f"ev_{name}_charge_kw",
             linestyle="--",
         )
         lines.append(line)
     if _has_any(load_kw):
-        (line,) = ax.plot(times, load_kw, label="load_kw")
+        (line,) = ax.step(
+            time_edges,
+            _extend_step_values(load_kw),
+            where="post",
+            label="load_kw",
+        )
         lines.append(line)
 
     price_lines: list[Any] = []
     if ax_price is not None:
         if _has_any(price_import):
-            (line,) = ax_price.plot(times, price_import, label="price_import")
+            (line,) = ax_price.step(
+                time_edges,
+                _extend_step_values(price_import),
+                where="post",
+                label="price_import",
+            )
             price_lines.append(line)
         if _has_any(price_export):
-            (line,) = ax_price.plot(times, price_export, label="price_export")
+            (line,) = ax_price.step(
+                time_edges,
+                _extend_step_values(price_export),
+                where="post",
+                label="price_export",
+            )
             price_lines.append(line)
         ax_price.set_ylabel("$/kWh")
         ax_price.legend(loc="best")
@@ -251,10 +303,21 @@ def plot_plan(
     if ax_cost is not None:
         ax_cost_right = ax_cost.twinx()
         if _has_any(segment_cost):
-            (line,) = ax_cost.plot(times, segment_cost, label="segment_cost", linestyle="--")
+            (line,) = ax_cost.step(
+                time_edges,
+                _extend_step_values(segment_cost),
+                where="post",
+                label="segment_cost",
+                linestyle="--",
+            )
             segment_lines.append(line)
         if _has_any(cumulative_cost):
-            (line,) = ax_cost_right.plot(times, cumulative_cost, label="cumulative_cost")
+            (line,) = ax_cost_right.step(
+                time_edges,
+                _extend_cumulative_values(cumulative_cost),
+                where="post",
+                label="cumulative_cost",
+            )
             cumulative_lines.append(line)
         ax_cost.set_ylabel("$/segment")
         ax_cost_right.set_ylabel("$ total")
@@ -288,13 +351,23 @@ def plot_plan(
         soc_suffix = "pct" if soc_unit == "%" else "kwh"
         for name, series in batt_soc_plot.items():
             if _has_any(series):
-                (line,) = ax_soc.plot(times, series, label=f"batt_{name}_soc_{soc_suffix}")
+                (line,) = ax_soc.step(
+                    time_edges,
+                    _extend_step_values(series),
+                    where="post",
+                    label=f"batt_{name}_soc_{soc_suffix}",
+                )
                 soc_lines.append(line)
                 soc_min = min(soc_min, min(series))
                 soc_max = max(soc_max, max(series))
         for name, series in ev_soc_plot.items():
             if _has_any(series):
-                (line,) = ax_soc.plot(times, series, label=f"ev_{name}_soc_{soc_suffix}")
+                (line,) = ax_soc.step(
+                    time_edges,
+                    _extend_step_values(series),
+                    where="post",
+                    label=f"ev_{name}_soc_{soc_suffix}",
+                )
                 soc_lines.append(line)
                 soc_min = min(soc_min, min(series))
                 soc_max = max(soc_max, max(series))
@@ -318,14 +391,14 @@ def plot_plan(
         fig.savefig(output)
         return
     if lines:
-        _enable_hover(ax, lines, times, unit="kW")
+        _enable_hover(ax, lines, time_edges, unit="kW")
     if ax_price is not None and price_lines:
-        _enable_hover(ax_price, price_lines, times, unit="$/kWh")
+        _enable_hover(ax_price, price_lines, time_edges, unit="$/kWh")
     if ax_cost is not None and segment_lines:
         _enable_hover(
             ax_cost,
             segment_lines,
-            times,
+            time_edges,
             unit="$/segment",
             allowed_axes={ax_cost, ax_cost_right} if ax_cost_right is not None else None,
         )
@@ -333,12 +406,12 @@ def plot_plan(
         _enable_hover(
             ax_cost_right,
             cumulative_lines,
-            times,
+            time_edges,
             unit="$",
             allowed_axes={ax_cost, ax_cost_right},
         )
     if ax_soc is not None and soc_lines:
-        _enable_hover(ax_soc, soc_lines, times, unit=soc_unit)
+        _enable_hover(ax_soc, soc_lines, time_edges, unit=soc_unit)
 
     _enable_line_toggle(fig)
     plt.show()
@@ -399,6 +472,18 @@ def _cumulative_sum(values: list[float]) -> list[float]:
         total += value
         series.append(total)
     return series
+
+
+def _extend_step_values(values: list[float]) -> list[float]:
+    if not values:
+        return values
+    return [*values, values[-1]]
+
+
+def _extend_cumulative_values(values: list[float]) -> list[float]:
+    if not values:
+        return values
+    return [0.0, *values]
 
 
 def _enable_hover(
