@@ -1,0 +1,287 @@
+from __future__ import annotations
+
+from typing import Any
+
+import pytest
+from pydantic import BaseModel
+
+from hass_energy.lib.source_resolver.hass_source import (
+    HomeAssistantCurrencyEntitySource,
+    HomeAssistantHistoricalAverageForecastSource,
+    HomeAssistantPowerKwEntitySource,
+    HomeAssistantSolcastForecastSource,
+    HomeAssistantEntitySource,
+    HomeAssistantHistoryEntitySource,
+    HomeAssistantMultiEntitySource,
+)
+from hass_energy.lib.source_resolver.resolver import ValueResolver
+from hass_energy.lib.source_resolver.sources import EntitySource
+
+
+class _StubProvider:
+    def __init__(self) -> None:
+        self.marked_entities: set[str] = set()
+        self.marked_history_entities: dict[str, int] = {}
+        self.states: dict[str, dict[str, Any]] = {}
+        self.history: dict[str, list[dict[str, Any]]] = {}
+        self.fetch_states_calls = 0
+        self.fetch_history_calls = 0
+
+    def mark(self, entity_id: str) -> None:
+        self.marked_entities.add(entity_id)
+
+    def mark_history(self, entity_id: str, history_days: int) -> None:
+        self.marked_history_entities[entity_id] = history_days
+
+    def get(self, entity_id: str) -> dict[str, Any]:
+        return self.states[entity_id]
+
+    def get_history(self, entity_id: str) -> list[dict[str, Any]]:
+        return self.history[entity_id]
+
+    def fetch_states(self) -> None:
+        self.fetch_states_calls += 1
+
+    def fetch_history(self) -> None:
+        self.fetch_history_calls += 1
+
+
+class _DemoConfig(BaseModel):
+    power: HomeAssistantPowerKwEntitySource
+    price: HomeAssistantCurrencyEntitySource
+    pv: HomeAssistantSolcastForecastSource
+    history: HomeAssistantHistoricalAverageForecastSource
+    nested: list[HomeAssistantPowerKwEntitySource]
+    mapping: dict[str, HomeAssistantPowerKwEntitySource]
+
+
+class _TupleConfig(BaseModel):
+    primary: HomeAssistantPowerKwEntitySource | None
+    sources: tuple[HomeAssistantPowerKwEntitySource, HomeAssistantPowerKwEntitySource]
+
+
+class _SimpleEntitySource(HomeAssistantEntitySource[int]):
+    def mapper(self, state: dict[str, Any]) -> int:
+        return 42
+
+
+class _SimpleHistorySource(HomeAssistantHistoryEntitySource[int]):
+    def mapper(self, history: list[dict[str, Any]]) -> int:
+        return len(history)
+
+
+class _SimpleMultiSource(HomeAssistantMultiEntitySource[int]):
+    def mapper(self, states: list[dict[str, Any]]) -> int:
+        return len(states)
+
+
+class _ExplodingHistorySource(HomeAssistantHistoryEntitySource[int]):
+    def mapper(self, history: list[dict[str, Any]]) -> int:
+        raise RuntimeError("boom")
+
+
+class _ExplodingMultiSource(HomeAssistantMultiEntitySource[int]):
+    def mapper(self, states: list[dict[str, Any]]) -> int:
+        raise RuntimeError("boom")
+
+
+class _UnsupportedSource(EntitySource[int, int]):
+    def mapper(self, state: int) -> int:
+        return state
+
+
+def test_mark_for_hydration_walks_nested_config() -> None:
+    provider = _StubProvider()
+    resolver = ValueResolver(provider)
+    config = _DemoConfig(
+        power=HomeAssistantPowerKwEntitySource(
+            type="home_assistant",
+            entity="sensor.load",
+        ),
+        price=HomeAssistantCurrencyEntitySource(
+            type="home_assistant",
+            entity="sensor.price",
+        ),
+        pv=HomeAssistantSolcastForecastSource(
+            type="home_assistant",
+            platform="solcast",
+            entities=["sensor.pv_a", "sensor.pv_b"],
+        ),
+        history=HomeAssistantHistoricalAverageForecastSource(
+            type="home_assistant",
+            platform="historical_average",
+            entity="sensor.load_history",
+            history_days=2,
+            unit="kW",
+            interval_duration=15,
+        ),
+        nested=[
+            HomeAssistantPowerKwEntitySource(
+                type="home_assistant",
+                entity="sensor.nested",
+            )
+        ],
+        mapping={
+            "extra": HomeAssistantPowerKwEntitySource(
+                type="home_assistant",
+                entity="sensor.extra",
+            )
+        },
+    )
+
+    resolver.mark_for_hydration(config)
+
+    assert provider.marked_entities == {
+        "sensor.load",
+        "sensor.price",
+        "sensor.pv_a",
+        "sensor.pv_b",
+        "sensor.nested",
+        "sensor.extra",
+    }
+    assert provider.marked_history_entities == {"sensor.load_history": 2}
+
+
+def test_mark_for_hydration_handles_tuples_and_nones() -> None:
+    provider = _StubProvider()
+    resolver = ValueResolver(provider)
+    config = _TupleConfig(
+        primary=None,
+        sources=(
+            HomeAssistantPowerKwEntitySource(
+                type="home_assistant",
+                entity="sensor.a",
+            ),
+            HomeAssistantPowerKwEntitySource(
+                type="home_assistant",
+                entity="sensor.b",
+            ),
+        ),
+    )
+
+    resolver.mark_for_hydration(config)
+
+    assert provider.marked_entities == {"sensor.a", "sensor.b"}
+
+
+def test_hydration_calls_provider_methods() -> None:
+    provider = _StubProvider()
+    resolver = ValueResolver(provider)
+
+    resolver.hydrate_all()
+    resolver.hydrate_states()
+    resolver.hydrate_history()
+
+    assert provider.fetch_states_calls == 2
+    assert provider.fetch_history_calls == 2
+
+
+def test_resolve_wraps_mapper_errors() -> None:
+    provider = _StubProvider()
+    provider.states["sensor.load"] = {
+        "entity_id": "sensor.load",
+        "state": None,
+        "attributes": {},
+        "last_changed": "2026-01-07T03:30:00+00:00",
+        "last_reported": "2026-01-07T03:30:00+00:00",
+        "last_updated": "2026-01-07T03:30:00+00:00",
+    }
+    resolver = ValueResolver(provider)
+    source = HomeAssistantPowerKwEntitySource(
+        type="home_assistant",
+        entity="sensor.load",
+    )
+
+    with pytest.raises(ValueError, match="sensor.load"):
+        resolver.resolve(source)
+
+
+def test_resolve_history_source() -> None:
+    provider = _StubProvider()
+    provider.history["sensor.history"] = [{"state": "ok"}]
+    resolver = ValueResolver(provider)
+    source = _SimpleHistorySource(
+        type="home_assistant",
+        entity="sensor.history",
+        history_days=1,
+    )
+
+    assert resolver.resolve(source) == 1
+
+
+def test_resolve_multi_entity_source() -> None:
+    provider = _StubProvider()
+    provider.states["sensor.a"] = {
+        "entity_id": "sensor.a",
+        "state": 1,
+        "attributes": {},
+        "last_changed": "2026-01-07T03:30:00+00:00",
+        "last_reported": "2026-01-07T03:30:00+00:00",
+        "last_updated": "2026-01-07T03:30:00+00:00",
+    }
+    provider.states["sensor.b"] = {
+        "entity_id": "sensor.b",
+        "state": 2,
+        "attributes": {},
+        "last_changed": "2026-01-07T03:30:00+00:00",
+        "last_reported": "2026-01-07T03:30:00+00:00",
+        "last_updated": "2026-01-07T03:30:00+00:00",
+    }
+    resolver = ValueResolver(provider)
+    source = _SimpleMultiSource(
+        type="home_assistant",
+        entities=["sensor.a", "sensor.b"],
+    )
+
+    assert resolver.resolve(source) == 2
+
+
+def test_resolve_history_wraps_mapper_errors() -> None:
+    provider = _StubProvider()
+    provider.history["sensor.history"] = [{"state": "ok"}]
+    resolver = ValueResolver(provider)
+    source = _ExplodingHistorySource(
+        type="home_assistant",
+        entity="sensor.history",
+        history_days=1,
+    )
+
+    with pytest.raises(ValueError, match="sensor.history"):
+        resolver.resolve(source)
+
+
+def test_resolve_multi_entity_wraps_mapper_errors() -> None:
+    provider = _StubProvider()
+    provider.states["sensor.a"] = {
+        "entity_id": "sensor.a",
+        "state": 1,
+        "attributes": {},
+        "last_changed": "2026-01-07T03:30:00+00:00",
+        "last_reported": "2026-01-07T03:30:00+00:00",
+        "last_updated": "2026-01-07T03:30:00+00:00",
+    }
+    provider.states["sensor.b"] = {
+        "entity_id": "sensor.b",
+        "state": 2,
+        "attributes": {},
+        "last_changed": "2026-01-07T03:30:00+00:00",
+        "last_reported": "2026-01-07T03:30:00+00:00",
+        "last_updated": "2026-01-07T03:30:00+00:00",
+    }
+    resolver = ValueResolver(provider)
+    source = _ExplodingMultiSource(
+        type="home_assistant",
+        entities=["sensor.a", "sensor.b"],
+    )
+
+    with pytest.raises(ValueError, match="entities"):
+        resolver.resolve(source)
+
+
+def test_resolve_unsupported_source_type() -> None:
+    provider = _StubProvider()
+    resolver = ValueResolver(provider)
+    source = _UnsupportedSource()
+
+    with pytest.raises(ValueError, match="Unsupported source type"):
+        resolver.resolve(source)
