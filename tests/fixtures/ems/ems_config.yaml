@@ -10,9 +10,9 @@ homeassistant:
 
 ems:
   interval_duration: 5
-  # num_intervals: 288
-  # num_intervals: 276 # 23 hours (for now, due to not handling multi-day forecasts)
-  num_intervals: 144
+  # min_intervals: 288
+  # min_intervals: 276 # 23 hours minimum; solver uses the shortest forecast length.
+  min_intervals: 144
 
 plant:
   grid:

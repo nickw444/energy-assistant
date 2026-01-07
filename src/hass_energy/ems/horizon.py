@@ -3,8 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from hass_energy.models.config import EmsConfig
-
 
 @dataclass(frozen=True, slots=True)
 class HorizonSlot:
@@ -37,11 +35,13 @@ class Horizon:
         return slot.start, slot.end
 
 
-def build_horizon(config: EmsConfig, *, now: datetime) -> Horizon:
-    interval_minutes = config.interval_duration
-    num_intervals = config.num_intervals
-
-    start = _floor_to_interval_boundary(now, interval_minutes)
+def build_horizon(
+    *,
+    now: datetime,
+    interval_minutes: int,
+    num_intervals: int,
+) -> Horizon:
+    start = floor_to_interval_boundary(now, interval_minutes)
     slots: list[HorizonSlot] = []
     for idx in range(num_intervals):
         slot_start = start + timedelta(minutes=idx * interval_minutes)
@@ -57,6 +57,6 @@ def build_horizon(config: EmsConfig, *, now: datetime) -> Horizon:
     )
 
 
-def _floor_to_interval_boundary(now: datetime, interval_minutes: int) -> datetime:
+def floor_to_interval_boundary(now: datetime, interval_minutes: int) -> datetime:
     minutes = (now.minute // interval_minutes) * interval_minutes
     return now.replace(minute=minutes, second=0, microsecond=0)

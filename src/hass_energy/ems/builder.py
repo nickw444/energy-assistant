@@ -5,12 +5,15 @@ from datetime import datetime, timedelta
 
 import pulp
 
-from hass_energy.ems.forecast_alignment import PowerForecastAligner, PriceForecastAligner
-from hass_energy.ems.horizon import Horizon
-from hass_energy.lib.source_resolver.hass_source import HomeAssistantEntitySource
+from hass_energy.ems.forecast_alignment import (
+    PowerForecastAligner,
+    PriceForecastAligner,
+    forecast_coverage_slots,
+)
+from hass_energy.ems.horizon import Horizon, floor_to_interval_boundary
+from hass_energy.ems.models import ResolvedForecasts
 from hass_energy.lib.source_resolver.models import PowerForecastInterval, PriceForecastInterval
 from hass_energy.lib.source_resolver.resolver import ValueResolver
-from hass_energy.lib.source_resolver.sources import EntitySource
 from hass_energy.models.loads import ControlledEvLoad, LoadConfig, NonVariableLoad
 from hass_energy.models.plant import PlantConfig, TimeWindow
 
@@ -105,24 +108,102 @@ class MILPBuilder:
         self,
         plant: PlantConfig,
         loads: list[LoadConfig],
-        horizon: Horizon,
         resolver: ValueResolver,
     ):
         self._plant = plant
         self._loads = loads
-        self._horizon = horizon
         self._resolver = resolver
         self._power_aligner = PowerForecastAligner()
         self._price_aligner = PriceForecastAligner()
 
-    def build(self) -> MILPModel:
+    def resolve_forecasts(
+        self,
+        *,
+        now: datetime,
+        interval_minutes: int,
+    ) -> ResolvedForecasts:
+        start = floor_to_interval_boundary(now, interval_minutes)
+
+        load_forecast = self._plant.load.forecast
+        if load_forecast.interval_duration != interval_minutes:
+            raise ValueError(
+                "Load forecast interval_duration must match EMS interval_duration"
+            )
+        load_intervals = self._resolver.resolve(load_forecast)
+        price_import_intervals = self._resolver.resolve(
+            self._plant.grid.price_import_forecast
+        )
+        price_export_intervals = self._resolver.resolve(
+            self._plant.grid.price_export_forecast
+        )
+
+        coverage_lengths: list[int] = []
+        coverage_lengths.append(
+            forecast_coverage_slots(
+                start,
+                interval_minutes,
+                load_intervals,
+                allow_first_slot_missing=True,
+            )
+        )
+        coverage_lengths.append(
+            forecast_coverage_slots(
+                start,
+                interval_minutes,
+                price_import_intervals,
+                allow_first_slot_missing=True,
+            )
+        )
+        coverage_lengths.append(
+            forecast_coverage_slots(
+                start,
+                interval_minutes,
+                price_export_intervals,
+                allow_first_slot_missing=True,
+            )
+        )
+
+        inverter_forecasts: dict[str, list[PowerForecastInterval]] = {}
+        for inverter in self._plant.inverters:
+            pv_intervals = self._resolver.resolve(inverter.pv.forecast)
+            allow_first_slot_missing = False
+            if inverter.pv.realtime_power is not None:
+                allow_first_slot_missing = True
+            inverter_forecasts[inverter.id] = pv_intervals
+            coverage_lengths.append(
+                forecast_coverage_slots(
+                    start,
+                    interval_minutes,
+                    pv_intervals,
+                    allow_first_slot_missing=allow_first_slot_missing,
+                )
+            )
+
+        if not coverage_lengths:
+            raise ValueError("No forecasts available to determine planning horizon")
+
+        min_coverage = min(coverage_lengths)
+        return ResolvedForecasts(
+            grid_price_import=price_import_intervals,
+            grid_price_export=price_export_intervals,
+            load=load_intervals,
+            inverters_pv=inverter_forecasts,
+            min_coverage_intervals=min_coverage,
+        )
+
+    def build(self, *, horizon: Horizon, forecasts: ResolvedForecasts) -> MILPModel:
         problem = pulp.LpProblem("ems_optimisation", pulp.LpMinimize)
-        base_load_kw = self._resolve_load_series(self._horizon)
-        grid = self._build_grid(problem, self._horizon)
-        inverters = self._build_inverters(problem, grid, self._horizon)
-        loads = self._build_loads(problem, self._horizon, base_load_kw)
-        self._build_ac_balance(problem, grid, inverters, loads, self._horizon)
-        self._build_objective(problem, grid, inverters, loads, self._horizon)
+        realtime_load = self._resolver.resolve(self._plant.load.realtime_load_power)
+        base_load_kw = self._power_aligner.align(
+            horizon,
+            forecasts.load,
+            first_slot_override=realtime_load,
+        )
+        grid = self._build_grid(problem, horizon, forecasts)
+        inverters = self._build_inverters(problem, grid, horizon, forecasts)
+        loads = self._build_loads(problem, horizon, base_load_kw)
+        self._build_ac_balance(problem, grid, inverters, loads, horizon)
+        self._build_objective(problem, grid, inverters, loads, horizon)
 
         return MILPModel(problem, grid, inverters, loads)
 
@@ -130,6 +211,7 @@ class MILPBuilder:
         self,
         problem: pulp.LpProblem,
         horizon: Horizon,
+        forecasts: ResolvedForecasts,
     ) -> GridBuild:
         T = horizon.T
         cfg = self._plant.grid
@@ -173,20 +255,25 @@ class MILPBuilder:
                 f"grid_import_forbidden_or_violation_t{t}",
             )
 
+        realtime_import = self._resolver.resolve(self._plant.grid.realtime_price_import)
+        realtime_export = self._resolver.resolve(self._plant.grid.realtime_price_export)
+        price_import = self._price_aligner.align(
+            horizon,
+            forecasts.grid_price_import,
+            first_slot_override=realtime_import,
+        )
+        price_export = self._price_aligner.align(
+            horizon,
+            forecasts.grid_price_export,
+            first_slot_override=realtime_export,
+        )
+
         return GridBuild(
             P_import=P_import,
             P_export=P_export,
             P_import_violation_kw=P_import_violation_kw,
-            price_import=self._resolve_price_series(
-                horizon,
-                self._plant.grid.price_import_forecast,
-                self._plant.grid.realtime_price_import,
-            ),
-            price_export=self._resolve_price_series(
-                horizon,
-                self._plant.grid.price_export_forecast,
-                self._plant.grid.realtime_price_export,
-            ),
+            price_import=price_import,
+            price_export=price_export,
             import_allowed=import_allowed,
         )
 
@@ -195,6 +282,7 @@ class MILPBuilder:
         problem: pulp.LpProblem,
         grid: GridBuild,
         horizon: Horizon,
+        forecasts: ResolvedForecasts,
     ) -> InverterBuild:
         T = horizon.T
         price_export = grid.price_export
@@ -203,6 +291,10 @@ class MILPBuilder:
         for inverter in self._plant.inverters:
             inv_name = inverter.name
             inv_id = inverter.id
+            pv_intervals = forecasts.inverters_pv[inv_id]
+            realtime_pv = None
+            if inverter.pv.realtime_power is not None:
+                realtime_pv = self._resolver.resolve(inverter.pv.realtime_power)
 
             pv_kw = pulp.LpVariable.dicts(
                 f"P_pv_{inv_id}_kw",
@@ -217,10 +309,10 @@ class MILPBuilder:
                 upBound=inverter.peak_power_kw,
             )
 
-            pv_available_kw_series = self._resolve_power_series(
+            pv_available_kw_series = self._power_aligner.align(
                 horizon,
-                forecast_source=inverter.pv.forecast,
-                realtime_source=inverter.pv.realtime_power,
+                pv_intervals,
+                first_slot_override=realtime_pv,
             )
             # Clamp to [0, peak_power_kw] to avoid infeasible PV generation.
             pv_available_kw_series = [
@@ -796,25 +888,6 @@ class MILPBuilder:
         )
         return segments
 
-    def _resolve_price_series(
-        self,
-        horizon: Horizon,
-        forecast_source: HomeAssistantEntitySource[list[PriceForecastInterval]],
-        realtime_source: HomeAssistantEntitySource[float],
-    ) -> list[float]:
-        """Resolve price forecast into a horizon-aligned series and override the current slot.
-
-        Uses the forecast to fill all slots, then replaces the slot containing
-        ``horizon.now`` with the realtime price value.
-        """
-        resolved = self._resolver.resolve(forecast_source)
-        realtime_value = self._resolver.resolve(realtime_source)
-        return self._price_aligner.align(
-            horizon,
-            resolved,
-            first_slot_override=realtime_value,
-        )
-
     def _resolve_import_allowed(self, horizon: Horizon) -> list[bool]:
         forbidden = self._plant.grid.import_forbidden_periods
         if not forbidden:
@@ -833,47 +906,6 @@ class MILPBuilder:
         if len(allowed) != horizon.num_intervals:
             raise ValueError("import_allowed series length mismatch")
         return allowed
-
-    def _resolve_power_series[TForecast, TRealtime](
-        self,
-        horizon: Horizon,
-        *,
-        forecast_source: EntitySource[TForecast, list[PowerForecastInterval]] | None,
-        realtime_source: EntitySource[TRealtime, float] | None,
-    ) -> list[float]:
-        """Resolve a power forecast into a horizon-aligned series.
-
-        If a forecast is provided, align it to the horizon and optionally replace
-        the current slot with realtime power when available. If no forecast is
-        provided, fill the horizon from realtime power.
-        """
-        if forecast_source is None:
-            if realtime_source is None:
-                raise ValueError("realtime power source is required when forecast is missing")
-            value = self._resolver.resolve(realtime_source)
-            return [value] * horizon.num_intervals
-
-        resolved = self._resolver.resolve(forecast_source)
-        realtime_value = None
-        if realtime_source is not None:
-            realtime_value = self._resolver.resolve(realtime_source)
-        return self._power_aligner.align(
-            horizon,
-            resolved,
-            first_slot_override=realtime_value,
-        )
-
-    def _resolve_load_series(self, horizon: Horizon) -> list[float]:
-        load_forecast = self._plant.load.forecast
-        if load_forecast.interval_duration != horizon.interval_minutes:
-            raise ValueError(
-                "Load forecast interval_duration must match EMS interval_duration"
-            )
-        return self._resolve_power_series(
-            horizon,
-            forecast_source=load_forecast,
-            realtime_source=self._plant.load.realtime_load_power,
-        )
 
 
 def _parse_hhmm(value: str) -> int:

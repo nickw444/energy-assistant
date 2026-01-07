@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict
 from pydantic.functional_serializers import PlainSerializer
 
+from hass_energy.lib.source_resolver.models import PowerForecastInterval, PriceForecastInterval
 Rounded3 = Annotated[
     float,
     PlainSerializer(lambda v: round(v, 3), return_type=float, when_used="json"),
@@ -108,3 +110,12 @@ class EmsPlanOutput(BaseModel):
     timesteps: list[TimestepPlan]
 
     model_config = ConfigDict(extra="forbid")
+
+
+@dataclass(slots=True)
+class ResolvedForecasts:
+    grid_price_import: list[PriceForecastInterval]
+    grid_price_export: list[PriceForecastInterval]
+    load: list[PowerForecastInterval]
+    inverters_pv: dict[str, list[PowerForecastInterval]]
+    min_coverage_intervals: int
