@@ -4,7 +4,11 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from hass_energy.ems.forecast_alignment import PowerForecastAligner, PriceForecastAligner
+from hass_energy.ems.forecast_alignment import (
+    PowerForecastAligner,
+    PriceForecastAligner,
+    forecast_coverage_slots,
+)
 from hass_energy.ems.horizon import Horizon, HorizonSlot
 from hass_energy.lib.source_resolver.models import PowerForecastInterval, PriceForecastInterval
 
@@ -75,3 +79,50 @@ def test_price_aligner_allows_current_slot_gap_with_override() -> None:
     )
 
     assert series == [0.35, 0.2]
+
+
+def test_forecast_coverage_allows_missing_first_slot() -> None:
+    start = datetime(2025, 12, 27, 0, 0, tzinfo=UTC)
+    interval_minutes = 5
+    intervals = [
+        PowerForecastInterval(
+            start=start + timedelta(minutes=5),
+            end=start + timedelta(minutes=10),
+            value=1.0,
+        ),
+        PowerForecastInterval(
+            start=start + timedelta(minutes=10),
+            end=start + timedelta(minutes=15),
+            value=1.0,
+        ),
+    ]
+
+    coverage = forecast_coverage_slots(
+        start,
+        interval_minutes,
+        intervals,
+        allow_first_slot_missing=True,
+    )
+
+    assert coverage == 3
+
+
+def test_forecast_coverage_stops_after_gap() -> None:
+    start = datetime(2025, 12, 27, 0, 0, tzinfo=UTC)
+    interval_minutes = 5
+    intervals = [
+        PowerForecastInterval(
+            start=start + timedelta(minutes=10),
+            end=start + timedelta(minutes=15),
+            value=1.0,
+        ),
+    ]
+
+    coverage = forecast_coverage_slots(
+        start,
+        interval_minutes,
+        intervals,
+        allow_first_slot_missing=True,
+    )
+
+    assert coverage == 1

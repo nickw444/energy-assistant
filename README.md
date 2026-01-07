@@ -26,7 +26,7 @@ Energy management system that pulls Home Assistant data, plans using MILP (stub 
      timeout_seconds: 30
    ems:
      interval_duration: 60
-     num_intervals: 24
+     min_intervals: 24
    plant:
      grid:
        max_import_kw: 0.0

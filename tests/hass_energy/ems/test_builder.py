@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from hass_energy.ems.planner import EmsMilpPlanner
 from hass_energy.lib.home_assistant import HomeAssistantConfig
 from hass_energy.lib.source_resolver.hass_source import (
@@ -56,7 +58,7 @@ def _make_config(
     inverters: list[InverterConfig] | None = None,
     load: PlantLoadConfig | None = None,
     interval_duration: int = 5,
-    num_intervals: int = 2,
+    min_intervals: int = 2,
 ) -> AppConfig:
     grid = GridConfig(
         max_import_kw=10.0,
@@ -113,7 +115,7 @@ def _make_config(
             )
         ]
     plant = PlantConfig(grid=grid, load=plant_load, inverters=inverters)
-    ems = EmsConfig(interval_duration=interval_duration, num_intervals=num_intervals)
+    ems = EmsConfig(interval_duration=interval_duration, min_intervals=min_intervals)
     return AppConfig(
         server=ServerConfig(),
         homeassistant=HomeAssistantConfig(base_url="http://localhost", token="token"),
@@ -135,11 +137,45 @@ def _load_intervals(
         microsecond=0,
     )
     intervals: list[PowerForecastInterval] = []
-    for idx in range(config.ems.num_intervals):
+    for idx in range(config.ems.min_intervals):
         slot_start = start + timedelta(minutes=idx * interval_minutes)
         slot_end = slot_start + timedelta(minutes=interval_minutes)
         intervals.append(
             PowerForecastInterval(start=slot_start, end=slot_end, value=value)
+        )
+    return intervals
+
+
+def _power_intervals(
+    start: datetime,
+    *,
+    interval_minutes: int,
+    num_intervals: int,
+    value: float,
+) -> list[PowerForecastInterval]:
+    intervals: list[PowerForecastInterval] = []
+    for idx in range(num_intervals):
+        slot_start = start + timedelta(minutes=idx * interval_minutes)
+        slot_end = slot_start + timedelta(minutes=interval_minutes)
+        intervals.append(
+            PowerForecastInterval(start=slot_start, end=slot_end, value=value)
+        )
+    return intervals
+
+
+def _price_intervals(
+    start: datetime,
+    *,
+    interval_minutes: int,
+    num_intervals: int,
+    value: float,
+) -> list[PriceForecastInterval]:
+    intervals: list[PriceForecastInterval] = []
+    for idx in range(num_intervals):
+        slot_start = start + timedelta(minutes=idx * interval_minutes)
+        slot_end = slot_start + timedelta(minutes=interval_minutes)
+        intervals.append(
+            PriceForecastInterval(start=slot_start, end=slot_end, value=value)
         )
     return intervals
 
@@ -248,7 +284,7 @@ def test_load_forecast_aligns_to_horizon() -> None:
     config = _make_config(
         load=load,
         interval_duration=interval_duration,
-        num_intervals=3,
+        min_intervals=3,
     )
     slot0 = now.replace(minute=0, second=0, microsecond=0)
     slot1 = slot0 + timedelta(minutes=interval_duration)
@@ -402,7 +438,7 @@ def test_load_aware_curtailment_blocks_export() -> None:
         ),
         battery=None,
     )
-    config = _make_config(inverters=[inverter], num_intervals=1)
+    config = _make_config(inverters=[inverter], min_intervals=1)
     slot0 = now.replace(minute=0, second=0, microsecond=0)
     slot_end = slot0 + timedelta(minutes=config.ems.interval_duration)
     pv_intervals = [PowerForecastInterval(start=slot0, end=slot_end, value=2.0)]
@@ -430,6 +466,104 @@ def test_load_aware_curtailment_blocks_export() -> None:
     assert abs(step.grid.import_kw) < 1e-6
 
 
+def test_horizon_uses_shortest_forecast() -> None:
+    now = datetime(2025, 12, 27, 10, 2, tzinfo=UTC)
+    config = _make_config(min_intervals=2)
+    interval_minutes = config.ems.interval_duration
+    start = now.replace(minute=0, second=0, microsecond=0)
+
+    resolver = DummyResolver(
+        price_forecasts={
+            "price_import_forecast": _price_intervals(
+                start,
+                interval_minutes=interval_minutes,
+                num_intervals=3,
+                value=0.1,
+            ),
+            "price_export_forecast": _price_intervals(
+                start,
+                interval_minutes=interval_minutes,
+                num_intervals=2,
+                value=0.1,
+            ),
+        },
+        pv_forecasts={
+            "pv_forecast": _power_intervals(
+                start,
+                interval_minutes=interval_minutes,
+                num_intervals=4,
+                value=1.0,
+            )
+        },
+        load_forecasts={
+            "load_forecast": _power_intervals(
+                start,
+                interval_minutes=interval_minutes,
+                num_intervals=5,
+                value=0.5,
+            )
+        },
+        realtime_values={
+            "load": 0.5,
+            "price_import": 0.1,
+            "price_export": 0.1,
+            "grid": 0.0,
+        },
+    )
+
+    plan = EmsMilpPlanner(config, resolver=resolver).generate_ems_plan(now=now)
+    assert len(plan.timesteps) == 2
+
+
+def test_horizon_errors_when_shorter_than_min_intervals() -> None:
+    now = datetime(2025, 12, 27, 10, 2, tzinfo=UTC)
+    config = _make_config(min_intervals=3)
+    interval_minutes = config.ems.interval_duration
+    start = now.replace(minute=0, second=0, microsecond=0)
+
+    resolver = DummyResolver(
+        price_forecasts={
+            "price_import_forecast": _price_intervals(
+                start,
+                interval_minutes=interval_minutes,
+                num_intervals=3,
+                value=0.1,
+            ),
+            "price_export_forecast": _price_intervals(
+                start,
+                interval_minutes=interval_minutes,
+                num_intervals=2,
+                value=0.1,
+            ),
+        },
+        pv_forecasts={
+            "pv_forecast": _power_intervals(
+                start,
+                interval_minutes=interval_minutes,
+                num_intervals=3,
+                value=1.0,
+            )
+        },
+        load_forecasts={
+            "load_forecast": _power_intervals(
+                start,
+                interval_minutes=interval_minutes,
+                num_intervals=3,
+                value=0.5,
+            )
+        },
+        realtime_values={
+            "load": 0.5,
+            "price_import": 0.1,
+            "price_export": 0.1,
+            "grid": 0.0,
+        },
+    )
+
+    with pytest.raises(ValueError, match="min_intervals"):
+        EmsMilpPlanner(config, resolver=resolver).generate_ems_plan(now=now)
+
+
 def test_load_aware_curtailment_active_with_negative_price_without_export() -> None:
     now = datetime(2025, 12, 27, 9, 2, tzinfo=UTC)
     inverter = InverterConfig(
@@ -447,7 +581,7 @@ def test_load_aware_curtailment_active_with_negative_price_without_export() -> N
         ),
         battery=None,
     )
-    config = _make_config(inverters=[inverter], num_intervals=1)
+    config = _make_config(inverters=[inverter], min_intervals=1)
     slot0 = now.replace(minute=0, second=0, microsecond=0)
     slot_end = slot0 + timedelta(minutes=config.ems.interval_duration)
     pv_intervals = [PowerForecastInterval(start=slot0, end=slot_end, value=0.4)]
@@ -492,7 +626,7 @@ def test_binary_curtailment_prefers_import_over_negative_export() -> None:
         ),
         battery=None,
     )
-    config = _make_config(inverters=[inverter], num_intervals=1)
+    config = _make_config(inverters=[inverter], min_intervals=1)
     slot0 = now.replace(minute=0, second=0, microsecond=0)
     slot_end = slot0 + timedelta(minutes=config.ems.interval_duration)
     pv_intervals = [PowerForecastInterval(start=slot0, end=slot_end, value=2.0)]

@@ -22,16 +22,16 @@ class PlanRunState(BaseModel):
     run_id: str
     status: PlanRunStatus
     accepted_at: datetime
-    started_at: datetime | None = None
-    finished_at: datetime | None = None
-    message: str | None = None
+    started_at: datetime | None
+    finished_at: datetime | None
+    message: str | None
 
     model_config = ConfigDict(extra="forbid")
 
 
 class PlanRunResponse(BaseModel):
     run: PlanRunState
-    already_running: bool = False
+    already_running: bool
 
     model_config = ConfigDict(extra="forbid")
 
@@ -40,21 +40,21 @@ class GridTimestepPlan(BaseModel):
     import_kw: float
     export_kw: float
     net_kw: float
-    import_allowed: bool | None = None
-    import_violation_kw: float | None = None
+    import_allowed: bool | None
+    import_violation_kw: float | None
 
     model_config = ConfigDict(extra="forbid")
 
 
 class InverterTimestepPlan(BaseModel):
     name: str
-    pv_kw: float | None = None
+    pv_kw: float | None
     ac_net_kw: float
-    battery_charge_kw: float | None = None
-    battery_discharge_kw: float | None = None
-    battery_soc_kwh: float | None = None
-    battery_soc_pct: float | None = None
-    curtailment: bool | None = None
+    battery_charge_kw: float | None
+    battery_discharge_kw: float | None
+    battery_soc_kwh: float | None
+    battery_soc_pct: float | None
+    curtailment: bool | None
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -63,7 +63,7 @@ class EvTimestepPlan(BaseModel):
     name: str
     charge_kw: float
     soc_kwh: float
-    soc_pct: float | None = None
+    soc_pct: float | None
     connected: bool
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
@@ -110,7 +110,7 @@ class EmsPlanTimings(BaseModel):
 class EmsPlanOutput(BaseModel):
     generated_at: datetime
     status: PlanStatus
-    objective_value: float | None = None
+    objective_value: float | None
     timings: EmsPlanTimings
     timesteps: list[TimestepPlan]
 
@@ -132,7 +132,7 @@ class PlanAwaitResponse(BaseModel):
 
 
 class EmsConfig(BaseModel):
-    interval_duration: int = 5
-    num_intervals: int = 24
+    interval_duration: int
+    min_intervals: int
 
     model_config = ConfigDict(extra="forbid")

@@ -15,15 +15,19 @@ time-stepped plan for plotting/inspection. The core code lives in:
 ## EMS Design (Canonical)
 
 ### Data flow
-1. `build_horizon(...)` constructs time slots aligned to `EmsConfig.interval_duration`.
-2. `MILPBuilder.build()` resolves forecast series and builds the MILP.
-3. `EmsMilpPlanner.generate_ems_plan(...)` solves the model (CBC) and extracts a plan.
-4. `plot_plan(...)` visualizes series (net grid, PV, battery, prices, costs, SoC).
+1. `MILPBuilder.resolve_forecasts(...)` resolves forecast series into `ResolvedForecasts`, including the shortest coverage length.
+2. `build_horizon(...)` constructs time slots aligned to `EmsConfig.interval_duration`, sized to the shortest forecast horizon (bounded by `EmsConfig.min_intervals`).
+3. `MILPBuilder.build(...)` builds the MILP using the resolved forecasts.
+4. `EmsMilpPlanner.generate_ems_plan(...)` solves the model (CBC) and extracts a plan.
+5. `plot_plan(...)` visualizes series (net grid, PV, battery, prices, costs, SoC).
 
 ### Inputs & resolution
-- `PlantConfig` + `LoadConfig` + `EmsConfig` define topology and horizon.
-- Forecasts resolve through `ValueResolver` into `PowerForecastInterval` and
+- `PlantConfig` + `LoadConfig` + `EmsConfig` define topology; horizon length shrinks to the shortest forecast horizon but must be ≥ `EmsConfig.min_intervals`.
+- Forecasts resolve through `MILPBuilder.resolve_forecasts(...)` into `ResolvedForecasts`
+  (defined in `src/hass_energy/ems/models.py`) containing `PowerForecastInterval` and
   `PriceForecastInterval` sequences.
+- `ResolvedForecasts` is data-only and flat (`grid_price_import`, `grid_price_export`, `load`, `inverters_pv`); `min_coverage_intervals` is computed during resolution.
+- Realtime override values are resolved during `MILPBuilder.build(...)`, not stored in `ResolvedForecasts`.
 - Alignment:
   - `PowerForecastAligner` / `PriceForecastAligner` align intervals to the horizon.
   - Alignment is strict: forecasts must fully cover the horizon (no wrapping).

@@ -10,13 +10,14 @@
 - MILP logic lives under `hass_energy/worker/milp/` using PuLP; planner/compiler are placeholders awaiting real constraints.
 - MILP v2 scaffolding lives under `src/hass_energy/milp_v2/` with a compile phase (config + `ValueResolver` -> `CompiledModel`) and an execute phase (solve -> `PlanResult`).
 - CLI `hass-energy milp` now wires the MILP v2 planner (compiler + executor); it currently fails until those phases are implemented.
-- MILP v2 slotting uses `EmsConfig.interval_duration` and `EmsConfig.num_intervals` to align forecast slots to the current block start.
+- MILP v2 slotting uses `EmsConfig.interval_duration` with a horizon length derived from the shortest forecast, bounded by `EmsConfig.min_intervals`, to align forecast slots to the current block start.
 - Plotting helpers live in `src/hass_energy/plotting/` and are shared by CLI.
 - A lightweight plan checker lives at `hass_energy/worker/milp/checker.py` with pytest coverage in `tests/`.
 - `hass_energy/worker/milp/ha_dump.py` now emits a single-battery stub in realtime inputs when `battery_soc` is available (capacity/limits are currently constants).
 - `hass_energy/worker/milp/ha_dump.py` emits a simple EV stub when `ev_connected` is true (defaults for capacity, target SOC, max power, value-per-kWh, min power, and switch penalty).
 - Tests should mirror the `src/hass_energy` package structure under `tests/` (e.g., `tests/hass_energy/ems/`).
 - Planner now consumes a resolved payload (no source models). Resolved schemas live in `src/hass_energy/models/resolved.py`; resolution scaffolding/registry is under `src/hass_energy/lib/resolution/` for two-pass fetch→transform in the future.
+- This is unreleased software; schema changes can be breaking without backward-compatibility shims.
 - EMS-specific guidance lives in `src/hass_energy/ems/AGENTS.md`.
 - EMS plan `EconomicsTimestepPlan` costs are grid import/export only and exclude other objective terms (EV incentives, penalties, curtailment tie-breaks, violation penalties, battery wear).
 - `EmsPlanOutput` now includes `objective_value` with the solver objective (may be negative/None).

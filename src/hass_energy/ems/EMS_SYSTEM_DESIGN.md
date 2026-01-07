@@ -55,8 +55,9 @@ Supporting runtime pieces:
 1. `load_app_config()` parses YAML into `AppConfig`.
 2. `ValueResolver` is created, config is marked for hydration, and HA data is fetched.
 3. `EmsMilpPlanner.generate_ems_plan()`:
-   - Builds horizon via `build_horizon()`.
-   - Builds MILP via `MILPBuilder.build()`.
+   - Resolves forecast inputs via `MILPBuilder.resolve_forecasts(...)`.
+   - Builds horizon via `build_horizon()` (interval duration + shortest coverage length).
+   - Builds MILP via `MILPBuilder.build(...)` using the resolved forecasts.
    - Solves with CBC (`pulp.PULP_CBC_CMD`).
    - Extracts a plan dictionary.
 4. Plan JSON is written to `data_dir/ems_plan.json` by default.
@@ -79,7 +80,7 @@ The EMS consumes `AppConfig` from `src/hass_energy/models/config.py`:
 
 - `ems`: `EmsConfig`
   - `interval_duration` (minutes)
-  - `num_intervals`
+  - `min_intervals` (minimum forecast horizon; solver uses the shortest forecast length)
   - `timezone` (optional)
 - `plant`: `PlantConfig`
   - `grid`: `GridConfig`

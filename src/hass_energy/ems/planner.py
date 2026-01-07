@@ -9,6 +9,7 @@ import pulp
 
 from hass_energy.ems.builder import MILPBuilder, MILPModel
 from hass_energy.ems.horizon import Horizon, build_horizon
+from hass_energy.ems.models import ResolvedForecasts
 from hass_energy.lib.source_resolver.resolver import ValueResolver
 from hass_energy.models.config import AppConfig
 from hass_energy.ems.models import (
@@ -42,16 +43,25 @@ class EmsMilpPlanner:
         solve_time = now or datetime.now().astimezone()
         if solve_time.tzinfo is None:
             solve_time = solve_time.astimezone()
-        horizon = build_horizon(self._app_config.ems, now=solve_time)
-
         builder = MILPBuilder(
             plant=self._app_config.plant,
             loads=self._app_config.loads,
-            horizon=horizon,
             resolver=self._resolver,
         )
+        forecasts = builder.resolve_forecasts(
+            now=solve_time,
+            interval_minutes=self._app_config.ems.interval_duration,
+        )
+        horizon_intervals = self._validate_min_horizon_intervals(
+            forecasts.min_coverage_intervals
+        )
+        horizon = build_horizon(
+            now=solve_time,
+            interval_minutes=self._app_config.ems.interval_duration,
+            num_intervals=horizon_intervals,
+        )
         build_start = time.perf_counter()
-        model = builder.build()
+        model = builder.build(horizon=horizon, forecasts=forecasts)
         build_seconds = time.perf_counter() - build_start
 
         solve_start = time.perf_counter()
@@ -84,6 +94,15 @@ class EmsMilpPlanner:
     @property
     def last_timings(self) -> EmsPlanTimings | None:
         return self._last_timings
+
+    def _validate_min_horizon_intervals(self, min_coverage_intervals: int) -> int:
+        min_intervals = self._app_config.ems.min_intervals
+        if min_coverage_intervals < min_intervals:
+            raise ValueError(
+                "Shortest forecast horizon "
+                f"({min_coverage_intervals} intervals) is below min_intervals={min_intervals}"
+            )
+        return min_coverage_intervals
 
 
 def _extract_plan(

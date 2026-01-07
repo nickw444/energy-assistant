@@ -16,6 +16,58 @@ class ForecastInterval(Protocol):
     value: float
 
 
+def forecast_coverage_slots(
+    start: datetime.datetime,
+    interval_minutes: int,
+    intervals: Sequence[ForecastInterval],
+    *,
+    allow_first_slot_missing: bool = False,
+) -> int:
+    """Return the number of contiguous horizon slots covered by the forecast.
+
+    Walks forward from the provided horizon start in fixed-size slots and counts
+    how many slots overlap at least one forecast interval. When
+    ``allow_first_slot_missing`` is true, the initial slot is allowed to be
+    uncovered (to support realtime overrides) but later gaps stop coverage.
+    """
+    if not intervals:
+        return 0
+
+    ordered = sorted(intervals, key=lambda interval: interval.start)
+    first_start = ordered[0].start
+    last_end = ordered[-1].end
+    if first_start == last_end:
+        return 0
+    if (last_end - first_start).total_seconds() <= 0:
+        return 0
+
+    starts = [interval.start for interval in ordered]
+    slot_start = start
+    delta = datetime.timedelta(minutes=interval_minutes)
+    count = 0
+
+    while True:
+        slot_end = slot_start + delta
+        idx = bisect.bisect_right(starts, slot_start) - 1
+        covered = False
+        for candidate in (idx, idx + 1):
+            if 0 <= candidate < len(ordered):
+                interval = ordered[candidate]
+                if interval.start < slot_end and interval.end > slot_start:
+                    covered = True
+                    break
+        if not covered:
+            if allow_first_slot_missing and count == 0:
+                count += 1
+                slot_start = slot_end
+                continue
+            break
+        count += 1
+        slot_start = slot_end
+
+    return count
+
+
 def _align_intervals[T: ForecastInterval](
     horizon: Horizon,
     intervals: Sequence[T],

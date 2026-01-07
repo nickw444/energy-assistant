@@ -176,6 +176,7 @@ def ems_solve(
         plan = EmsMilpPlanner(app_config, resolver=resolver).generate_ems_plan(
             solver_msg=solver_msg,
         )
+        click.echo(f"Timesteps: {len(plan.timesteps)}")
         timings = plan.timings
         click.echo(
             "Timings (s): build="

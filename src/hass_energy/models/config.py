@@ -11,7 +11,7 @@ from hass_energy.models.plant import PlantConfig
 
 class EmsConfig(BaseModel):
     interval_duration: int = Field(default=5, ge=1, le=1440)
-    num_intervals: int = Field(default=24, ge=1, le=10000)
+    min_intervals: int = Field(default=24, ge=1, le=10000)
 
     model_config = ConfigDict(extra="forbid")
 
