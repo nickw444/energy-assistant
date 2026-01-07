@@ -22,6 +22,7 @@
 - EMS plan `EconomicsTimestepPlan` costs are grid import/export only and exclude other objective terms (EV incentives, penalties, curtailment tie-breaks, violation penalties, battery wear).
 - `EmsPlanOutput` now includes `objective_value` with the solver objective (may be negative/None).
 - Load-aware curtailment is forced on whenever export price is negative, enabling PV to follow load and blocking export for those slots.
+- Historical-average load forecasts can repeat daily averages beyond 24h via `forecast_horizon_hours` (default 24).
 - `ConfigMapper` (`src/hass_energy/lib/resolver/__init__.py`) offers a recursive walk utility that calls a visitor for side effects and allows halting recursion by returning `False`.
 - Home Assistant integration (POC) lives under `custom_components/hass_energy`.
 - Home Assistant integration guidance lives in `custom_components/hass_energy/AGENTS.md`.

@@ -33,6 +33,7 @@ time-stepped plan for plotting/inspection. The core code lives in:
   - Alignment is strict: forecasts must fully cover the horizon (no wrapping).
   - `first_slot_override` replaces the first slot with a realtime value.
 - Plant load forecasts/realtime values should exclude controlled loads; controllable loads are added separately in the MILP.
+- Historical-average load forecasts support `forecast_horizon_hours` to repeat the daily profile beyond 24h.
 - Controlled EV loads can assume future connectivity using `connect_grace_minutes` plus optional `can_connect` and `allowed_connect_times` constraints.
 - Controlled EV loads apply a small internal ramp penalty to discourage large per-slot changes in charge power.
 - Controlled EV loads include a soft anchor penalty that keeps slot 0 close to realtime charge power; when realtime power is near zero (below 0.1 kW), the anchor penalty is skipped so charging can start immediately.
