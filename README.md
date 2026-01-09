@@ -24,13 +24,14 @@ Energy management system that pulls Home Assistant data, plans using MILP (stub 
      token: null
      verify_tls: true
      timeout_seconds: 30
-   ems:
-     timestep_minutes: 60
-     min_horizon_minutes: 1440
-   plant:
+  ems:
+    timestep_minutes: 60
+    min_horizon_minutes: 1440
+  plant:
      grid:
        max_import_kw: 0.0
        max_export_kw: 0.0
+       min_battery_export_price: 0.15
        realtime_grid_power:
          type: home_assistant
          entity: sensor.grid_power

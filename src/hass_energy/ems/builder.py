@@ -205,6 +205,7 @@ class MILPBuilder:
         inverters = self._build_inverters(problem, grid, horizon, forecasts)
         loads = self._build_loads(problem, horizon, base_load_kw)
         self._build_ac_balance(problem, grid, inverters, loads, horizon)
+        self._build_battery_export_price_limit(problem, grid, inverters, horizon)
         self._build_objective(problem, grid, inverters, loads, horizon)
 
         return MILPModel(problem, grid, inverters, loads)
@@ -537,6 +538,32 @@ class MILPBuilder:
                 P_import[t] + inv_total - P_export[t] == base_load + extra_load,
                 f"ac_balance_t{t}",
             )
+
+    def _build_battery_export_price_limit(
+        self,
+        problem: pulp.LpProblem,
+        grid: GridBuild,
+        inverters: InverterBuild,
+        horizon: Horizon,
+    ) -> None:
+        min_price = self._plant.grid.min_battery_export_price
+        if min_price is None:
+            return
+        inverter_values = list(inverters.inverters.values())
+        for t in horizon.T:
+            if float(grid.price_export[t]) < min_price:
+                pv_total = pulp.lpSum(
+                    inv.P_pv_kw[t] for inv in inverter_values if inv.P_pv_kw is not None
+                )
+                charge_total = pulp.lpSum(
+                    inv.P_batt_charge_kw[t]
+                    for inv in inverter_values
+                    if inv.P_batt_charge_kw is not None
+                )
+                problem += (
+                    grid.P_export[t] <= pv_total - charge_total,
+                    f"grid_export_price_floor_t{t}",
+                )
 
     def _build_objective(
         self,
