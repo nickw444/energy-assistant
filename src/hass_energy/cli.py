@@ -6,6 +6,7 @@ import json
 import logging
 import signal
 import traceback
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from threading import Event
@@ -18,7 +19,6 @@ from hass_energy.config import load_app_config
 from hass_energy.ems.planner import EmsMilpPlanner
 from hass_energy.lib.home_assistant import HomeAssistantClient
 from hass_energy.lib.source_resolver.hass_provider import HassDataProvider
-from hass_energy.lib.source_resolver.models import PowerForecastInterval
 from hass_energy.lib.source_resolver.resolver import ValueResolver
 from hass_energy.plotting import plot_plan
 from hass_energy.worker import Worker
@@ -26,7 +26,7 @@ from hass_energy.worker import Worker
 LOG_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
 
-def _common_options(func: click.Command) -> click.Command:
+def _common_options[**P, R](func: Callable[P, R]) -> Callable[P, R]:
     func = click.option(
         "--config",
         type=click.Path(path_type=Path, dir_okay=False),
@@ -266,13 +266,6 @@ def hydrate_load_forecast(ctx: click.Context, limit: int) -> None:
         resolved = resolver.resolve(load_forecast)
     except Exception as exc:
         raise click.ClickException(str(exc)) from exc
-
-    if not isinstance(resolved, list) or not all(
-        isinstance(item, PowerForecastInterval) for item in resolved
-    ):
-        raise click.ClickException(
-            "Load forecast source did not resolve to list[PowerForecastInterval]."
-        )
 
     sorted_intervals = sorted(resolved, key=lambda interval: interval.start)
     entity = getattr(load_forecast, "entity", "<unknown>")

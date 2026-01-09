@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from homeassistant.config import ConfigType
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -14,7 +15,6 @@ from .const import (
     DEFAULT_BASE_URL,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_TIMEOUT,
-    DOMAIN,
 )
 from .coordinator import HassEnergyCoordinator
 from .hass_energy_client import HassEnergyApiClient
@@ -29,9 +29,8 @@ class HassEnergyRuntimeData:
     base_url: str
 
 
-async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the integration via configuration.yaml."""
-    _ = config.get(DOMAIN)
     return True
 
 

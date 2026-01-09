@@ -1,7 +1,5 @@
-from __future__ import annotations
-
 import re
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -20,6 +18,14 @@ class SocIncentive(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
+def _default_time_windows() -> list[TimeWindow]:
+    return []
+
+
+def _default_soc_incentives() -> list[SocIncentive]:
+    return []
+
+
 class ControlledEvLoad(BaseModel):
     id: str = Field(min_length=1)
     name: str = Field(min_length=1)
@@ -31,12 +37,12 @@ class ControlledEvLoad(BaseModel):
     # Combined availability signal (true when the EV can be connected).
     can_connect: HomeAssistantBinarySensorEntitySource | None = None
     # Time windows when connecting the EV is permitted (local time).
-    allowed_connect_times: list[TimeWindow] = Field(default_factory=list)
+    allowed_connect_times: list[TimeWindow] = Field(default_factory=_default_time_windows)
     # Grace period from "now" before assuming the EV can be connected.
     connect_grace_minutes: int = Field(default=0, ge=0)
     realtime_power: HomeAssistantPowerKwEntitySource
     state_of_charge_pct: HomeAssistantPercentageEntitySource
-    soc_incentives: list[SocIncentive] = Field(default_factory=list)
+    soc_incentives: list[SocIncentive] = Field(default_factory=_default_soc_incentives)
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -48,7 +54,7 @@ class ControlledEvLoad(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def _validate_power_bounds(self) -> ControlledEvLoad:
+    def _validate_power_bounds(self) -> Self:
         if self.min_power_kw > self.max_power_kw:
             raise ValueError("min_power_kw must be <= max_power_kw")
         return self
