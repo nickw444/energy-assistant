@@ -36,6 +36,7 @@ def required_bool(value: str | int | float | None) -> bool:
             return False
     return bool(value)
 
+
 def _normalize_power_kw(value: float, unit: str | None) -> float:
     if not unit:
         return value

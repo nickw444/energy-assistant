@@ -10,4 +10,4 @@ U = TypeVar("U")
 
 class EntitySource[T, U](BaseModel):
     def mapper(self, state: T) -> U:
-        raise NotImplementedError()    
+        raise NotImplementedError()

@@ -99,18 +99,13 @@ class Worker:
         timeout: int,
     ) -> tuple[PlanRunState, EmsPlanOutput] | None:
         async with self._condition:
+
             def _predicate() -> bool:
                 return (
-                    (
-                        self._latest_plan is not None
-                        and self._latest_run is not None
-                        and _plan_generated_at(self._latest_plan) > since_ts
-                    )
-                    or (
-                        self._current_run is not None
-                        and self._current_run.status == "failed"
-                    )
-                )
+                    self._latest_plan is not None
+                    and self._latest_run is not None
+                    and _plan_generated_at(self._latest_plan) > since_ts
+                ) or (self._current_run is not None and self._current_run.status == "failed")
 
             try:
                 await asyncio.wait_for(self._condition.wait_for(_predicate), timeout=timeout)

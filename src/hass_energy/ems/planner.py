@@ -51,9 +51,7 @@ class EmsMilpPlanner:
         high_res_timestep = self._app_config.ems.high_res_timestep_minutes
         high_res_horizon = self._app_config.ems.high_res_horizon_minutes
         # Base interval used to size the forecast horizon and align forecasts into slots.
-        base_interval_minutes = (
-            high_res_timestep or self._app_config.ems.timestep_minutes
-        )
+        base_interval_minutes = high_res_timestep or self._app_config.ems.timestep_minutes
         forecasts = builder.resolve_forecasts(
             now=solve_time,
             interval_minutes=base_interval_minutes,
@@ -140,9 +138,7 @@ class EmsMilpPlanner:
         return min_coverage_intervals
 
 
-def _extract_plan(
-    model: MILPModel, horizon: Horizon
-) -> tuple[EmsPlanStatus, list[TimestepPlan]]:
+def _extract_plan(model: MILPModel, horizon: Horizon) -> tuple[EmsPlanStatus, list[TimestepPlan]]:
     status = cast(EmsPlanStatus, pulp.LpStatus.get(model.problem.status, "Unknown"))
 
     grid = model.grid
@@ -156,16 +152,11 @@ def _extract_plan(
         export_kw = _value(grid.P_export.get(t))
         import_violation_kw = _value(grid.P_import_violation_kw.get(t))
 
-        price_import_value = (
-            float(grid.price_import[t]) if t < len(grid.price_import) else 0.0
-        )
-        price_export_value = (
-            float(grid.price_export[t]) if t < len(grid.price_export) else 0.0
-        )
+        price_import_value = float(grid.price_import[t]) if t < len(grid.price_import) else 0.0
+        price_export_value = float(grid.price_export[t]) if t < len(grid.price_export) else 0.0
         segment_cost = (
-            (import_kw * price_import_value - export_kw * price_export_value)
-            * slot.duration_h
-        )
+            import_kw * price_import_value - export_kw * price_export_value
+        ) * slot.duration_h
         cumulative_cost += segment_cost
 
         inverter_plans: dict[str, InverterTimestepPlan] = {}
@@ -214,9 +205,7 @@ def _extract_plan(
                 connected=connected,
             )
 
-        base_load_kw = (
-            float(loads.base_load_kw[t]) if t < len(loads.base_load_kw) else 0.0
-        )
+        base_load_kw = float(loads.base_load_kw[t]) if t < len(loads.base_load_kw) else 0.0
         extra_load_kw = _value(loads.load_contribs.get(t))
         total_load_kw = base_load_kw + extra_load_kw
 

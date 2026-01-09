@@ -29,18 +29,13 @@ def plot_plan(
     grid_import = [float(step.grid.import_kw) for step in timesteps]
     grid_export = [float(step.grid.export_kw) for step in timesteps]
     grid_net = [float(step.grid.net_kw) for step in timesteps]
-    pv_kw = [
-        sum(float(inv.pv_kw or 0.0) for inv in step.inverters.values())
-        for step in timesteps
-    ]
+    pv_kw = [sum(float(inv.pv_kw or 0.0) for inv in step.inverters.values()) for step in timesteps]
     pv_available_kw: list[float] = []
     pv_inverters = _collect_inverter_series(timesteps, lambda inv: inv.pv_kw)
     pv_inverters_available: dict[str, list[float]] = {}
     inverter_ac_net = _collect_inverter_series(timesteps, lambda inv: inv.ac_net_kw)
     batt_charge = _collect_inverter_series(timesteps, lambda inv: inv.battery_charge_kw)
-    batt_discharge = _collect_inverter_series(
-        timesteps, lambda inv: inv.battery_discharge_kw
-    )
+    batt_discharge = _collect_inverter_series(timesteps, lambda inv: inv.battery_discharge_kw)
     batt_soc = _collect_inverter_series(timesteps, lambda inv: inv.battery_soc_kwh)
     batt_soc_pct = _collect_inverter_series(timesteps, lambda inv: inv.battery_soc_pct)
     batt_net: dict[str, list[float]] = {}
@@ -71,13 +66,9 @@ def plot_plan(
     segment_cost = [float(step.economics.segment_cost) for step in timesteps]
     cumulative_cost = [float(step.economics.cumulative_cost) for step in timesteps]
     has_batt_pct = any(
-        inv.battery_soc_pct is not None
-        for step in timesteps
-        for inv in step.inverters.values()
+        inv.battery_soc_pct is not None for step in timesteps for inv in step.inverters.values()
     )
-    has_ev_pct = any(
-        ev.soc_pct is not None for step in timesteps for ev in step.loads.evs.values()
-    )
+    has_ev_pct = any(ev.soc_pct is not None for step in timesteps for ev in step.loads.evs.values())
     if has_batt_pct or has_ev_pct:
         soc_unit = "%"
         batt_soc_plot = batt_soc_pct
@@ -433,9 +424,7 @@ def _collect_inverter_series(
     timesteps: list[TimestepPlan],
     accessor: Callable[[InverterTimestepPlan], float | None],
 ) -> dict[str, list[float]]:
-    names = sorted(
-        {inv.name for step in timesteps for inv in step.inverters.values()}
-    )
+    names = sorted({inv.name for step in timesteps for inv in step.inverters.values()})
     series: dict[str, list[float]] = {name: [] for name in names}
     for step in timesteps:
         inv_map = {inv.name: inv for inv in step.inverters.values()}
@@ -526,9 +515,7 @@ def _enable_hover(
         return f"{label}\n{time_str}\n{value:.3f} {unit}"
 
     def _on_move(event: Any) -> None:
-        if event.inaxes is None or (
-            allowed_axes is not None and event.inaxes not in allowed_axes
-        ):
+        if event.inaxes is None or (allowed_axes is not None and event.inaxes not in allowed_axes):
             if annotation.get_visible():
                 annotation.set_visible(False)
                 event.canvas.draw_idle()

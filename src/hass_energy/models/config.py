@@ -19,15 +19,9 @@ class EmsConfig(BaseModel):
 
     @model_validator(mode="after")
     def _validate_interval_settings(self) -> EmsConfig:
-        if (
-            self.high_res_timestep_minutes is None
-            and self.high_res_horizon_minutes is None
-        ):
+        if self.high_res_timestep_minutes is None and self.high_res_horizon_minutes is None:
             return self
-        if (
-            self.high_res_timestep_minutes is None
-            or self.high_res_horizon_minutes is None
-        ):
+        if self.high_res_timestep_minutes is None or self.high_res_horizon_minutes is None:
             raise ValueError(
                 "high_res_timestep_minutes and high_res_horizon_minutes must be set together"
             )

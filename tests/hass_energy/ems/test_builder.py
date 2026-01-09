@@ -96,9 +96,7 @@ def _make_config(
         interval_duration=timestep_minutes,
     )
     plant_load = load or PlantLoadConfig(
-        realtime_load_power=HomeAssistantPowerKwEntitySource(
-            type="home_assistant", entity="load"
-        ),
+        realtime_load_power=HomeAssistantPowerKwEntitySource(type="home_assistant", entity="load"),
         forecast=default_load_forecast,
     )
     if inverters is None:
@@ -140,9 +138,7 @@ def _load_intervals(
     config: AppConfig,
     value: float,
 ) -> list[PowerForecastInterval]:
-    interval_minutes = (
-        config.ems.high_res_timestep_minutes or config.ems.timestep_minutes
-    )
+    interval_minutes = config.ems.high_res_timestep_minutes or config.ems.timestep_minutes
     min_intervals = math.ceil(config.ems.min_horizon_minutes / interval_minutes)
     start = now.replace(
         minute=(now.minute // interval_minutes) * interval_minutes,
@@ -153,9 +149,7 @@ def _load_intervals(
     for idx in range(min_intervals):
         slot_start = start + timedelta(minutes=idx * interval_minutes)
         slot_end = slot_start + timedelta(minutes=interval_minutes)
-        intervals.append(
-            PowerForecastInterval(start=slot_start, end=slot_end, value=value)
-        )
+        intervals.append(PowerForecastInterval(start=slot_start, end=slot_end, value=value))
     return intervals
 
 
@@ -170,9 +164,7 @@ def _power_intervals(
     for idx in range(num_intervals):
         slot_start = start + timedelta(minutes=idx * interval_minutes)
         slot_end = slot_start + timedelta(minutes=interval_minutes)
-        intervals.append(
-            PowerForecastInterval(start=slot_start, end=slot_end, value=value)
-        )
+        intervals.append(PowerForecastInterval(start=slot_start, end=slot_end, value=value))
     return intervals
 
 
@@ -187,9 +179,7 @@ def _price_intervals(
     for idx in range(num_intervals):
         slot_start = start + timedelta(minutes=idx * interval_minutes)
         slot_end = slot_start + timedelta(minutes=interval_minutes)
-        intervals.append(
-            PriceForecastInterval(start=slot_start, end=slot_end, value=value)
-        )
+        intervals.append(PriceForecastInterval(start=slot_start, end=slot_end, value=value))
     return intervals
 
 
@@ -289,9 +279,7 @@ def test_load_forecast_aligns_to_horizon() -> None:
         interval_duration=interval_duration,
     )
     load = PlantLoadConfig(
-        realtime_load_power=HomeAssistantPowerKwEntitySource(
-            type="home_assistant", entity="load"
-        ),
+        realtime_load_power=HomeAssistantPowerKwEntitySource(type="home_assistant", entity="load"),
         forecast=load_forecast,
     )
     config = _make_config(

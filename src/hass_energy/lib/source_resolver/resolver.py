@@ -16,6 +16,7 @@ from hass_energy.lib.source_resolver.sources import EntitySource
 Q = TypeVar("Q")
 R = TypeVar("R")
 
+
 class ValueResolver:
     def __init__(self, hass_data_provider: HassDataProvider) -> None:
         self._hass_data_provider = hass_data_provider
@@ -56,10 +57,7 @@ class ValueResolver:
                     f"Failed to resolve Home Assistant history for {source.entity}: {exc}"
                 ) from exc
         if isinstance(source, HomeAssistantMultiEntitySource):
-            states = [
-                self._hass_data_provider.get(entity)
-                for entity in source.entities
-            ]
+            states = [self._hass_data_provider.get(entity) for entity in source.entities]
             try:
                 return source.mapper(states)
             except Exception as exc:
@@ -85,6 +83,7 @@ class ValueResolver:
 
         raise ValueError("Unsupported source type")
 
+
 def walk_and_mark_recursively(value: object, resolver: ValueResolver) -> None:
     """Recursively walk all EntitySource fields in a config model and mark them to be fetched."""
     if isinstance(value, EntitySource):
@@ -101,4 +100,3 @@ def walk_and_mark_recursively(value: object, resolver: ValueResolver) -> None:
         for item in iterable:
             walk_and_mark_recursively(item, resolver)
     # primitives are ignored
-    

@@ -72,9 +72,7 @@ class HassDataProvider:
                 minimal_response=True,
                 no_attributes=True,
             )
-            history_data[entity_id] = [
-                item for item in history if isinstance(item, dict)
-            ]
+            history_data[entity_id] = [item for item in history if isinstance(item, dict)]
         self._history_data = history_data
 
     def snapshot(self) -> dict[str, object]:

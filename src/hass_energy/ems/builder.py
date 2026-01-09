@@ -129,12 +129,8 @@ class MILPBuilder:
 
         load_forecast = self._plant.load.forecast
         load_intervals = self._resolver.resolve(load_forecast)
-        price_import_intervals = self._resolver.resolve(
-            self._plant.grid.price_import_forecast
-        )
-        price_export_intervals = self._resolver.resolve(
-            self._plant.grid.price_export_forecast
-        )
+        price_import_intervals = self._resolver.resolve(self._plant.grid.price_import_forecast)
+        price_export_intervals = self._resolver.resolve(self._plant.grid.price_export_forecast)
 
         coverage_by_series: dict[str, int] = {}
         coverage_by_series["load"] = forecast_coverage_slots(
@@ -218,12 +214,8 @@ class MILPBuilder:
         T = horizon.T
         cfg = self._plant.grid
 
-        P_import = pulp.LpVariable.dicts(
-            "P_grid_import", T, lowBound=0, upBound=cfg.max_import_kw
-        )
-        P_export = pulp.LpVariable.dicts(
-            "P_grid_export", T, lowBound=0, upBound=cfg.max_export_kw
-        )
+        P_import = pulp.LpVariable.dicts("P_grid_import", T, lowBound=0, upBound=cfg.max_import_kw)
+        P_export = pulp.LpVariable.dicts("P_grid_export", T, lowBound=0, upBound=cfg.max_export_kw)
         P_import_violation_kw = pulp.LpVariable.dicts(
             "P_grid_import_violation_kw",
             T,
@@ -355,14 +347,12 @@ class MILPBuilder:
                         )
                         problem += (
                             # Load-aware: curtail flag reduces minimum output (allows export block).
-                            pv_kw[t]
-                            >= pv_available_kw_series[t] * (1 - curtail[t]),
+                            pv_kw[t] >= pv_available_kw_series[t] * (1 - curtail[t]),
                             f"inverter_pv_min_{inv_id}_t{t}",
                         )
                         problem += (
                             # Load-aware: when curtailing, block grid export.
-                            grid.P_export[t]
-                            <= self._plant.grid.max_export_kw * (1 - curtail[t]),
+                            grid.P_export[t] <= self._plant.grid.max_export_kw * (1 - curtail[t]),
                             f"inverter_export_block_{inv_id}_t{t}",
                         )
                         if float(price_export[t]) < _NEGATIVE_EXPORT_PRICE_THRESHOLD:
@@ -463,18 +453,15 @@ class MILPBuilder:
             for t in T:
                 # Block grid export unless battery stays above reserve SoC for this slot.
                 problem += (
-                    E_batt_kwh[t]
-                    >= reserve_kwh - export_soc_m * (1 - export_ok[t]),
+                    E_batt_kwh[t] >= reserve_kwh - export_soc_m * (1 - export_ok[t]),
                     f"batt_export_reserve_start_{inv_id}_t{t}",
                 )
                 problem += (
-                    E_batt_kwh[t + 1]
-                    >= reserve_kwh - export_soc_m * (1 - export_ok[t]),
+                    E_batt_kwh[t + 1] >= reserve_kwh - export_soc_m * (1 - export_ok[t]),
                     f"batt_export_reserve_end_{inv_id}_t{t}",
                 )
                 problem += (
-                    grid.P_export[t]
-                    <= self._plant.grid.max_export_kw * export_ok[t],
+                    grid.P_export[t] <= self._plant.grid.max_export_kw * export_ok[t],
                     f"grid_export_reserve_{inv_id}_t{t}",
                 )
                 # Select charge vs discharge mode (idle is allowed in either mode).
@@ -488,8 +475,7 @@ class MILPBuilder:
                 )
                 # Net AC flow combines PV and battery charge/discharge.
                 problem += (
-                    inv_ac_net_kw[t]
-                    == pv_kw[t] + P_batt_discharge[t] - P_batt_charge[t],
+                    inv_ac_net_kw[t] == pv_kw[t] + P_batt_discharge[t] - P_batt_charge[t],
                     f"inverter_ac_net_{inv_id}_t{t}",
                 )
                 # Battery energy balance with storage efficiency.
@@ -561,11 +547,7 @@ class MILPBuilder:
             (
                 P_import[t] * float(price_import[t])
                 - P_export[t]
-                * (
-                    export_bonus
-                    if abs(float(price_export[t])) <= 1e-9
-                    else float(price_export[t])
-                )
+                * (export_bonus if abs(float(price_export[t])) <= 1e-9 else float(price_export[t]))
             )
             * horizon.dt_hours(t)
             for t in horizon.T
@@ -578,10 +560,7 @@ class MILPBuilder:
         # Tiny early-flow bonus to bias any grid flow toward earlier slots.
         w_early = 1e-4
         objective += pulp.lpSum(
-            (
-                -w_early * (P_import[t] + P_export[t]) * (1.0 / (t + 1))
-                * horizon.dt_hours(t)
-            )
+            (-w_early * (P_import[t] + P_export[t]) * (1.0 / (t + 1)) * horizon.dt_hours(t))
             for t in horizon.T
         )
         # Battery throughput penalty (wear cost) from config per inverter.
@@ -600,9 +579,7 @@ class MILPBuilder:
             if charge_series is None or discharge_series is None:
                 continue
             objective += pulp.lpSum(
-                wear_cost
-                * (charge_series[t] + discharge_series[t])
-                * horizon.dt_hours(t)
+                wear_cost * (charge_series[t] + discharge_series[t]) * horizon.dt_hours(t)
                 for t in horizon.T
             )
         # Tiny tie-breaker to keep binary curtailment decisions stable across inverters.
@@ -615,9 +592,7 @@ class MILPBuilder:
             series = inv_vars.Curtail_inv
             weight = w_curtail_tie * (total - idx)
             # Consistent ordering bias avoids multiple equivalent curtailment choices.
-            objective += pulp.lpSum(
-                weight * series[t] * horizon.dt_hours(t) for t in horizon.T
-            )
+            objective += pulp.lpSum(weight * series[t] * horizon.dt_hours(t) for t in horizon.T)
         # EV terminal SoC incentives (piecewise per-kWh rewards).
         for segments in loads.ev_incentive_segments.values():
             for segment_var, incentive in segments:
@@ -633,9 +608,7 @@ class MILPBuilder:
             if ev_vars is None:
                 continue
             ramp_series = ev_vars.Ev_charge_ramp_kw
-            objective += pulp.lpSum(
-                ramp_penalty * ramp_series[t] for t in horizon.T if t > 0
-            )
+            objective += pulp.lpSum(ramp_penalty * ramp_series[t] for t in horizon.T if t > 0)
         # EV soft anchor to realtime power for slot 0.
         anchor_penalty = _EV_ANCHOR_PENALTY_COST
         if horizon.num_intervals > 0:
@@ -804,8 +777,7 @@ class MILPBuilder:
                 )
             # SoC dynamics (charge-only).
             problem += (
-                E_ev_kwh[t + 1]
-                == E_ev_kwh[t] + P_ev_charge[t] * horizon.dt_hours(t),
+                E_ev_kwh[t + 1] == E_ev_kwh[t] + P_ev_charge[t] * horizon.dt_hours(t),
                 f"ev_soc_step_{ev_id}_t{t}",
             )
             load_contribs[t] += P_ev_charge[t]
