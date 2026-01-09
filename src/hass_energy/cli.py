@@ -6,10 +6,10 @@ import json
 import logging
 import signal
 import traceback
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from threading import Event
-from typing import Callable, ParamSpec, TypeVar
 
 import click
 import uvicorn
@@ -25,11 +25,8 @@ from hass_energy.worker import Worker
 
 LOG_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
-P = ParamSpec("P")
-R = TypeVar("R")
 
-
-def _common_options(func: Callable[P, R]) -> Callable[P, R]:
+def _common_options[**P, R](func: Callable[P, R]) -> Callable[P, R]:
     func = click.option(
         "--config",
         type=click.Path(path_type=Path, dir_okay=False),
