@@ -5,7 +5,7 @@ from __future__ import annotations
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.core import HomeAssistant
+from homeassistant.config_entries import ConfigFlowResult
 
 from .const import CONF_BASE_URL, DEFAULT_BASE_URL, DOMAIN
 
@@ -15,7 +15,10 @@ class HassEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
-    async def async_step_user(self, user_input: dict | None = None):
+    async def async_step_user(
+        self,
+        user_input: dict[str, str] | None = None,
+    ) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
             base_url = user_input[CONF_BASE_URL].rstrip("/")

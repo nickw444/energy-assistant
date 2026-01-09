@@ -6,11 +6,11 @@ from typing import Any, TypeVar
 
 import aiohttp
 import async_timeout
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from .models import EmsConfig, PlanAwaitResponse, PlanLatestResponse, PlanRunResponse
 
-T = TypeVar("T")
+T = TypeVar("T", bound=BaseModel)
 
 
 class HassEnergyApiClient:

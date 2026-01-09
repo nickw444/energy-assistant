@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from datetime import UTC, datetime, tzinfo
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from hass_energy.ems.models import EmsPlanOutput, EvTimestepPlan, InverterTimestepPlan, TimestepPlan
 
@@ -15,16 +15,20 @@ def plot_plan(
     output: Path | None = None,
 ) -> None:
     try:
+        import matplotlib.dates as mdates
         import matplotlib.pyplot as plt
     except ImportError as exc:
         raise ImportError("matplotlib is required to plot plans") from exc
+    plt = cast(Any, plt)
+    mdates = cast(Any, mdates)
 
     local_tz = datetime.now().astimezone().tzinfo or UTC
     timesteps = plan.timesteps
     if not timesteps:
         raise ValueError("Plan has no timesteps to plot.")
-    time_edges = [_normalize_time(step.start, local_tz=local_tz) for step in timesteps]
-    time_edges.append(_normalize_time(timesteps[-1].end, local_tz=local_tz))
+    time_edges_dt = [_normalize_time(step.start, local_tz=local_tz) for step in timesteps]
+    time_edges_dt.append(_normalize_time(timesteps[-1].end, local_tz=local_tz))
+    time_edges = [float(mdates.date2num(value)) for value in time_edges_dt]
     durations = [float(step.duration_s) / 3600.0 for step in timesteps]
     grid_import = [float(step.grid.import_kw) for step in timesteps]
     grid_export = [float(step.grid.export_kw) for step in timesteps]
@@ -388,14 +392,14 @@ def plot_plan(
         fig.savefig(output)
         return
     if lines:
-        _enable_hover(ax, lines, time_edges, unit="kW")
+        _enable_hover(ax, lines, time_edges_dt, unit="kW")
     if ax_price is not None and price_lines:
-        _enable_hover(ax_price, price_lines, time_edges, unit="$/kWh")
+        _enable_hover(ax_price, price_lines, time_edges_dt, unit="$/kWh")
     if ax_cost is not None and segment_lines:
         _enable_hover(
             ax_cost,
             segment_lines,
-            time_edges,
+            time_edges_dt,
             unit="$/segment",
             allowed_axes={ax_cost, ax_cost_right} if ax_cost_right is not None else None,
         )
@@ -403,12 +407,12 @@ def plot_plan(
         _enable_hover(
             ax_cost_right,
             cumulative_lines,
-            time_edges,
+            time_edges_dt,
             unit="$",
             allowed_axes={ax_cost, ax_cost_right},
         )
     if ax_soc is not None and soc_lines:
-        _enable_hover(ax_soc, soc_lines, time_edges, unit=soc_unit)
+        _enable_hover(ax_soc, soc_lines, time_edges_dt, unit=soc_unit)
 
     _enable_line_toggle(fig)
     plt.show()
@@ -493,11 +497,12 @@ def _enable_hover(
         import matplotlib.dates as mdates
     except ImportError:
         return
+    mdates = cast(Any, mdates)
 
     for line in lines:
         line.set_pickradius(5)
 
-    time_values = [mdates.date2num(value) for value in times]
+    time_values = [float(mdates.date2num(value)) for value in times]
     annotation = ax.annotate(
         "",
         xy=(0, 0),
@@ -526,7 +531,8 @@ def _enable_hover(
             contains, info = line.contains(event)
             if not contains:
                 continue
-            for idx in info.get("ind", []):
+            indices = cast(list[int], info.get("ind", []))
+            for idx in indices:
                 x = time_values[idx]
                 y = float(line.get_ydata()[idx])
                 display_x, display_y = ax.transData.transform((x, y))
