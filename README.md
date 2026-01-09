@@ -31,8 +31,8 @@ Energy management system that pulls Home Assistant data, plans using MILP (stub 
      grid:
        max_import_kw: 0.0
        max_export_kw: 0.0
-       # Optional: discourage battery-driven export when export price is below this floor.
-       min_battery_export_price: 0.15
+       # Optional: discourage exporting while the battery is discharging unless export exceeds import by this spread.
+       min_battery_export_spread: 0.10
        realtime_grid_power:
          type: home_assistant
          entity: sensor.grid_power

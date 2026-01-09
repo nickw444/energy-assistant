@@ -205,7 +205,7 @@ class MILPBuilder:
         inverters = self._build_inverters(problem, grid, horizon, forecasts)
         loads = self._build_loads(problem, horizon, base_load_kw)
         self._build_ac_balance(problem, grid, inverters, loads, horizon)
-        export_floor_violation_kw = self._build_battery_export_price_floor_penalty(
+        export_discharge_overlap = self._build_battery_export_discharge_overlap(
             problem, grid, inverters, horizon
         )
         self._build_objective(
@@ -214,7 +214,7 @@ class MILPBuilder:
             inverters,
             loads,
             horizon,
-            export_floor_violation_kw=export_floor_violation_kw,
+            export_discharge_overlap=export_discharge_overlap,
         )
 
         return MILPModel(problem, grid, inverters, loads)
@@ -548,37 +548,93 @@ class MILPBuilder:
                 f"ac_balance_t{t}",
             )
 
-    def _build_battery_export_price_floor_penalty(
+    def _build_battery_export_discharge_overlap(
         self,
         problem: pulp.LpProblem,
         grid: GridBuild,
         inverters: InverterBuild,
         horizon: Horizon,
-    ) -> dict[int, pulp.LpVariable]:
-        min_price = self._plant.grid.min_battery_export_price
-        if min_price is None:
+    ) -> dict[int, tuple[pulp.LpVariable, float]]:
+        """Discourage exporting while the battery is discharging.
+
+        This targets unintuitive schedules where PV is exported while the battery
+        discharges to serve load (or export), which can happen when export prices
+        are positive but still below the configured spread threshold.
+
+        The overlap is defined as min(P_export, total_battery_discharge) using a
+        standard linearization and is then penalized in the objective.
+        """
+
+        min_spread = self._plant.grid.min_battery_export_spread
+        if min_spread is None:
             return {}
+
         inverter_values = list(inverters.inverters.values())
-        violation_kw: dict[int, pulp.LpVariable] = {}
+        if not any(inv.P_batt_discharge_kw is not None for inv in inverter_values):
+            return {}
+
+        max_export_kw = float(self._plant.grid.max_export_kw)
+        max_discharge_kw = 0.0
+        for inverter in self._plant.inverters:
+            battery = inverter.battery
+            if battery is None:
+                continue
+            discharge_limit = (
+                battery.max_discharge_kw
+                if battery.max_discharge_kw is not None
+                else inverter.peak_power_kw
+            )
+            discharge_limit = min(discharge_limit, inverter.peak_power_kw)
+            max_discharge_kw += float(discharge_limit)
+        big_m = max(max_export_kw, max_discharge_kw)
+        if big_m <= 0:
+            return {}
+
+        overlap_kw: dict[int, tuple[pulp.LpVariable, float]] = {}
         for t in horizon.T:
-            if float(grid.price_export[t]) < min_price:
-                pv_total = pulp.lpSum(
-                    inv.P_pv_kw[t] for inv in inverter_values if inv.P_pv_kw is not None
-                )
-                charge_total = pulp.lpSum(
-                    inv.P_batt_charge_kw[t]
-                    for inv in inverter_values
-                    if inv.P_batt_charge_kw is not None
-                )
-                violation_kw[t] = pulp.LpVariable(
-                    f"P_batt_export_price_floor_violation_kw_t{t}",
-                    lowBound=0,
-                )
-                problem += (
-                    grid.P_export[t] <= pv_total - charge_total + violation_kw[t],
-                    f"grid_export_price_floor_soft_t{t}",
-                )
-        return violation_kw
+            spread = float(grid.price_export[t]) - float(grid.price_import[t])
+            penalty = float(min_spread) - spread
+            if penalty <= 0:
+                continue
+
+            discharge_total = pulp.lpSum(
+                inv.P_batt_discharge_kw[t]
+                for inv in inverter_values
+                if inv.P_batt_discharge_kw is not None
+            )
+            overlap = pulp.LpVariable(
+                f"P_batt_export_discharge_overlap_kw_t{t}",
+                lowBound=0,
+            )
+            select = pulp.LpVariable(
+                f"Batt_export_overlap_select_t{t}",
+                lowBound=0,
+                upBound=1,
+                cat="Binary",
+            )
+
+            problem += (
+                overlap <= grid.P_export[t],
+                f"batt_export_overlap_export_cap_t{t}",
+            )
+            problem += (
+                overlap <= discharge_total,
+                f"batt_export_overlap_discharge_cap_t{t}",
+            )
+            # overlap == min(P_export, discharge_total):
+            # - when select=1: overlap == P_export (requires P_export <= discharge_total)
+            # - when select=0: overlap == discharge_total (requires discharge_total <= P_export)
+            problem += (
+                overlap >= grid.P_export[t] - big_m * (1 - select),
+                f"batt_export_overlap_export_lb_t{t}",
+            )
+            problem += (
+                overlap >= discharge_total - big_m * select,
+                f"batt_export_overlap_discharge_lb_t{t}",
+            )
+            overlap_kw[t] = (overlap, penalty)
+
+        return overlap_kw
 
     def _build_objective(
         self,
@@ -588,7 +644,7 @@ class MILPBuilder:
         loads: LoadBuild,
         horizon: Horizon,
         *,
-        export_floor_violation_kw: dict[int, pulp.LpVariable],
+        export_discharge_overlap: dict[int, tuple[pulp.LpVariable, float]],
     ) -> None:
         P_import = grid.P_import
         P_export = grid.P_export
@@ -697,11 +753,10 @@ class MILPBuilder:
 
         # Penalize battery-driven export when export price is below the configured floor.
         # This is modeled as a soft constraint slack from _build_battery_export_price_floor_penalty.
-        min_price = self._plant.grid.min_battery_export_price
-        if min_price is not None and export_floor_violation_kw:
+        if export_discharge_overlap:
             objective += pulp.lpSum(
-                float(min_price) * export_floor_violation_kw[t] * horizon.dt_hours(t)
-                for t in export_floor_violation_kw
+                penalty * overlap * horizon.dt_hours(t)
+                for t, (overlap, penalty) in export_discharge_overlap.items()
             )
         problem += objective
 
