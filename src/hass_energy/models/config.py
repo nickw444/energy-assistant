@@ -25,10 +25,7 @@ class EmsConfig(BaseModel):
             raise ValueError(
                 "high_res_timestep_minutes and high_res_horizon_minutes must be set together"
             )
-        if (
-            self.high_res_horizon_minutes is not None
-            and self.high_res_horizon_minutes % self.high_res_timestep_minutes != 0
-        ):
+        if self.high_res_horizon_minutes % self.high_res_timestep_minutes != 0:
             raise ValueError(
                 "high_res_horizon_minutes must be a multiple of high_res_timestep_minutes"
             )

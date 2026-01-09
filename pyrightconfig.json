@@ -3,6 +3,7 @@
   "typeCheckingMode": "strict",
   "reportMissingImports": true,
   "reportMissingTypeStubs": false,
+  "stubPath": "typings",
   "pythonVersion": "3.13",
   "venvPath": ".",
   "venv": ".venv"

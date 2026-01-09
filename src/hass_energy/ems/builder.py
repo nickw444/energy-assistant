@@ -543,7 +543,7 @@ class MILPBuilder:
         # Price-aware objective: minimize net cost (import cost minus export revenue).
         # When export price is exactly zero, add a tiny bonus to prefer exporting over curtailment.
         export_bonus = 1e-4
-        objective = pulp.lpSum(
+        objective: pulp.LpAffineExpression = pulp.lpSum(
             (
                 P_import[t] * float(price_import[t])
                 - P_export[t]
@@ -645,10 +645,7 @@ class MILPBuilder:
                 evs[ev_id] = ev_vars
                 ev_incentive_segments[ev_id] = segments
                 continue
-            elif isinstance(load, NonVariableLoad):
-                self._build_nonvariable_load(problem, horizon, load, load_contribs)
-                continue
-            raise ValueError(f"Unsupported load type: {load.load_type}")
+            self._build_nonvariable_load(problem, horizon, load, load_contribs)
 
         return LoadBuild(
             base_load_kw=base_load_kw,

@@ -53,6 +53,8 @@ def build_horizon(
 
     # Single-resolution horizon: build fixed-size slots from the base timestep.
     if high_res_timestep_minutes is None and high_res_horizon_minutes is None:
+        if num_intervals is None:
+            raise ValueError("num_intervals is required for single-resolution horizons")
         slots: list[HorizonSlot] = []
         for idx in range(num_intervals):
             slot_start = start + timedelta(minutes=idx * timestep_minutes)
@@ -67,6 +69,15 @@ def build_horizon(
         )
 
     # Multi-resolution horizon: high-res window first, then default timestep.
+    if (
+        high_res_timestep_minutes is None
+        or high_res_horizon_minutes is None
+        or total_minutes is None
+    ):
+        raise ValueError(
+            "high_res_timestep_minutes, high_res_horizon_minutes, and total_minutes "
+            "are required for multi-resolution horizons"
+        )
     slots: list[HorizonSlot] = []
     horizon_end = start + timedelta(minutes=total_minutes)
     high_res_end = start + timedelta(minutes=high_res_horizon_minutes)

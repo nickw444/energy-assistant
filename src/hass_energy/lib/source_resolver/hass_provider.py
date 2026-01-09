@@ -1,6 +1,6 @@
-from dataclasses import dataclass
 import datetime as dt
-from typing import TypedDict
+from dataclasses import dataclass
+from typing import TypedDict, cast
 
 from hass_energy.lib.home_assistant import HomeAssistantClient
 
@@ -49,12 +49,13 @@ class HassDataProvider:
         for item in resp:
             if not isinstance(item, dict):
                 continue
+            item = cast(dict[str, object], item)
             entity_id = item.get("entity_id")
             if not isinstance(entity_id, str):
                 continue
             if entity_id not in self.marked_entities:
                 continue
-            data[entity_id] = item
+            data[entity_id] = cast(HomeAssistantStateDict, item)
         self._data = data
 
     def fetch_history(self) -> None:
@@ -72,7 +73,9 @@ class HassDataProvider:
                 minimal_response=True,
                 no_attributes=True,
             )
-            history_data[entity_id] = [item for item in history if isinstance(item, dict)]
+            history_data[entity_id] = [
+                cast(HomeAssistantHistoryStateDict, item) for item in history
+            ]
         self._history_data = history_data
 
     def snapshot(self) -> dict[str, object]:
