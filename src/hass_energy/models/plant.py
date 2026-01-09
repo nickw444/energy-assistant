@@ -25,6 +25,7 @@ class TimeWindow(BaseModel):
 class GridConfig(BaseModel):
     max_import_kw: float = Field(ge=0)
     max_export_kw: float = Field(ge=0)
+    min_battery_export_price: float | None = None
     realtime_grid_power: HomeAssistantPowerKwEntitySource
     realtime_price_import: HomeAssistantCurrencyEntitySource
     realtime_price_export: HomeAssistantCurrencyEntitySource

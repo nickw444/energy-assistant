@@ -11,12 +11,14 @@ from hass_energy.lib.source_resolver.hass_source import (
     HomeAssistantAmberElectricForecastSource,
     HomeAssistantCurrencyEntitySource,
     HomeAssistantHistoricalAverageForecastSource,
+    HomeAssistantPercentageEntitySource,
     HomeAssistantPowerKwEntitySource,
     HomeAssistantSolcastForecastSource,
 )
 from hass_energy.lib.source_resolver.models import PowerForecastInterval, PriceForecastInterval
 from hass_energy.models.config import AppConfig, EmsConfig, ServerConfig
 from hass_energy.models.plant import (
+    BatteryConfig,
     GridConfig,
     InverterConfig,
     PlantConfig,
@@ -48,7 +50,11 @@ class DummyResolver:
             return self._load_forecasts[source.entity]
         if isinstance(
             source,
-            (HomeAssistantPowerKwEntitySource, HomeAssistantCurrencyEntitySource),
+            (
+                HomeAssistantPowerKwEntitySource,
+                HomeAssistantCurrencyEntitySource,
+                HomeAssistantPercentageEntitySource,
+            ),
         ):
             return self._realtime_values[source.entity]
         raise TypeError(f"Unhandled source type: {type(source).__name__}")
@@ -62,12 +68,14 @@ def _make_config(
     min_horizon_minutes: int | None = None,
     high_res_timestep_minutes: int | None = None,
     high_res_horizon_minutes: int | None = None,
+    min_battery_export_price: float | None = None,
 ) -> AppConfig:
     if min_horizon_minutes is None:
         min_horizon_minutes = timestep_minutes * 2
     grid = GridConfig(
         max_import_kw=10.0,
         max_export_kw=10.0,
+        min_battery_export_price=min_battery_export_price,
         realtime_grid_power=HomeAssistantPowerKwEntitySource(type="home_assistant", entity="grid"),
         realtime_price_import=HomeAssistantCurrencyEntitySource(
             type="home_assistant", entity="price_import"
@@ -234,6 +242,80 @@ def test_solver_exports_with_positive_price() -> None:
     for step in timesteps:
         assert abs(step.grid.export_kw - 1.0) < 1e-6
         assert abs(step.grid.import_kw) < 1e-6
+
+
+def test_battery_export_price_floor_blocks_discharge() -> None:
+    now = datetime(2025, 12, 27, 8, 2, tzinfo=UTC)
+    battery = BatteryConfig(
+        capacity_kwh=10.0,
+        storage_efficiency_pct=100.0,
+        throughput_cost_per_kwh=0.0,
+        min_soc_pct=0.0,
+        max_soc_pct=100.0,
+        reserve_soc_pct=0.0,
+        max_charge_kw=5.0,
+        max_discharge_kw=5.0,
+        state_of_charge_pct=HomeAssistantPercentageEntitySource(
+            type="home_assistant", entity="battery_soc"
+        ),
+        realtime_power=HomeAssistantPowerKwEntitySource(
+            type="home_assistant", entity="battery_power"
+        ),
+    )
+    config = _make_config(
+        timestep_minutes=60,
+        min_horizon_minutes=120,
+        min_battery_export_price=1.0,
+        inverters=[
+            InverterConfig(
+                id="inv",
+                name="Inv",
+                peak_power_kw=5.0,
+                curtailment=None,
+                pv=PvConfig(
+                    realtime_power=None,
+                    forecast=HomeAssistantSolcastForecastSource(
+                        type="home_assistant",
+                        platform="solcast",
+                        entities=["pv_forecast"],
+                    ),
+                ),
+                battery=battery,
+            )
+        ],
+    )
+    slot0 = now.replace(minute=0, second=0, microsecond=0)
+    interval = config.ems.timestep_minutes
+    intervals_import = _price_intervals(
+        slot0, interval_minutes=interval, num_intervals=2, value=0.1
+    )
+    intervals_export = _price_intervals(
+        slot0, interval_minutes=interval, num_intervals=2, value=0.5
+    )
+    pv_intervals = _power_intervals(
+        slot0, interval_minutes=interval, num_intervals=2, value=0.0
+    )
+
+    resolver = DummyResolver(
+        price_forecasts={
+            "price_import_forecast": intervals_import,
+            "price_export_forecast": intervals_export,
+        },
+        pv_forecasts={"pv_forecast": pv_intervals},
+        load_forecasts={"load_forecast": _load_intervals(now, config, value=0.0)},
+        realtime_values={
+            "load": 0.0,
+            "price_import": 0.1,
+            "price_export": 0.5,
+            "grid": 0.0,
+            "battery_soc": 50.0,
+            "battery_power": 0.0,
+        },
+    )
+
+    plan = EmsMilpPlanner(config, resolver=resolver).generate_ems_plan(now=now)
+    for step in plan.timesteps:
+        assert abs(step.grid.export_kw) < 1e-6
 
 
 def test_realtime_price_overrides_current_slot() -> None:
