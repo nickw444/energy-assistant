@@ -98,6 +98,9 @@ model at the start of the horizon:
   - Large penalty on `P_grid_import_violation_kw`.
 - Battery wear:
   - `throughput_cost_per_kwh` applied to charge + discharge.
+- Battery export spread penalty:
+  - When `plant.grid.min_battery_export_spread` is set, penalize export overlapping with battery discharge
+    if `price_export - price_import` is below the configured spread.
 - Early-flow tie-breaker:
   - Small time-decay bonus on total grid flow `(P_import + P_export)` favoring earlier slots.
 
