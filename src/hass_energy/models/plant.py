@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from typing import Literal
-
 import re
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -106,7 +105,7 @@ class PlantConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     @model_validator(mode="after")
-    def _validate_inverter_ids_unique(self) -> "PlantConfig":
+    def _validate_inverter_ids_unique(self) -> PlantConfig:
         ids = [inv.id for inv in self.inverters]
         if len(ids) != len(set(ids)):
             raise ValueError("inverter ids must be unique")

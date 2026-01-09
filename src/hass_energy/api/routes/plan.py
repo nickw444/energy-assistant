@@ -1,17 +1,17 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
-from hass_energy.worker import PlanRunState, Worker
 from hass_energy.api.routes.plan_dto import (
     PlanAwaitResponseDto,
     PlanLatestResponseDto,
     PlanRunResponseDto,
     PlanRunStateDto,
 )
+from hass_energy.worker import PlanRunState, Worker
 
 router = APIRouter(prefix="/plan", tags=["plan"])
 
@@ -71,7 +71,7 @@ def _parse_since(value: str | None) -> float:
     except ValueError:
         return 0.0
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
+        parsed = parsed.replace(tzinfo=UTC)
     return parsed.timestamp()
 
 

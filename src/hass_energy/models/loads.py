@@ -48,7 +48,7 @@ class ControlledEvLoad(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def _validate_power_bounds(self) -> "ControlledEvLoad":
+    def _validate_power_bounds(self) -> ControlledEvLoad:
         if self.min_power_kw > self.max_power_kw:
             raise ValueError("min_power_kw must be <= max_power_kw")
         return self
