@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import timedelta
-import logging
 from typing import Any, TypeVar
 
 import aiohttp
-
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -64,7 +63,7 @@ def get_timestep0(plan: EmsPlanOutput) -> TimestepPlan | None:
     return plan.timesteps[0]
 
 
-def sorted_items(values: dict[str, T]) -> list[tuple[str, T]]:
+def sorted_items[T](values: dict[str, T]) -> list[tuple[str, T]]:
     return sorted(values.items(), key=lambda item: str(item[0]))
 
 

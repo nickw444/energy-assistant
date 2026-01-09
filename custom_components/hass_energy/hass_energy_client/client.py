@@ -64,7 +64,7 @@ class HassEnergyApiClient:
                 return resp.status, payload
 
 
-def _parse_payload(model: type[T], payload: Any, label: str) -> T:
+def _parse_payload[T: BaseModel](model: type[T], payload: Any, label: str) -> T:
     try:
         return model.model_validate(payload)
     except ValidationError as exc:
