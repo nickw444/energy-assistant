@@ -70,8 +70,14 @@ def plot_plan(
     price_export = [float(step.economics.price_export) for step in timesteps]
     segment_cost = [float(step.economics.segment_cost) for step in timesteps]
     cumulative_cost = [float(step.economics.cumulative_cost) for step in timesteps]
-    has_batt_pct = any(inv.battery_soc_pct is not None for step in timesteps for inv in step.inverters.values())
-    has_ev_pct = any(ev.soc_pct is not None for step in timesteps for ev in step.loads.evs.values())
+    has_batt_pct = any(
+        inv.battery_soc_pct is not None
+        for step in timesteps
+        for inv in step.inverters.values()
+    )
+    has_ev_pct = any(
+        ev.soc_pct is not None for step in timesteps for ev in step.loads.evs.values()
+    )
     if has_batt_pct or has_ev_pct:
         soc_unit = "%"
         batt_soc_plot = batt_soc_pct

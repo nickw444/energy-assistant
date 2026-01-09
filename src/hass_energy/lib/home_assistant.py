@@ -7,7 +7,6 @@ from typing import Any, cast
 import httpx
 from pydantic import BaseModel, ConfigDict
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -34,7 +33,7 @@ class HomeAssistantClient:
 
     def _format_datetime(self, value: dt.datetime) -> str:
         if value.tzinfo is None:
-            value = value.replace(tzinfo=dt.timezone.utc)
+            value = value.replace(tzinfo=dt.UTC)
         return value.isoformat()
 
     def fetch_realtime_state(self) -> list[Any]:

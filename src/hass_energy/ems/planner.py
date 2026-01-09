@@ -1,29 +1,28 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import logging
-import time
 import math
+import time
+from datetime import UTC, datetime
 from typing import Any, cast
 
 import pulp
 
 from hass_energy.ems.builder import MILPBuilder, MILPModel
 from hass_energy.ems.horizon import Horizon, build_horizon
-from hass_energy.ems.models import ResolvedForecasts
-from hass_energy.lib.source_resolver.resolver import ValueResolver
-from hass_energy.models.config import AppConfig
 from hass_energy.ems.models import (
     EconomicsTimestepPlan,
     EmsPlanOutput,
-    EmsPlanTimings,
     EmsPlanStatus,
+    EmsPlanTimings,
     EvTimestepPlan,
     GridTimestepPlan,
     InverterTimestepPlan,
     LoadsTimestepPlan,
     TimestepPlan,
 )
+from hass_energy.lib.source_resolver.resolver import ValueResolver
+from hass_energy.models.config import AppConfig
 
 logger = logging.getLogger(__name__)
 
@@ -77,8 +76,12 @@ class EmsMilpPlanner:
             high_res_horizon,
             self._app_config.ems.timestep_minutes,
         )
+        horizon_msg = (
+            "EMS horizon: intervals=%s base_interval_minutes=%s total_minutes=%s "
+            "start=%s schedule=%s"
+        )
         logger.info(
-            "EMS horizon: intervals=%s base_interval_minutes=%s total_minutes=%s start=%s schedule=%s",
+            horizon_msg,
             horizon.num_intervals,
             base_interval_minutes,
             total_minutes,
@@ -109,7 +112,7 @@ class EmsMilpPlanner:
             total_seconds,
         )
         return EmsPlanOutput(
-            generated_at=solve_time.astimezone(timezone.utc),
+            generated_at=solve_time.astimezone(UTC),
             status=status,
             objective_value=objective_value,
             timings=timings,

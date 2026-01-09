@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict
 from pydantic.functional_serializers import PlainSerializer
 
 from hass_energy.lib.source_resolver.models import PowerForecastInterval, PriceForecastInterval
+
 Rounded3 = Annotated[
     float,
     PlainSerializer(lambda v: round(v, 3), return_type=float, when_used="json"),
