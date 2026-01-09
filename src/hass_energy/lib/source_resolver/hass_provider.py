@@ -1,25 +1,11 @@
 import datetime as dt
 from dataclasses import dataclass
-from typing import TypedDict, cast
 
-from hass_energy.lib.home_assistant import HomeAssistantClient
-
-
-class HomeAssistantStateDict(TypedDict):
-    entity_id: str
-    state: str | float | int | None
-    attributes: dict[str, object]
-    last_changed: str
-    last_reported: str
-    last_updated: str
-
-
-class HomeAssistantHistoryStateDict(TypedDict, total=False):
-    entity_id: str
-    state: str | float | int | None
-    last_changed: str
-    last_reported: str
-    last_updated: str
+from hass_energy.lib.home_assistant import (
+    HomeAssistantClient,
+    HomeAssistantHistoryStateDict,
+    HomeAssistantStateDict,
+)
 
 
 @dataclass(frozen=True)
@@ -47,15 +33,10 @@ class HassDataProvider:
         resp = self._hass_client.fetch_realtime_state()
         data: dict[str, HomeAssistantStateDict] = {}
         for item in resp:
-            if not isinstance(item, dict):
-                continue
-            item = cast(dict[str, object], item)
             entity_id = item.get("entity_id")
-            if not isinstance(entity_id, str):
-                continue
             if entity_id not in self.marked_entities:
                 continue
-            data[entity_id] = cast(HomeAssistantStateDict, item)
+            data[entity_id] = item
         self._data = data
 
     def fetch_history(self) -> None:
@@ -73,9 +54,7 @@ class HassDataProvider:
                 minimal_response=True,
                 no_attributes=True,
             )
-            history_data[entity_id] = [
-                cast(HomeAssistantHistoryStateDict, item) for item in history
-            ]
+            history_data[entity_id] = history
         self._history_data = history_data
 
     def snapshot(self) -> dict[str, object]:
