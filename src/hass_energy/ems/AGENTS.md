@@ -87,7 +87,9 @@ model at the start of the horizon:
   - SoC bounds from `min_soc_pct` and `max_soc_pct`.
   - Grid export is blocked when SoC is below `reserve_soc_pct` (self-consumption can still discharge to `min_soc_pct`).
   - SoC update uses `storage_efficiency_pct`.
-  - Terminal SoC constraint: `E_batt[end] >= E_batt[start]`.
+  - Terminal SoC constraint:
+    - Default (hard): `E_batt[end] >= E_batt[start]`.
+    - Optional (soft): `E_batt[end] + shortfall >= E_batt[start]` with `shortfall` penalized by `ems.battery_terminal_soc_shortfall_cost_per_kwh`.
 - AC balance (system):
   - `P_grid_import + sum(P_inv_ac_net_kw) - P_grid_export == load + controllable_loads`.
 

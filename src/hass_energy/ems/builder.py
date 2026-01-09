@@ -58,6 +58,8 @@ class InverterVars:
     P_batt_discharge_kw: dict[int, pulp.LpVariable] | None
     # Battery SoC variables at slot boundaries (indexed 0..N).
     E_batt_kwh: dict[int, pulp.LpVariable] | None
+    # Battery terminal SoC shortfall slack (kWh) for soft terminal constraints.
+    batt_terminal_soc_shortfall_kwh: pulp.LpVariable | None
     # Curtailment binary variables per timestep t (None if curtailment disabled).
     Curtail_inv: dict[int, pulp.LpVariable] | None
 
@@ -112,10 +114,15 @@ class MILPBuilder:
         plant: PlantConfig,
         loads: list[LoadConfig],
         resolver: ValueResolver,
+        *,
+        battery_terminal_soc_shortfall_cost_per_kwh: float | None = None,
     ):
         self._plant = plant
         self._loads = loads
         self._resolver = resolver
+        self._battery_terminal_soc_shortfall_cost_per_kwh = (
+            battery_terminal_soc_shortfall_cost_per_kwh
+        )
         self._power_aligner = PowerForecastAligner()
         self._price_aligner = PriceForecastAligner()
 
@@ -390,6 +397,7 @@ class MILPBuilder:
                     P_batt_charge_kw=None,
                     P_batt_discharge_kw=None,
                     E_batt_kwh=None,
+                    batt_terminal_soc_shortfall_kwh=None,
                     Curtail_inv=curtail_vars,
                 )
                 continue
@@ -455,10 +463,22 @@ class MILPBuilder:
                 E_batt_kwh[0] == initial_soc_kwh,
                 f"batt_soc_initial_{inv_id}",
             )
-            problem += (
-                E_batt_kwh[horizon.num_intervals] >= initial_soc_kwh,
-                f"batt_soc_terminal_{inv_id}",
-            )
+            terminal_shortfall = None
+            if self._battery_terminal_soc_shortfall_cost_per_kwh is None:
+                problem += (
+                    E_batt_kwh[horizon.num_intervals] >= initial_soc_kwh,
+                    f"batt_soc_terminal_{inv_id}",
+                )
+            else:
+                terminal_shortfall = pulp.LpVariable(
+                    f"E_batt_{inv_id}_terminal_shortfall_kwh",
+                    lowBound=0,
+                    upBound=export_soc_m,
+                )
+                problem += (
+                    E_batt_kwh[horizon.num_intervals] + terminal_shortfall >= initial_soc_kwh,
+                    f"batt_soc_terminal_soft_{inv_id}",
+                )
 
             for t in T:
                 # Block grid export unless battery stays above reserve SoC for this slot.
@@ -512,6 +532,7 @@ class MILPBuilder:
                 P_batt_charge_kw=P_batt_charge,
                 P_batt_discharge_kw=P_batt_discharge,
                 E_batt_kwh=E_batt_kwh,
+                batt_terminal_soc_shortfall_kwh=terminal_shortfall,
                 Curtail_inv=curtail_vars,
             )
 
@@ -604,6 +625,14 @@ class MILPBuilder:
                 * (charge_series[t] + discharge_series[t])
                 * horizon.dt_hours(t)
                 for t in horizon.T
+            )
+        # Battery terminal SoC shortfall penalty (soft terminal constraint).
+        shortfall_cost = self._battery_terminal_soc_shortfall_cost_per_kwh
+        if shortfall_cost is not None and shortfall_cost > 0:
+            objective += pulp.lpSum(
+                float(shortfall_cost) * inv.batt_terminal_soc_shortfall_kwh
+                for inv in inverter_by_id.values()
+                if inv.batt_terminal_soc_shortfall_kwh is not None
             )
         # Tiny tie-breaker to keep binary curtailment decisions stable across inverters.
         w_curtail_tie = 1e-6

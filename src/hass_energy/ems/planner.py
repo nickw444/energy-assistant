@@ -48,6 +48,7 @@ class EmsMilpPlanner:
             plant=self._app_config.plant,
             loads=self._app_config.loads,
             resolver=self._resolver,
+            battery_terminal_soc_shortfall_cost_per_kwh=self._app_config.ems.battery_terminal_soc_shortfall_cost_per_kwh,
         )
         high_res_timestep = self._app_config.ems.high_res_timestep_minutes
         high_res_horizon = self._app_config.ems.high_res_horizon_minutes

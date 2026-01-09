@@ -14,6 +14,7 @@ class EmsConfig(BaseModel):
     min_horizon_minutes: int = Field(default=120, ge=1, le=525600)
     high_res_timestep_minutes: int | None = Field(default=None, ge=1, le=1440)
     high_res_horizon_minutes: int | None = Field(default=None, ge=1, le=525600)
+    battery_terminal_soc_shortfall_cost_per_kwh: float | None = Field(default=None, ge=0)
 
     model_config = ConfigDict(extra="forbid")
 
