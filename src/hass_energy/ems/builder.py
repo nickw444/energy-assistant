@@ -645,7 +645,10 @@ class MILPBuilder:
                 evs[ev_id] = ev_vars
                 ev_incentive_segments[ev_id] = segments
                 continue
-            self._build_nonvariable_load(problem, horizon, load, load_contribs)
+            elif isinstance(load, NonVariableLoad):  # pyright: ignore[reportUnnecessaryIsInstance]
+                self._build_nonvariable_load(problem, horizon, load, load_contribs)
+                continue
+            raise ValueError(f"Unsupported load type: {load.load_type}")
 
         return LoadBuild(
             base_load_kw=base_load_kw,

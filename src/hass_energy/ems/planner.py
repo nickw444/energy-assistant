@@ -4,7 +4,7 @@ import logging
 import math
 import time
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import get_args
 
 import pulp
 
@@ -25,7 +25,6 @@ from hass_energy.lib.source_resolver.resolver import ValueResolver
 from hass_energy.models.config import AppConfig
 
 logger = logging.getLogger(__name__)
-pulp_any = cast(Any, pulp)
 
 
 class EmsMilpPlanner:
@@ -92,8 +91,7 @@ class EmsMilpPlanner:
         build_seconds = time.perf_counter() - build_start
 
         solve_start = time.perf_counter()
-        problem = cast(Any, model.problem)
-        problem.solve(pulp_any.PULP_CBC_CMD(msg=solver_msg))
+        model.problem.solve(pulp.PULP_CBC_CMD(msg=solver_msg))
         solve_seconds = time.perf_counter() - solve_start
 
         objective_value = _objective_value(model)
@@ -140,11 +138,18 @@ class EmsMilpPlanner:
         return min_coverage_intervals
 
 
+_VALID_STATUSES: frozenset[str] = frozenset(get_args(EmsPlanStatus))
+
+
+def _map_status(status_text: str) -> EmsPlanStatus:
+    if status_text in _VALID_STATUSES:
+        return status_text  # type: ignore[return-value]
+    return "Unknown"
+
+
 def _extract_plan(model: MILPModel, horizon: Horizon) -> tuple[EmsPlanStatus, list[TimestepPlan]]:
-    problem = cast(Any, model.problem)
-    status_code = cast(int, problem.status)
-    status_text = cast(str, pulp_any.LpStatus.get(status_code, "Unknown"))
-    status = cast(EmsPlanStatus, status_text)
+    status_text = pulp.LpStatus.get(model.problem.status, "Unknown")
+    status = _map_status(status_text)
 
     grid = model.grid
     inverters = model.inverters.inverters
@@ -247,20 +252,20 @@ def _extract_plan(model: MILPModel, horizon: Horizon) -> tuple[EmsPlanStatus, li
     return status, timesteps
 
 
-def _value(var: Any) -> float:
+def _value(var: pulp.LpVariable | pulp.LpAffineExpression | None) -> float:
     if var is None:
         return 0.0
-    value = pulp_any.value(var)
-    if value is None:
+    v = pulp.value(var)
+    if v is None:
         return 0.0
-    return float(value)
+    return float(v)
 
 
 def _objective_value(model: MILPModel) -> float | None:
-    value = pulp_any.value(model.problem.objective)
-    if value is None:
+    v = pulp.value(model.problem.objective)
+    if v is None:
         return None
-    return float(value)
+    return float(v)
 
 
 def _format_schedule(
