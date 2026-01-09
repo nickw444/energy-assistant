@@ -244,7 +244,7 @@ def test_solver_exports_with_positive_price() -> None:
         assert abs(step.grid.import_kw) < 1e-6
 
 
-def test_battery_export_price_floor_blocks_discharge() -> None:
+def test_battery_export_price_floor_discourages_discharge() -> None:
     now = datetime(2025, 12, 27, 8, 2, tzinfo=UTC)
     battery = BatteryConfig(
         capacity_kwh=10.0,
@@ -313,6 +313,8 @@ def test_battery_export_price_floor_blocks_discharge() -> None:
         },
     )
 
+    # Export price is below the floor; the model should avoid discharging the battery to export
+    # for arbitrage (even though it could recharge later to satisfy the terminal SoC constraint).
     plan = EmsMilpPlanner(config, resolver=resolver).generate_ems_plan(now=now)
     for step in plan.timesteps:
         assert abs(step.grid.export_kw) < 1e-6

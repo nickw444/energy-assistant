@@ -205,8 +205,17 @@ class MILPBuilder:
         inverters = self._build_inverters(problem, grid, horizon, forecasts)
         loads = self._build_loads(problem, horizon, base_load_kw)
         self._build_ac_balance(problem, grid, inverters, loads, horizon)
-        self._build_battery_export_price_limit(problem, grid, inverters, horizon)
-        self._build_objective(problem, grid, inverters, loads, horizon)
+        export_floor_violation_kw = self._build_battery_export_price_floor_penalty(
+            problem, grid, inverters, horizon
+        )
+        self._build_objective(
+            problem,
+            grid,
+            inverters,
+            loads,
+            horizon,
+            export_floor_violation_kw=export_floor_violation_kw,
+        )
 
         return MILPModel(problem, grid, inverters, loads)
 
@@ -539,17 +548,18 @@ class MILPBuilder:
                 f"ac_balance_t{t}",
             )
 
-    def _build_battery_export_price_limit(
+    def _build_battery_export_price_floor_penalty(
         self,
         problem: pulp.LpProblem,
         grid: GridBuild,
         inverters: InverterBuild,
         horizon: Horizon,
-    ) -> None:
+    ) -> dict[int, pulp.LpVariable]:
         min_price = self._plant.grid.min_battery_export_price
         if min_price is None:
-            return
+            return {}
         inverter_values = list(inverters.inverters.values())
+        violation_kw: dict[int, pulp.LpVariable] = {}
         for t in horizon.T:
             if float(grid.price_export[t]) < min_price:
                 pv_total = pulp.lpSum(
@@ -560,10 +570,15 @@ class MILPBuilder:
                     for inv in inverter_values
                     if inv.P_batt_charge_kw is not None
                 )
-                problem += (
-                    grid.P_export[t] <= pv_total - charge_total,
-                    f"grid_export_price_floor_t{t}",
+                violation_kw[t] = pulp.LpVariable(
+                    f"P_batt_export_price_floor_violation_kw_t{t}",
+                    lowBound=0,
                 )
+                problem += (
+                    grid.P_export[t] <= pv_total - charge_total + violation_kw[t],
+                    f"grid_export_price_floor_soft_t{t}",
+                )
+        return violation_kw
 
     def _build_objective(
         self,
@@ -572,6 +587,8 @@ class MILPBuilder:
         inverters: InverterBuild,
         loads: LoadBuild,
         horizon: Horizon,
+        *,
+        export_floor_violation_kw: dict[int, pulp.LpVariable],
     ) -> None:
         P_import = grid.P_import
         P_export = grid.P_export
@@ -677,6 +694,15 @@ class MILPBuilder:
                     continue
                 anchor_var = ev_vars.Ev_charge_anchor_kw
                 objective += anchor_penalty * anchor_var * horizon.dt_hours(0)
+
+        # Penalize battery-driven export when export price is below the configured floor.
+        # This is modeled as a soft constraint slack from _build_battery_export_price_floor_penalty.
+        min_price = self._plant.grid.min_battery_export_price
+        if min_price is not None and export_floor_violation_kw:
+            objective += pulp.lpSum(
+                float(min_price) * export_floor_violation_kw[t] * horizon.dt_hours(t)
+                for t in export_floor_violation_kw
+            )
         problem += objective
 
     def _build_loads(
