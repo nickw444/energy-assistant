@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-import logging
 
 import pulp
 
@@ -13,7 +13,7 @@ from hass_energy.ems.forecast_alignment import (
 )
 from hass_energy.ems.horizon import Horizon, floor_to_interval_boundary
 from hass_energy.ems.models import ResolvedForecasts
-from hass_energy.lib.source_resolver.models import PowerForecastInterval, PriceForecastInterval
+from hass_energy.lib.source_resolver.models import PowerForecastInterval
 from hass_energy.lib.source_resolver.resolver import ValueResolver
 from hass_energy.models.loads import ControlledEvLoad, LoadConfig, NonVariableLoad
 from hass_energy.models.plant import PlantConfig, TimeWindow
@@ -366,9 +366,9 @@ class MILPBuilder:
                             f"inverter_export_block_{inv_id}_t{t}",
                         )
                         if float(price_export[t]) < _NEGATIVE_EXPORT_PRICE_THRESHOLD:
-                            # Negative export prices should always activate load-following curtailment:
-                            # we want PV to be able to drop to match load and prevent any export, even
-                            # when PV is already below load (which would otherwise keep curtail off).
+                            # Negative export prices always activate load-following curtailment.
+                            # We want PV to drop to match load and prevent any export,
+                            # even when PV is already below load (which keeps curtail off).
                             problem += (
                                 curtail[t] == 1,
                                 f"inverter_curtail_neg_export_{inv_id}_t{t}",

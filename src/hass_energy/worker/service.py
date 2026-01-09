@@ -3,13 +3,13 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 
+from hass_energy.ems.models import EmsPlanOutput
 from hass_energy.ems.planner import EmsMilpPlanner
 from hass_energy.lib.source_resolver.resolver import ValueResolver
 from hass_energy.models.config import AppConfig
-from hass_energy.ems.models import EmsPlanOutput
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ class Worker:
         async with self._condition:
             if self._in_progress and self._current_run is not None:
                 return self._current_run, True
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             run_state = PlanRunState(
                 run_id=_new_run_id(),
                 status="running",
@@ -114,7 +114,7 @@ class Worker:
 
             try:
                 await asyncio.wait_for(self._condition.wait_for(_predicate), timeout=timeout)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 return None
 
             if (
@@ -130,7 +130,7 @@ class Worker:
     async def _run_once(self, run_state: PlanRunState) -> None:
         try:
             plan = await asyncio.to_thread(self._solve_once_blocking)
-            finished = datetime.now(timezone.utc)
+            finished = datetime.now(UTC)
             completed_state = _update_run(
                 run_state,
                 status="completed",
@@ -138,7 +138,7 @@ class Worker:
             )
         except Exception as exc:  # pragma: no cover - unexpected runtime failures
             logger.exception("Worker plan run failed")
-            finished = datetime.now(timezone.utc)
+            finished = datetime.now(UTC)
             completed_state = _update_run(
                 run_state,
                 status="failed",
@@ -171,12 +171,12 @@ class Worker:
                     self._stop_event.wait(),
                     timeout=_SCHEDULE_INTERVAL.total_seconds(),
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
 
 
 def _new_run_id() -> str:
-    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%f")
+    return datetime.now(UTC).strftime("%Y%m%dT%H%M%S%f")
 
 
 def _update_run(
