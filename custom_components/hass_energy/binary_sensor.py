@@ -15,7 +15,6 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from . import HassEnergyRuntimeData
 from .coordinator import (
     HassEnergyCoordinator,
-    PlanPayload,
     build_plan_series,
     get_timestep0,
     inverter_step_getter,
@@ -26,7 +25,16 @@ from .device import entity_unique_id, inverter_device_info, suggested_object_id
 from .hass_energy_client import EmsPlanOutput, PlanLatestResponse, TimestepPlan
 
 
-class HassEnergyCurtailmentSensor(CoordinatorEntity[PlanPayload | None], BinarySensorEntity):
+# NOTE: homeassistant-stubs has several type conflicts that require ignores:
+# 1. type: ignore[misc] on class - conflicting `available` property types between
+#    CoordinatorEntity and Entity (property vs cached_property).
+# 2. pyright: ignore[reportIncompatibleVariableOverride] on properties - stubs define
+#    is_on/extra_state_attributes as cached_property but we override with property.
+# These are stubs issues, not runtime issues. Remove ignores when stubs are fixed.
+class HassEnergyCurtailmentSensor(  # type: ignore[misc]
+    CoordinatorEntity[HassEnergyCoordinator],
+    BinarySensorEntity,
+):
     _attr_has_entity_name = True
     _attr_name = "Curtailment"
     _unrecorded_attributes = frozenset({"plan"})
@@ -51,17 +59,15 @@ class HassEnergyCurtailmentSensor(CoordinatorEntity[PlanPayload | None], BinaryS
         self._attr_icon = "mdi:solar-power-variant"
 
     @property
-    def is_on(self) -> bool | None:
+    def is_on(self) -> bool | None:  # pyright: ignore[reportIncompatibleVariableOverride]
         payload = self.coordinator.data
         if not payload:
             return None
         value = self._value_getter(payload.response)
-        if value is None:
-            return None
-        return bool(value)
+        return bool(value) if value is not None else None
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, Any]:  # pyright: ignore[reportIncompatibleVariableOverride]
         payload = self.coordinator.data
         if not payload:
             return {}

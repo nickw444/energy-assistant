@@ -15,13 +15,17 @@ from hass_energy.lib.source_resolver.sources import EntitySource
 T = TypeVar("T")
 
 
-def required_float(value: str | int | float | None) -> float:
+def required_float(value: object) -> float:
     if value is None:
         raise ValueError("Value is required and cannot be None")
-    return float(value)
+    if isinstance(value, bool):
+        return float(value)
+    if isinstance(value, (int, float, str)):
+        return float(value)
+    raise TypeError(f"Unsupported value type: {type(value)!r}")
 
 
-def required_bool(value: str | int | float | None) -> bool:
+def required_bool(value: object) -> bool:
     if value is None:
         raise ValueError("Value is required and cannot be None")
     if isinstance(value, bool):
@@ -137,14 +141,18 @@ class HomeAssistantAmberElectricForecastSource(
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     def mapper(self, state: HomeAssistantStateDict) -> list[PriceForecastInterval]:
-        forecasts = state.get("attributes", {}).get("forecasts")
-        if not isinstance(forecasts, list):
+        attributes = state["attributes"]
+        forecasts_raw = attributes.get("forecasts")
+        if not isinstance(forecasts_raw, list):
             return []
+        forecasts_raw = cast(list[object], forecasts_raw)
 
         intervals: list[PriceForecastInterval] = []
+        forecasts: list[dict[str, object]] = []
+        for item in forecasts_raw:
+            if isinstance(item, dict):
+                forecasts.append(cast(dict[str, object], item))
         for item in forecasts:
-            if not isinstance(item, dict):
-                continue
             start = _parse_timestamp(item.get("start_time") or item.get("nem_date"))
             end = _parse_timestamp(item.get("end_time"))
             if start is None:
@@ -231,10 +239,10 @@ class HomeAssistantHistoricalAverageForecastSource(
 
     def mapper(
         self,
-        payload: HomeAssistantHistoryPayload,
+        state: HomeAssistantHistoryPayload,
     ) -> list[PowerForecastInterval]:
-        history = payload.history
-        current_state = payload.current_state
+        history = state.history
+        current_state = state.current_state
         entries: list[tuple[datetime.datetime, float]] = []
         unit = self.unit
         for item in history:
@@ -326,7 +334,7 @@ class HomeAssistantHistoricalAverageForecastSource(
         except (TypeError, ValueError):
             return
         attributes = current_state.get("attributes", {})
-        unit = attributes.get("unit_of_measurement") if isinstance(attributes, dict) else None
+        unit = attributes.get("unit_of_measurement")
         unit_value = unit if isinstance(unit, str) else self.unit
         realtime_kw = _normalize_power_kw(raw_value, unit_value)
         window = datetime.timedelta(minutes=self.realtime_window_minutes)

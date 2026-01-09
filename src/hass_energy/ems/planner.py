@@ -4,7 +4,7 @@ import logging
 import math
 import time
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import get_args
 
 import pulp
 
@@ -138,8 +138,18 @@ class EmsMilpPlanner:
         return min_coverage_intervals
 
 
+_VALID_STATUSES: frozenset[str] = frozenset(get_args(EmsPlanStatus))
+
+
+def _map_status(status_text: str) -> EmsPlanStatus:
+    if status_text in _VALID_STATUSES:
+        return status_text  # type: ignore[return-value]
+    return "Unknown"
+
+
 def _extract_plan(model: MILPModel, horizon: Horizon) -> tuple[EmsPlanStatus, list[TimestepPlan]]:
-    status = cast(EmsPlanStatus, pulp.LpStatus.get(model.problem.status, "Unknown"))
+    status_text = pulp.LpStatus.get(model.problem.status, "Unknown")
+    status = _map_status(status_text)
 
     grid = model.grid
     inverters = model.inverters.inverters
@@ -174,7 +184,7 @@ def _extract_plan(model: MILPModel, horizon: Horizon) -> tuple[EmsPlanStatus, li
             inverter_plans[key] = InverterTimestepPlan(
                 name=str(inv.name),
                 pv_kw=_value(pv_series.get(t)) if pv_series is not None else None,
-                ac_net_kw=_value(ac_net_series.get(t)) if ac_net_series is not None else 0.0,
+                ac_net_kw=_value(ac_net_series.get(t)),
                 battery_charge_kw=(
                     _value(charge_series.get(t)) if charge_series is not None else None
                 ),
@@ -193,13 +203,13 @@ def _extract_plan(model: MILPModel, horizon: Horizon) -> tuple[EmsPlanStatus, li
             ev_series = ev.P_ev_charge_kw
             ev_soc_series = ev.E_ev_kwh
             connected = ev.connected
-            ev_soc_kwh = _value(ev_soc_series.get(t)) if ev_soc_series is not None else 0.0
+            ev_soc_kwh = _value(ev_soc_series.get(t))
             ev_soc_pct = None
             if ev.capacity_kwh:
                 ev_soc_pct = (ev_soc_kwh / float(ev.capacity_kwh)) * 100.0
             ev_plans[key] = EvTimestepPlan(
                 name=str(ev.name),
-                charge_kw=_value(ev_series.get(t)) if ev_series is not None else 0.0,
+                charge_kw=_value(ev_series.get(t)),
                 soc_kwh=ev_soc_kwh,
                 soc_pct=ev_soc_pct,
                 connected=connected,
@@ -242,20 +252,20 @@ def _extract_plan(model: MILPModel, horizon: Horizon) -> tuple[EmsPlanStatus, li
     return status, timesteps
 
 
-def _value(var: Any) -> float:
+def _value(var: pulp.LpVariable | pulp.LpAffineExpression | None) -> float:
     if var is None:
         return 0.0
-    value = pulp.value(var)
-    if value is None:
+    v = pulp.value(var)
+    if v is None:
         return 0.0
-    return float(value)
+    return float(v)
 
 
 def _objective_value(model: MILPModel) -> float | None:
-    value = pulp.value(model.problem.objective)
-    if value is None:
+    v = pulp.value(model.problem.objective)
+    if v is None:
         return None
-    return float(value)
+    return float(v)
 
 
 def _format_schedule(

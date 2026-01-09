@@ -1,7 +1,5 @@
-from __future__ import annotations
-
 import re
-from typing import Literal
+from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -22,6 +20,10 @@ class TimeWindow(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
+def _default_import_forbidden_periods() -> list[TimeWindow]:
+    return []
+
+
 class GridConfig(BaseModel):
     max_import_kw: float = Field(ge=0)
     max_export_kw: float = Field(ge=0)
@@ -30,7 +32,9 @@ class GridConfig(BaseModel):
     realtime_price_export: HomeAssistantCurrencyEntitySource
     price_import_forecast: HomeAssistantAmberElectricForecastSource
     price_export_forecast: HomeAssistantAmberElectricForecastSource
-    import_forbidden_periods: list[TimeWindow] = Field(default_factory=list)
+    import_forbidden_periods: list[TimeWindow] = Field(
+        default_factory=_default_import_forbidden_periods
+    )
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -64,7 +68,7 @@ class BatteryConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     @model_validator(mode="after")
-    def _validate_soc_bounds(self) -> BatteryConfig:
+    def _validate_soc_bounds(self) -> Self:
         if self.min_soc_pct > self.max_soc_pct:
             raise ValueError("min_soc_pct must be <= max_soc_pct")
         if self.reserve_soc_pct > self.max_soc_pct:
@@ -105,7 +109,7 @@ class PlantConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     @model_validator(mode="after")
-    def _validate_inverter_ids_unique(self) -> PlantConfig:
+    def _validate_inverter_ids_unique(self) -> Self:
         ids = [inv.id for inv in self.inverters]
         if len(ids) != len(set(ids)):
             raise ValueError("inverter ids must be unique")

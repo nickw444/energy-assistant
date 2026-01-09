@@ -80,7 +80,7 @@ async def await_plan(
     worker: Annotated[Worker, Depends(get_worker)],
     since: str | None = None,
     timeout: int = 30,
-) -> PlanAwaitResponseDto:
+) -> PlanAwaitResponseDto | Response:
     since_ts = _parse_since(since)
     try:
         latest = await worker.await_latest(since_ts=since_ts, timeout=timeout)

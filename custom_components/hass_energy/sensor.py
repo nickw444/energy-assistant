@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import datetime
 from typing import Any
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
@@ -11,12 +10,12 @@ from homeassistant.const import CURRENCY_DOLLAR, PERCENTAGE, UnitOfEnergy, UnitO
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import HassEnergyRuntimeData
 from .coordinator import (
     HassEnergyCoordinator,
-    PlanPayload,
     build_plan_series,
     ev_step_getter,
     ev_value_getter,
@@ -35,7 +34,16 @@ from .device import (
 from .hass_energy_client import EmsPlanOutput, PlanLatestResponse, TimestepPlan
 
 
-class HassEnergyPlanSensor(CoordinatorEntity[PlanPayload | None], SensorEntity):
+# NOTE: homeassistant-stubs has several type conflicts that require ignores:
+# 1. type: ignore[misc] on class - conflicting `available` property types between
+#    CoordinatorEntity and Entity (property vs cached_property).
+# 2. pyright: ignore[reportIncompatibleVariableOverride] on properties - stubs define
+#    native_value/extra_state_attributes as cached_property but we override with property.
+# These are stubs issues, not runtime issues. Remove ignores when stubs are fixed.
+class HassEnergyPlanSensor(  # type: ignore[misc]
+    CoordinatorEntity[HassEnergyCoordinator],
+    SensorEntity,
+):
     _attr_has_entity_name = True
     _attr_name = "Plan Status"
     _unrecorded_attributes = frozenset({"plan"})
@@ -51,24 +59,30 @@ class HassEnergyPlanSensor(CoordinatorEntity[PlanPayload | None], SensorEntity):
         self._attr_device_info = device_info
 
     @property
-    def native_value(self) -> str | None:
+    def native_value(self) -> str | None:  # pyright: ignore[reportIncompatibleVariableOverride]
         payload = self.coordinator.data
         if not payload:
             return None
-        status = payload.response.plan.status
-        return str(status) if status is not None else None
+        return str(payload.response.plan.status)
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def extra_state_attributes(self) -> dict[str, Any]:  # pyright: ignore[reportIncompatibleVariableOverride]
         payload = self.coordinator.data
         if not payload:
             return {}
-        return {
-            "plan": payload.plan_dump,
-        }
+        return {"plan": payload.plan_dump}
 
 
-class HassEnergyPlanUpdatedSensor(CoordinatorEntity[PlanPayload | None], SensorEntity):
+# NOTE: homeassistant-stubs has several type conflicts that require ignores:
+# 1. type: ignore[misc] on class - conflicting `available` property types between
+#    CoordinatorEntity and Entity (property vs cached_property).
+# 2. pyright: ignore[reportIncompatibleVariableOverride] on properties - stubs define
+#    native_value as cached_property but we override with property.
+# These are stubs issues, not runtime issues. Remove ignores when stubs are fixed.
+class HassEnergyPlanUpdatedSensor(  # type: ignore[misc]
+    CoordinatorEntity[HassEnergyCoordinator],
+    SensorEntity,
+):
     _attr_has_entity_name = True
     _attr_name = "Plan Updated"
     _attr_device_class = SensorDeviceClass.TIMESTAMP
@@ -85,14 +99,23 @@ class HassEnergyPlanUpdatedSensor(CoordinatorEntity[PlanPayload | None], SensorE
         self._attr_device_info = device_info
 
     @property
-    def native_value(self) -> datetime | None:
+    def native_value(self) -> Any:  # pyright: ignore[reportIncompatibleVariableOverride]
         payload = self.coordinator.data
         if not payload:
             return None
         return payload.response.plan.generated_at
 
 
-class HassEnergyPlanValueSensor(CoordinatorEntity[PlanPayload | None], SensorEntity):
+# NOTE: homeassistant-stubs has several type conflicts that require ignores:
+# 1. type: ignore[misc] on class - conflicting `available` property types between
+#    CoordinatorEntity and Entity (property vs cached_property).
+# 2. pyright: ignore[reportIncompatibleVariableOverride] on properties - stubs define
+#    native_value/extra_state_attributes as cached_property but we override with property.
+# These are stubs issues, not runtime issues. Remove ignores when stubs are fixed.
+class HassEnergyPlanValueSensor(  # type: ignore[misc]
+    CoordinatorEntity[HassEnergyCoordinator],
+    SensorEntity,
+):
     _attr_has_entity_name = True
     _unrecorded_attributes = frozenset({"plan"})
 
@@ -124,7 +147,7 @@ class HassEnergyPlanValueSensor(CoordinatorEntity[PlanPayload | None], SensorEnt
             self._attr_icon = icon
 
     @property
-    def native_value(self) -> Any:
+    def native_value(self) -> Any:  # pyright: ignore[reportIncompatibleVariableOverride]
         payload = self.coordinator.data
         if not payload:
             return None
@@ -132,11 +155,9 @@ class HassEnergyPlanValueSensor(CoordinatorEntity[PlanPayload | None], SensorEnt
         return _normalize_value(value)
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        if self._series_getter is None:
-            return {}
+    def extra_state_attributes(self) -> dict[str, Any]:  # pyright: ignore[reportIncompatibleVariableOverride]
         payload = self.coordinator.data
-        if not payload:
+        if not payload or self._series_getter is None:
             return {}
         return {
             "plan": build_plan_series(
@@ -150,7 +171,7 @@ class HassEnergyPlanValueSensor(CoordinatorEntity[PlanPayload | None], SensorEnt
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
-    async_add_entities,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     runtime: HassEnergyRuntimeData = entry.runtime_data
     coordinator = runtime.coordinator
