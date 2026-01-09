@@ -63,9 +63,7 @@ def test_high_res_window_snaps_forward_to_interval_boundary() -> None:
     )
 
     transitions = [
-        slot
-        for slot in horizon.slots
-        if slot.start.minute in (0, 30) and slot.duration_m == 30
+        slot for slot in horizon.slots if slot.start.minute in (0, 30) and slot.duration_m == 30
     ]
     assert transitions
     assert transitions[0].start.minute == 30 or transitions[0].start.minute == 0

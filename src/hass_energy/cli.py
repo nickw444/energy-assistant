@@ -281,9 +281,9 @@ def hydrate_load_forecast(ctx: click.Context, limit: int) -> None:
     show = sorted_intervals[: max(limit, 0)]
     for interval in show:
         click.echo(
-            f"{interval.start.isoformat()} -> {interval.end.isoformat()} = "
-            f"{interval.value:.3f} kW"
+            f"{interval.start.isoformat()} -> {interval.end.isoformat()} = {interval.value:.3f} kW"
         )
+
 
 def _parse_log_level(level_str: str) -> int:
     normalized = level_str.strip().upper()

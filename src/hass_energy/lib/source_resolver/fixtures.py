@@ -34,9 +34,7 @@ class FixtureHassDataProvider:
     @classmethod
     def from_path(cls, path: Path) -> tuple[FixtureHassDataProvider, str | None]:
         fixture = load_hass_fixture(path)
-        return cls(states=fixture["states"], history=fixture["history"]), fixture.get(
-            "captured_at"
-        )
+        return cls(states=fixture["states"], history=fixture["history"]), fixture.get("captured_at")
 
     def fetch(self) -> None:
         # Fixtures are pre-hydrated; nothing to fetch.
