@@ -2,7 +2,10 @@ from typing import TypeVar, cast
 
 from pydantic import BaseModel
 
-from hass_energy.lib.source_resolver.hass_provider import HassDataProvider
+from hass_energy.lib.source_resolver.hass_provider import (
+    HassDataProvider,
+    HomeAssistantHistoryPayload,
+)
 from hass_energy.lib.source_resolver.hass_source import (
     HomeAssistantEntitySource,
     HomeAssistantHistoryEntitySource,
@@ -41,8 +44,13 @@ class ValueResolver:
                 ) from exc
         if isinstance(source, HomeAssistantHistoryEntitySource):
             history = self._hass_data_provider.get_history(source.entity)
+            current_state = self._hass_data_provider.get(source.entity)
             try:
-                return source.mapper(history)
+                payload = HomeAssistantHistoryPayload(
+                    history=history,
+                    current_state=current_state,
+                )
+                return source.mapper(payload)
             except Exception as exc:
                 raise ValueError(
                     f"Failed to resolve Home Assistant history for {source.entity}: {exc}"
@@ -68,6 +76,7 @@ class ValueResolver:
             return
         if isinstance(source, HomeAssistantHistoryEntitySource):
             self._hass_data_provider.mark_history(source.entity, source.history_days)
+            self._hass_data_provider.mark(source.entity)
             return
         if isinstance(source, HomeAssistantMultiEntitySource):
             for entity in source.entities:

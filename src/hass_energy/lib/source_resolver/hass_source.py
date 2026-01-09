@@ -6,7 +6,7 @@ from typing import Annotated, Literal, TypeVar, cast
 from pydantic import ConfigDict, Field, model_validator
 
 from hass_energy.lib.source_resolver.hass_provider import (
-    HomeAssistantHistoryStateDict,
+    HomeAssistantHistoryPayload,
     HomeAssistantStateDict,
 )
 from hass_energy.lib.source_resolver.models import PowerForecastInterval, PriceForecastInterval
@@ -91,7 +91,7 @@ class HomeAssistantMultiEntitySource(EntitySource[list[HomeAssistantStateDict], 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
-class HomeAssistantHistoryEntitySource(EntitySource[list[HomeAssistantHistoryStateDict], T]):
+class HomeAssistantHistoryEntitySource(EntitySource[HomeAssistantHistoryPayload, T]):
     type: Literal["home_assistant"]
     entity: str = Field(min_length=1)
     history_days: int = Field(ge=1)
@@ -215,6 +215,7 @@ class HomeAssistantHistoricalAverageForecastSource(
     unit: str = Field(min_length=1)
     interval_duration: int = Field(default=5, ge=1, le=60)
     forecast_horizon_hours: int = Field(default=24, ge=1)
+    realtime_window_minutes: int | None = Field(default=None, ge=1)
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -227,7 +228,12 @@ class HomeAssistantHistoricalAverageForecastSource(
             raise ValueError("unit must be one of: W, kW, MW")
         return self
 
-    def mapper(self, history: list[HomeAssistantHistoryStateDict]) -> list[PowerForecastInterval]:
+    def mapper(
+        self,
+        payload: HomeAssistantHistoryPayload,
+    ) -> list[PowerForecastInterval]:
+        history = payload.history
+        current_state = payload.current_state
         entries: list[tuple[datetime.datetime, float]] = []
         unit = self.unit
         for item in history:
@@ -303,4 +309,36 @@ class HomeAssistantHistoricalAverageForecastSource(
                     value=averages[bucket],
                 )
             )
+        self._apply_realtime_smoothing(intervals, now, current_state)
         return intervals
+
+    def _apply_realtime_smoothing(
+        self,
+        intervals: list[PowerForecastInterval],
+        now: datetime.datetime,
+        current_state: HomeAssistantStateDict,
+    ) -> None:
+        if not intervals or self.realtime_window_minutes is None:
+            return
+        try:
+            raw_value = required_float(current_state.get("state"))
+        except (TypeError, ValueError):
+            return
+        attributes = current_state.get("attributes", {})
+        unit = attributes.get("unit_of_measurement") if isinstance(attributes, dict) else None
+        unit_value = unit if isinstance(unit, str) else self.unit
+        realtime_kw = _normalize_power_kw(raw_value, unit_value)
+        window = datetime.timedelta(minutes=self.realtime_window_minutes)
+        if window.total_seconds() <= 0:
+            return
+        window_end = now + window
+        for interval in intervals:
+            if interval.end <= now:
+                continue
+            if interval.start >= window_end:
+                break
+            progress = (interval.start - now).total_seconds() / window.total_seconds()
+            progress = max(0.0, min(1.0, progress))
+            interpolated = realtime_kw + (interval.value - realtime_kw) * progress
+            if interpolated > interval.value:
+                interval.value = interpolated
