@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import datetime as dt
 from typing import TypedDict
 
@@ -19,6 +20,12 @@ class HomeAssistantHistoryStateDict(TypedDict, total=False):
     last_changed: str
     last_reported: str
     last_updated: str
+
+
+@dataclass(frozen=True)
+class HomeAssistantHistoryPayload:
+    history: list[HomeAssistantHistoryStateDict]
+    current_state: HomeAssistantStateDict
 
 
 class HassDataProvider:
