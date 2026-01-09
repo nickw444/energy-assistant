@@ -147,8 +147,6 @@ class HassEnergyPlanValueSensor(CoordinatorEntity[PlanPayload | None], SensorEnt
         }
 
 
-
-
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
