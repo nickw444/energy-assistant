@@ -222,7 +222,7 @@ class Worker:
         return EmsMilpPlanner(self._app_config, resolver=self._resolver).generate_ems_plan()
 
     async def _run_scheduler(self) -> None:
-        """Scheduler loop: runs immediately on start, then waits for fallback interval after each run."""
+        """Scheduler loop: runs immediately, then waits for fallback interval after each run."""
         logger.debug("Scheduler loop started")
         while not self._stop_event.is_set():
             now = datetime.now(UTC)
