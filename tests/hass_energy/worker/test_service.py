@@ -58,7 +58,7 @@ class TestWorkerDebounce:
 
         worker = Worker(app_config=mock_app_config, resolver=mock_resolver)
         worker._loop = asyncio.get_running_loop()
-        worker._schedule_task = asyncio.create_task(asyncio.sleep(100))
+        worker._scheduler_task = asyncio.create_task(asyncio.sleep(100))
 
         trigger_mock = AsyncMock()
         worker.trigger_run = trigger_mock

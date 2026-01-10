@@ -10,7 +10,7 @@ from hass_energy.ems.models import EmsPlanOutput
 
 class PlanRunStateDto(BaseModel):
     run_id: str
-    status: Literal["queued", "running", "completed", "failed"]
+    status: Literal["queued", "running", "completed", "failed", "cancelled"]
     accepted_at: datetime
     started_at: datetime | None = None
     finished_at: datetime | None = None

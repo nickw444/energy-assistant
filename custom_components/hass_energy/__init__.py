@@ -46,6 +46,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         DEFAULT_SCAN_INTERVAL,
     )
     await coordinator.async_config_entry_first_refresh()
+    coordinator.start_long_poll_loop()
     entry.runtime_data = HassEnergyRuntimeData(
         client=client,
         coordinator=coordinator,
@@ -57,6 +58,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
+    runtime_data: HassEnergyRuntimeData | None = entry.runtime_data
+    if runtime_data is not None:
+        runtime_data.coordinator.stop_long_poll_loop()
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         entry.runtime_data = None
