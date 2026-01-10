@@ -9,6 +9,7 @@ import pulp
 from hass_energy.ems.forecast_alignment import (
     PowerForecastAligner,
     PriceForecastAligner,
+    TemperatureForecastAligner,
     forecast_coverage_slots,
 )
 from hass_energy.ems.horizon import Horizon, floor_to_interval_boundary
@@ -125,6 +126,7 @@ class MILPBuilder:
         self._ems_config = ems_config
         self._power_aligner = PowerForecastAligner()
         self._price_aligner = PriceForecastAligner()
+        self._temperature_aligner = TemperatureForecastAligner()
 
     def resolve_forecasts(
         self,
@@ -906,6 +908,7 @@ class MILPBuilder:
             connect_times=load.allowed_connect_times,
             grace_minutes=load.connect_grace_minutes,
         )
+        temperature_allow_by_slot = self._ev_temperature_allowance(horizon, load)
         charge_on = None
         if load.min_power_kw > 0:
             charge_on = pulp.LpVariable.dicts(
@@ -938,7 +941,7 @@ class MILPBuilder:
         )
 
         for t in T:
-            connected_allow = connected_allow_by_slot[t]
+            connected_allow = connected_allow_by_slot[t] * temperature_allow_by_slot[t]
             # Enforce connection gating.
             problem += (
                 P_ev_charge[t] <= load.max_power_kw * connected_allow,
@@ -991,6 +994,24 @@ class MILPBuilder:
             Ev_charge_anchor_kw=anchor_var,
         )
         return ev_vars, segments
+
+    def _ev_temperature_allowance(self, horizon: Horizon, load: ControlledEvLoad) -> list[float]:
+        if (
+            load.ambient_temperature_forecast is None
+            or load.maximum_ambient_temperature_for_charging is None
+        ):
+            return [1.0] * horizon.num_intervals
+
+        current_temperature, forecast_intervals = self._resolver.resolve(
+            load.ambient_temperature_forecast
+        )
+        temperature_series = self._temperature_aligner.align(
+            horizon,
+            forecast_intervals,
+            first_slot_override=current_temperature,
+        )
+        limit = load.maximum_ambient_temperature_for_charging
+        return [0.0 if temp > limit else 1.0 for temp in temperature_series]
 
     def _ev_connected_allowance(
         self,

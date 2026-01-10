@@ -5,11 +5,13 @@ from pydantic import BaseModel
 from hass_energy.lib.source_resolver.hass_provider import (
     HassDataProvider,
     HomeAssistantHistoryPayload,
+    HomeAssistantServiceCallPayload,
 )
 from hass_energy.lib.source_resolver.hass_source import (
     HomeAssistantEntitySource,
     HomeAssistantHistoryEntitySource,
     HomeAssistantMultiEntitySource,
+    HomeAssistantServiceCallEntitySource,
 )
 from hass_energy.lib.source_resolver.sources import EntitySource
 
@@ -41,6 +43,7 @@ class ValueResolverImpl(ValueResolver):
     def hydrate_all(self) -> None:
         self._hass_data_provider.fetch_states()
         self._hass_data_provider.fetch_history()
+        self._hass_data_provider.fetch_service_calls()
 
     def hydrate_history(self) -> None:
         self._hass_data_provider.fetch_history()
@@ -56,6 +59,20 @@ class ValueResolverImpl(ValueResolver):
             except Exception as exc:
                 raise ValueError(
                     f"Failed to resolve Home Assistant entity {source.entity}: {exc}"
+                ) from exc
+        if isinstance(source, HomeAssistantServiceCallEntitySource):
+            request = source.get_service_call_request()
+            response = self._hass_data_provider.get_service_call(request)
+            current_state = self._hass_data_provider.get(source.entity)
+            try:
+                payload = HomeAssistantServiceCallPayload(
+                    response=response,
+                    current_state=current_state,
+                )
+                return source.mapper(payload)
+            except Exception as exc:
+                raise ValueError(
+                    f"Failed to resolve Home Assistant service call for {source.entity}: {exc}"
                 ) from exc
         if isinstance(source, HomeAssistantHistoryEntitySource):
             history = self._hass_data_provider.get_history(source.entity)
@@ -85,6 +102,10 @@ class ValueResolverImpl(ValueResolver):
     def mark(self, source: EntitySource[object, object]) -> None:
         if isinstance(source, HomeAssistantEntitySource):
             self._hass_data_provider.mark(source.entity)
+            return
+        if isinstance(source, HomeAssistantServiceCallEntitySource):
+            self._hass_data_provider.mark(source.entity)
+            self._hass_data_provider.mark_service_call(source.get_service_call_request())
             return
         if isinstance(source, HomeAssistantHistoryEntitySource):
             self._hass_data_provider.mark_history(source.entity, source.history_days)
