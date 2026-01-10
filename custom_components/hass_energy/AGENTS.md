@@ -8,5 +8,6 @@
 - Curtailment is exposed as a binary sensor and includes plan series attributes.
 - Shared device registry helpers live in `custom_components/hass_energy/device.py`.
 - Shared plan helpers (timestep lookup, plan series) live in `custom_components/hass_energy/coordinator.py`.
+- Coordinator uses long-polling (`/plan/await`) to receive plan updates immediately when prices change; falls back to `get_latest_plan()` on timeout or error.
 - Prefer typed model access; avoid dynamic field traversal in sensors.
 - Use `_unrecorded_attributes` for large plan arrays to keep them out of the recorder DB.
