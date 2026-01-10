@@ -5,16 +5,16 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
+from hass_energy.lib.source_resolver.hass_provider import HomeAssistantHistoryPayload
 from hass_energy.lib.source_resolver.hass_source import (
     HomeAssistantCurrencyEntitySource,
-    HomeAssistantHistoricalAverageForecastSource,
-    HomeAssistantPowerKwEntitySource,
-    HomeAssistantSolcastForecastSource,
     HomeAssistantEntitySource,
+    HomeAssistantHistoricalAverageForecastSource,
     HomeAssistantHistoryEntitySource,
     HomeAssistantMultiEntitySource,
+    HomeAssistantPowerKwEntitySource,
+    HomeAssistantSolcastForecastSource,
 )
-from hass_energy.lib.source_resolver.hass_provider import HomeAssistantHistoryPayload
 from hass_energy.lib.source_resolver.resolver import ValueResolver
 from hass_energy.lib.source_resolver.sources import EntitySource
 

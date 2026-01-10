@@ -19,7 +19,7 @@ jobs:
       - name: Sync dependencies
         run: uv sync --dev --frozen
       - name: Lint
-        run: uv run ruff check src custom_components
+        run: uv run ruff check src custom_components tests
   typecheck:
     runs-on: ubuntu-latest
     steps:
