@@ -50,33 +50,42 @@ class HassEnergyCoordinator(DataUpdateCoordinator[PlanPayload | None]):
 
     async def _async_update_data(self) -> PlanPayload | None:
         try:
-            response = await self._long_poll_for_plan()
+            response, from_long_poll = await self._long_poll_for_plan()
         except (aiohttp.ClientError, ValueError) as exc:
             raise UpdateFailed(f"Failed to fetch EMS plan: {exc}") from exc
         if response is None:
             return None
         self._last_generated_at = response.plan.generated_at.isoformat()
+        if from_long_poll:
+            self.hass.async_create_task(self.async_request_refresh())
         return PlanPayload(
             response=response,
             plan_dump=response.plan.model_dump(mode="json"),
         )
 
-    async def _long_poll_for_plan(self) -> PlanLatestResponse | None:
-        """Use long-polling to wait for new plans, falling back to latest on timeout."""
+    async def _long_poll_for_plan(self) -> tuple[PlanLatestResponse | None, bool]:
+        """Use long-polling to wait for new plans, falling back to latest on timeout.
+
+        Returns a tuple of (response, from_long_poll) where from_long_poll indicates
+        whether the response came from a successful long-poll (vs timeout/fallback).
+        """
         try:
             await_response: PlanAwaitResponse | None = await self._client.await_plan(
                 since=self._last_generated_at,
                 timeout=LONG_POLL_TIMEOUT,
             )
             if await_response is not None:
-                return PlanLatestResponse(
-                    run=await_response.run,
-                    plan=await_response.plan,
+                return (
+                    PlanLatestResponse(
+                        run=await_response.run,
+                        plan=await_response.plan,
+                    ),
+                    True,
                 )
         except aiohttp.ClientError:
             _LOGGER.debug("Long-poll failed, falling back to get_latest_plan")
 
-        return await self._client.get_latest_plan()
+        return (await self._client.get_latest_plan(), False)
 
 
 def get_timestep0(plan: EmsPlanOutput) -> TimestepPlan | None:
