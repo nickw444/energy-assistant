@@ -7,6 +7,7 @@ from hass_energy.lib.source_resolver.hass_source import (
     HomeAssistantBinarySensorEntitySource,
     HomeAssistantPercentageEntitySource,
     HomeAssistantPowerKwEntitySource,
+    HomeAssistantWeatherForecastSource,
 )
 from hass_energy.models.plant import TimeWindow
 
@@ -43,6 +44,8 @@ class ControlledEvLoad(BaseModel):
     realtime_power: HomeAssistantPowerKwEntitySource
     state_of_charge_pct: HomeAssistantPercentageEntitySource
     soc_incentives: list[SocIncentive] = Field(default_factory=_default_soc_incentives)
+    ambient_temperature_forecast: HomeAssistantWeatherForecastSource | None = None
+    maximum_ambient_temperature_for_charging: float | None = None
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -57,6 +60,19 @@ class ControlledEvLoad(BaseModel):
     def _validate_power_bounds(self) -> Self:
         if self.min_power_kw > self.max_power_kw:
             raise ValueError("min_power_kw must be <= max_power_kw")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_ambient_temperature_limit(self) -> Self:
+        fields = (
+            self.ambient_temperature_forecast,
+            self.maximum_ambient_temperature_for_charging,
+        )
+        if any(field is not None for field in fields) and any(field is None for field in fields):
+            raise ValueError(
+                "ambient_temperature_forecast and maximum_ambient_temperature_for_charging must "
+                "be provided together"
+            )
         return self
 
 

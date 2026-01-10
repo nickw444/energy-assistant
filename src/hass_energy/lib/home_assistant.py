@@ -120,3 +120,29 @@ class HomeAssistantClient:
         except httpx.HTTPError as exc:
             logger.error("Failed to fetch history data from Home Assistant: %s", exc)
             raise
+
+    def call_service(
+        self,
+        *,
+        domain: str,
+        service: str,
+        data: dict[str, object],
+    ) -> object:
+        base_url = self._config.base_url.rstrip("/")
+        if not base_url:
+            logger.warning("Home Assistant base_url not configured; skipping service call")
+            return []
+
+        url = f"{base_url}/api/services/{domain}/{service}"
+        headers = self._build_headers(self._config.token)
+        try:
+            with httpx.Client(
+                verify=self._config.verify_tls,
+                timeout=self._timeout,
+            ) as client:
+                response = client.post(url, headers=headers, json=data)
+                response.raise_for_status()
+                return response.json()
+        except httpx.HTTPError as exc:
+            logger.error("Failed to call Home Assistant service %s.%s: %s", domain, service, exc)
+            raise

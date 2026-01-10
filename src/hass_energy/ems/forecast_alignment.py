@@ -7,7 +7,11 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from hass_energy.ems.horizon import Horizon
-from hass_energy.lib.source_resolver.models import PowerForecastInterval, PriceForecastInterval
+from hass_energy.lib.source_resolver.models import (
+    PowerForecastInterval,
+    PriceForecastInterval,
+    TemperatureForecastInterval,
+)
 
 
 class ForecastInterval(Protocol):
@@ -168,6 +172,23 @@ class PriceForecastAligner:
         Optionally override the first slot with a realtime value. When an
         override is provided, a missing first slot is permitted.
         """
+        return _align_intervals(
+            horizon,
+            intervals,
+            first_slot_override=first_slot_override,
+        )
+
+
+@dataclass(slots=True)
+class TemperatureForecastAligner:
+    def align(
+        self,
+        horizon: Horizon,
+        intervals: Sequence[TemperatureForecastInterval],
+        *,
+        first_slot_override: float | None = None,
+    ) -> list[float]:
+        """Align temperature forecast intervals to the horizon."""
         return _align_intervals(
             horizon,
             intervals,

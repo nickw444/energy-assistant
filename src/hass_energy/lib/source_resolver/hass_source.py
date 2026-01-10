@@ -5,11 +5,17 @@ from typing import Annotated, Literal, TypeVar, cast
 
 from pydantic import ConfigDict, Field, model_validator
 
+from hass_energy.lib.home_assistant import HomeAssistantStateDict
 from hass_energy.lib.source_resolver.hass_provider import (
     HomeAssistantHistoryPayload,
-    HomeAssistantStateDict,
+    HomeAssistantServiceCallPayload,
+    ServiceCallRequest,
 )
-from hass_energy.lib.source_resolver.models import PowerForecastInterval, PriceForecastInterval
+from hass_energy.lib.source_resolver.models import (
+    PowerForecastInterval,
+    PriceForecastInterval,
+    TemperatureForecastInterval,
+)
 from hass_energy.lib.source_resolver.sources import EntitySource
 
 T = TypeVar("T")
@@ -241,6 +247,77 @@ class HomeAssistantSolcastForecastSource(
             end=end_dt,
             value=value_kw,
         )
+
+
+class HomeAssistantServiceCallEntitySource(EntitySource[HomeAssistantServiceCallPayload, T]):
+    type: Literal["home_assistant"]
+    entity: str = Field(min_length=1)
+    data: dict[str, object] = Field(default_factory=dict)
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    def get_service_call_request(self) -> ServiceCallRequest:
+        raise NotImplementedError
+
+
+class HomeAssistantWeatherForecastSource(
+    HomeAssistantServiceCallEntitySource[tuple[float, list[TemperatureForecastInterval]]]
+):
+    type: Literal["home_assistant"]
+    platform: Literal["weather_forecast"]
+    forecast_type: Literal["hourly"] = "hourly"
+
+    def mapper(
+        self,
+        state: HomeAssistantServiceCallPayload,
+    ) -> tuple[float, list[TemperatureForecastInterval]]:
+        current_temperature = self._current_temperature(state)
+        intervals: list[TemperatureForecastInterval] = []
+        forecasts = _extract_weather_forecast(state.response, self.entity)
+        for item in forecasts:
+            start = _parse_timestamp(item.get("datetime"))
+            if start is None:
+                continue
+            temperature = item.get("temperature")
+            if temperature is None:
+                continue
+            value = required_float(temperature)
+            end = start + datetime.timedelta(hours=1)
+            intervals.append(
+                TemperatureForecastInterval(
+                    start=start,
+                    end=end,
+                    value=value,
+                )
+            )
+        return current_temperature, intervals
+
+    def get_service_call_request(self) -> ServiceCallRequest:
+        data: dict[str, object] = {"entity_id": self.entity, "type": self.forecast_type}
+        return ServiceCallRequest(domain="weather", service="get_forecasts", data=data)
+
+    @staticmethod
+    def _current_temperature(state: HomeAssistantServiceCallPayload) -> float:
+        attributes = state.current_state.get("attributes", {})
+        return required_float(attributes.get("temperature"))
+
+
+def _extract_weather_forecast(payload: object, entity_id: str) -> list[dict[str, object]]:
+    if not isinstance(payload, dict):
+        return []
+    payload_dict = cast(dict[str, object], payload)
+    entry = payload_dict.get(entity_id)
+    if not isinstance(entry, dict):
+        return []
+    entry_dict = cast(dict[str, object], entry)
+    raw = entry_dict.get("forecast")
+    if not isinstance(raw, list):
+        return []
+    forecasts: list[dict[str, object]] = []
+    for item in cast(list[object], raw):
+        if isinstance(item, dict):
+            forecasts.append(cast(dict[str, object], item))
+    return forecasts
 
 
 class HomeAssistantHistoricalAverageForecastSource(
