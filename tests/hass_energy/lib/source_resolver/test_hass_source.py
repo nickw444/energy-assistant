@@ -5,11 +5,11 @@ from datetime import UTC, datetime
 import pytest
 
 import hass_energy.lib.source_resolver.hass_source as hass_source
+from hass_energy.lib.source_resolver.hass_provider import HomeAssistantHistoryPayload
 from hass_energy.lib.source_resolver.hass_source import (
     HomeAssistantAmberElectricForecastSource,
     HomeAssistantHistoricalAverageForecastSource,
 )
-from hass_energy.lib.source_resolver.hass_provider import HomeAssistantHistoryPayload
 
 
 def _freeze_hass_source_time(monkeypatch: pytest.MonkeyPatch, frozen: datetime) -> None:
