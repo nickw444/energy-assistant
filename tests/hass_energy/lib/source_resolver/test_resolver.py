@@ -10,6 +10,8 @@ from hass_energy.lib.home_assistant import (
 from hass_energy.lib.source_resolver.hass_provider import (
     HassDataProvider,
     HomeAssistantHistoryPayload,
+    ServiceCallRequest,
+    service_call_key,
 )
 from hass_energy.lib.source_resolver.hass_source import (
     HomeAssistantCurrencyEntitySource,
@@ -30,8 +32,11 @@ class _StubProvider(HassDataProvider):
         self.marked_history_entities: dict[str, int] = {}
         self.states: dict[str, HomeAssistantStateDict] = {}
         self.history: dict[str, list[HomeAssistantHistoryStateDict]] = {}
+        self.marked_service_calls: dict[str, ServiceCallRequest] = {}
+        self.service_calls: dict[str, object] = {}
         self.fetch_states_calls = 0
         self.fetch_history_calls = 0
+        self.fetch_service_calls_calls = 0
 
     def mark(self, entity_id: str) -> None:
         self.marked_entities.add(entity_id)
@@ -42,6 +47,10 @@ class _StubProvider(HassDataProvider):
     def fetch(self) -> None:
         self.fetch_states()
         self.fetch_history()
+        self.fetch_service_calls()
+
+    def mark_service_call(self, request: ServiceCallRequest) -> None:
+        self.marked_service_calls[service_call_key(request)] = request
 
     def get(self, entity_id: str) -> HomeAssistantStateDict:
         return self.states[entity_id]
@@ -49,11 +58,17 @@ class _StubProvider(HassDataProvider):
     def get_history(self, entity_id: str) -> list[HomeAssistantHistoryStateDict]:
         return self.history[entity_id]
 
+    def get_service_call(self, request: ServiceCallRequest) -> object:
+        return self.service_calls[service_call_key(request)]
+
     def fetch_states(self) -> None:
         self.fetch_states_calls += 1
 
     def fetch_history(self) -> None:
         self.fetch_history_calls += 1
+
+    def fetch_service_calls(self) -> None:
+        self.fetch_service_calls_calls += 1
 
 
 class _DemoConfig(BaseModel):
@@ -231,6 +246,7 @@ def test_hydration_calls_provider_methods() -> None:
 
     assert provider.fetch_states_calls == 2
     assert provider.fetch_history_calls == 2
+    assert provider.fetch_service_calls_calls == 1
 
 
 def test_resolve_entity_source() -> None:
