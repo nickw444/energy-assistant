@@ -4,6 +4,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from enum import Enum
 from typing import Literal
 
 from hass_energy.ems.models import EmsPlanOutput
@@ -14,14 +15,20 @@ from hass_energy.models.config import AppConfig
 
 logger = logging.getLogger(__name__)
 
-_SCHEDULE_INTERVAL = timedelta(minutes=1)
+_FALLBACK_INTERVAL = timedelta(minutes=1)
 _PRICE_DEBOUNCE_SECONDS = 0.75
+
+
+class RunTrigger(Enum):
+    SCHEDULED = "scheduled"
+    PRICE_CHANGE = "price_change"
+    MANUAL = "manual"
 
 
 @dataclass(slots=True)
 class PlanRunState:
     run_id: str
-    status: Literal["queued", "running", "completed", "failed"]
+    status: Literal["queued", "running", "completed", "failed", "cancelled"]
     accepted_at: datetime
     started_at: datetime | None = None
     finished_at: datetime | None = None
@@ -44,13 +51,17 @@ class Worker:
         self._condition = asyncio.Condition()
         self._in_progress = False
         self._current_run: PlanRunState | None = None
+        self._current_run_task: asyncio.Task[None] | None = None
+        self._current_run_cancelled = False
         self._latest_run: PlanRunState | None = None
         self._latest_plan: EmsPlanOutput | None = None
-        self._schedule_task: asyncio.Task[None] | None = None
+        self._scheduler_task: asyncio.Task[None] | None = None
         self._price_watcher_task: asyncio.Task[None] | None = None
         self._price_debounce_task: asyncio.Task[None] | None = None
         self._stop_event = asyncio.Event()
         self._loop: asyncio.AbstractEventLoop | None = None
+        self._run_requested = asyncio.Event()
+        self._last_run_finished_at: datetime | None = None
 
         self._price_entity_ids = {
             app_config.plant.grid.realtime_price_import.entity,
@@ -59,7 +70,7 @@ class Worker:
         self._ha_ws_client = HomeAssistantWebSocketClient(config=app_config.homeassistant)
 
     def start(self) -> None:
-        if self._schedule_task and not self._schedule_task.done():
+        if self._scheduler_task and not self._scheduler_task.done():
             return
         try:
             loop = asyncio.get_running_loop()
@@ -68,13 +79,14 @@ class Worker:
             return
         self._loop = loop
         self._stop_event.clear()
-        self._schedule_task = loop.create_task(self._run_schedule())
+        self._run_requested.clear()
+        self._scheduler_task = loop.create_task(self._run_scheduler())
         self._price_watcher_task = loop.create_task(self._run_price_watcher())
-        logger.info("Worker started (schedule + price watcher)")
+        logger.info("Worker started (scheduler + price watcher)")
 
     def stop(self) -> None:
-        if self._loop is None or self._schedule_task is None:
-            logger.info("Worker stop requested (no schedule)")
+        if self._loop is None or self._scheduler_task is None:
+            logger.info("Worker stop requested (no scheduler)")
             return
         self._stop_event.set()
         if self._price_watcher_task and not self._price_watcher_task.done():
@@ -83,10 +95,24 @@ class Worker:
             self._price_debounce_task.cancel()
         logger.info("Worker stop requested")
 
-    async def trigger_run(self) -> tuple[PlanRunState, bool]:
+    async def trigger_run(
+        self, trigger: RunTrigger = RunTrigger.MANUAL
+    ) -> tuple[PlanRunState, bool]:
         async with self._condition:
             if self._in_progress and self._current_run is not None:
-                return self._current_run, True
+                if trigger == RunTrigger.PRICE_CHANGE:
+                    logger.info(
+                        "Price change cancelling in-progress run (run_id=%s)",
+                        self._current_run.run_id,
+                    )
+                    self._current_run_cancelled = True
+                else:
+                    logger.debug(
+                        "Run already in progress (run_id=%s), skipping trigger=%s",
+                        self._current_run.run_id,
+                        trigger.value,
+                    )
+                    return self._current_run, True
             now = datetime.now(UTC)
             run_state = PlanRunState(
                 run_id=_new_run_id(),
@@ -96,8 +122,14 @@ class Worker:
             )
             self._in_progress = True
             self._current_run = run_state
+            self._current_run_cancelled = False
+            logger.info(
+                "Starting plan run (run_id=%s, trigger=%s)",
+                run_state.run_id,
+                trigger.value,
+            )
 
-        asyncio.create_task(self._run_once(run_state))
+        self._current_run_task = asyncio.create_task(self._run_once(run_state))
         return run_state, False
 
     async def get_latest(self) -> tuple[PlanRunState, EmsPlanOutput] | None:
@@ -145,6 +177,11 @@ class Worker:
                 status="completed",
                 finished_at=finished,
             )
+            logger.info(
+                "Plan run completed (run_id=%s, duration=%.2fs)",
+                run_state.run_id,
+                (finished - run_state.started_at).total_seconds() if run_state.started_at else 0,
+            )
         except Exception as exc:  # pragma: no cover - unexpected runtime failures
             logger.exception("Worker plan run failed")
             finished = datetime.now(UTC)
@@ -157,8 +194,24 @@ class Worker:
             plan = None
 
         async with self._condition:
+            if self._current_run_cancelled:
+                logger.info(
+                    "Discarding cancelled run result (run_id=%s)",
+                    run_state.run_id,
+                )
+                cancelled_state = _update_run(
+                    run_state,
+                    status="cancelled",
+                    finished_at=finished,
+                    message="Cancelled due to price change",
+                )
+                self._current_run = cancelled_state
+                self._condition.notify_all()
+                return
+
             self._in_progress = False
             self._current_run = completed_state
+            self._last_run_finished_at = finished
             if plan is not None:
                 self._latest_run = completed_state
                 self._latest_plan = plan
@@ -168,20 +221,40 @@ class Worker:
         self._resolver.hydrate_all()
         return EmsMilpPlanner(self._app_config, resolver=self._resolver).generate_ems_plan()
 
-    async def _run_schedule(self) -> None:
+    async def _run_scheduler(self) -> None:
+        """Scheduler loop: runs immediately on start, then waits for fallback interval after each run."""
+        logger.debug("Scheduler loop started")
         while not self._stop_event.is_set():
+            now = datetime.now(UTC)
+            time_until_next = self._compute_time_until_next_run(now)
+
+            if time_until_next > 0:
+                logger.debug("Scheduler waiting %.1fs until next fallback run", time_until_next)
+                try:
+                    await asyncio.wait_for(
+                        self._stop_event.wait(),
+                        timeout=time_until_next,
+                    )
+                    break
+                except TimeoutError:
+                    pass
+
+            logger.debug("Scheduler triggering fallback run")
             try:
-                await self.trigger_run()
+                await self.trigger_run(RunTrigger.SCHEDULED)
             except Exception:  # pragma: no cover - safety net
                 logger.exception("Scheduled EMS run failed to start")
 
-            try:
-                await asyncio.wait_for(
-                    self._stop_event.wait(),
-                    timeout=_SCHEDULE_INTERVAL.total_seconds(),
-                )
-            except TimeoutError:
-                continue
+            async with self._condition:
+                await self._condition.wait_for(lambda: not self._in_progress)
+
+    def _compute_time_until_next_run(self, now: datetime) -> float:
+        """Compute seconds until next fallback run should occur."""
+        if self._last_run_finished_at is None:
+            return 0.0
+        elapsed = (now - self._last_run_finished_at).total_seconds()
+        remaining = _FALLBACK_INTERVAL.total_seconds() - elapsed
+        return max(0.0, remaining)
 
     async def _run_price_watcher(self) -> None:
         logger.info("Price watcher started for entities: %s", self._price_entity_ids)
@@ -206,8 +279,8 @@ class Worker:
     async def _debounced_replan(self) -> None:
         try:
             await asyncio.sleep(_PRICE_DEBOUNCE_SECONDS)
-            logger.info("Price change detected; triggering EMS plan run")
-            await self.trigger_run()
+            logger.debug("Debounce elapsed, triggering price-change run")
+            await self.trigger_run(RunTrigger.PRICE_CHANGE)
         except asyncio.CancelledError:
             pass
         except Exception:
@@ -221,7 +294,7 @@ def _new_run_id() -> str:
 def _update_run(
     run_state: PlanRunState,
     *,
-    status: Literal["queued", "running", "completed", "failed"],
+    status: Literal["queued", "running", "completed", "failed", "cancelled"],
     finished_at: datetime | None = None,
     message: str | None = None,
 ) -> PlanRunState:
