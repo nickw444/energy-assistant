@@ -35,6 +35,15 @@ class HomeAssistantConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    def websocket_url(self) -> str:
+        """Return the WebSocket URL for this Home Assistant instance."""
+        base = self.base_url.rstrip("/")
+        if base.startswith("https://"):
+            return "wss://" + base[len("https://") :] + "/api/websocket"
+        if base.startswith("http://"):
+            return "ws://" + base[len("http://") :] + "/api/websocket"
+        return base + "/api/websocket"
+
 
 class HomeAssistantClient:
     """Tiny client for Home Assistant API interactions."""

@@ -8,12 +8,14 @@ from typing import Literal
 
 from hass_energy.ems.models import EmsPlanOutput
 from hass_energy.ems.planner import EmsMilpPlanner
+from hass_energy.lib.home_assistant_ws import HomeAssistantWebSocketClient
 from hass_energy.lib.source_resolver.resolver import ValueResolver
 from hass_energy.models.config import AppConfig
 
 logger = logging.getLogger(__name__)
 
 _SCHEDULE_INTERVAL = timedelta(minutes=1)
+_PRICE_DEBOUNCE_SECONDS = 0.75
 
 
 @dataclass(slots=True)
@@ -45,8 +47,16 @@ class Worker:
         self._latest_run: PlanRunState | None = None
         self._latest_plan: EmsPlanOutput | None = None
         self._schedule_task: asyncio.Task[None] | None = None
+        self._price_watcher_task: asyncio.Task[None] | None = None
+        self._price_debounce_task: asyncio.Task[None] | None = None
         self._stop_event = asyncio.Event()
         self._loop: asyncio.AbstractEventLoop | None = None
+
+        self._price_entity_ids = {
+            app_config.plant.grid.realtime_price_import.entity,
+            app_config.plant.grid.realtime_price_export.entity,
+        }
+        self._ha_ws_client = HomeAssistantWebSocketClient(config=app_config.homeassistant)
 
     def start(self) -> None:
         if self._schedule_task and not self._schedule_task.done():
@@ -59,14 +69,18 @@ class Worker:
         self._loop = loop
         self._stop_event.clear()
         self._schedule_task = loop.create_task(self._run_schedule())
-        logger.info("Worker schedule started")
+        self._price_watcher_task = loop.create_task(self._run_price_watcher())
+        logger.info("Worker started (schedule + price watcher)")
 
     def stop(self) -> None:
         if self._loop is None or self._schedule_task is None:
             logger.info("Worker stop requested (no schedule)")
             return
-        if not self._schedule_task.done():
-            self._stop_event.set()
+        self._stop_event.set()
+        if self._price_watcher_task and not self._price_watcher_task.done():
+            self._price_watcher_task.cancel()
+        if self._price_debounce_task and not self._price_debounce_task.done():
+            self._price_debounce_task.cancel()
         logger.info("Worker stop requested")
 
     async def trigger_run(self) -> tuple[PlanRunState, bool]:
@@ -168,6 +182,36 @@ class Worker:
                 )
             except TimeoutError:
                 continue
+
+    async def _run_price_watcher(self) -> None:
+        logger.info("Price watcher started for entities: %s", self._price_entity_ids)
+        try:
+            async for state in self._ha_ws_client.subscribe_state_changes(self._price_entity_ids):
+                if self._stop_event.is_set():
+                    break
+                logger.debug("Price entity changed: %s = %s", state["entity_id"], state["state"])
+                self._schedule_debounced_replan()
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            logger.exception("Price watcher failed unexpectedly")
+
+    def _schedule_debounced_replan(self) -> None:
+        if self._price_debounce_task and not self._price_debounce_task.done():
+            self._price_debounce_task.cancel()
+        if self._loop is None:
+            return
+        self._price_debounce_task = self._loop.create_task(self._debounced_replan())
+
+    async def _debounced_replan(self) -> None:
+        try:
+            await asyncio.sleep(_PRICE_DEBOUNCE_SECONDS)
+            logger.info("Price change detected; triggering EMS plan run")
+            await self.trigger_run()
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            logger.exception("Failed to trigger EMS plan run after price change")
 
 
 def _new_run_id() -> str:
