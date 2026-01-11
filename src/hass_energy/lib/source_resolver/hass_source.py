@@ -69,9 +69,12 @@ def _parse_timestamp(value: object) -> datetime.datetime | None:
     if text.endswith("Z"):
         text = f"{text[:-1]}+00:00"
     try:
-        return datetime.datetime.fromisoformat(text)
+        parsed = datetime.datetime.fromisoformat(text)
     except ValueError:
         return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=datetime.UTC)
+    return parsed
 
 
 def _amber_price_value(
@@ -293,8 +296,12 @@ class HomeAssistantWeatherForecastSource(
         return current_temperature, intervals
 
     def get_service_call_request(self) -> ServiceCallRequest:
-        data: dict[str, object] = {"entity_id": self.entity, "type": self.forecast_type}
-        return ServiceCallRequest(domain="weather", service="get_forecasts", data=data)
+        payload: dict[str, object] = {"entity_id": self.entity, "type": self.forecast_type}
+        return ServiceCallRequest(
+            domain="weather",
+            service="get_forecasts",
+            payload=payload,
+        )
 
     @staticmethod
     def _current_temperature(state: HomeAssistantServiceCallPayload) -> float:
@@ -306,9 +313,15 @@ def _extract_weather_forecast(payload: object, entity_id: str) -> list[dict[str,
     if not isinstance(payload, dict):
         return []
     payload_dict = cast(dict[str, object], payload)
-    entry = payload_dict.get(entity_id)
+    service_response = payload_dict.get("service_response")
+    if not isinstance(service_response, dict):
+        return []
+
+    response = cast(dict[str, object], service_response)
+    entry = response.get(entity_id)
     if not isinstance(entry, dict):
         return []
+
     entry_dict = cast(dict[str, object], entry)
     raw = entry_dict.get("forecast")
     if not isinstance(raw, list):

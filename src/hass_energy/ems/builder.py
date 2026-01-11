@@ -14,7 +14,10 @@ from hass_energy.ems.forecast_alignment import (
 )
 from hass_energy.ems.horizon import Horizon, floor_to_interval_boundary
 from hass_energy.ems.models import ResolvedForecasts
-from hass_energy.lib.source_resolver.models import PowerForecastInterval
+from hass_energy.lib.source_resolver.models import (
+    PowerForecastInterval,
+    TemperatureForecastInterval,
+)
 from hass_energy.lib.source_resolver.resolver import ValueResolver
 from hass_energy.models.config import EmsConfig
 from hass_energy.models.loads import ControlledEvLoad, LoadConfig, NonVariableLoad
@@ -1005,9 +1008,20 @@ class MILPBuilder:
         current_temperature, forecast_intervals = self._resolver.resolve(
             load.ambient_temperature_forecast
         )
+        ordered = sorted(forecast_intervals, key=lambda interval: interval.start)
+        if ordered and ordered[0].start > horizon.start:
+            ordered = [
+                TemperatureForecastInterval(
+                    start=horizon.start,
+                    end=ordered[0].start,
+                    value=current_temperature,
+                ),
+                *ordered,
+            ]
+
         temperature_series = self._temperature_aligner.align(
             horizon,
-            forecast_intervals,
+            ordered,
             first_slot_override=current_temperature,
         )
         limit = load.maximum_ambient_temperature_for_charging

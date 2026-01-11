@@ -126,7 +126,8 @@ class HomeAssistantClient:
         *,
         domain: str,
         service: str,
-        data: dict[str, object],
+        payload: dict[str, object],
+        return_response: bool = True,
     ) -> object:
         base_url = self._config.base_url.rstrip("/")
         if not base_url:
@@ -135,12 +136,15 @@ class HomeAssistantClient:
 
         url = f"{base_url}/api/services/{domain}/{service}"
         headers = self._build_headers(self._config.token)
+        payload = dict(payload)
+        params = {"return_response": "true"} if return_response else None
+
         try:
             with httpx.Client(
                 verify=self._config.verify_tls,
                 timeout=self._timeout,
             ) as client:
-                response = client.post(url, headers=headers, json=data)
+                response = client.post(url, headers=headers, json=payload, params=params)
                 response.raise_for_status()
                 return response.json()
         except httpx.HTTPError as exc:

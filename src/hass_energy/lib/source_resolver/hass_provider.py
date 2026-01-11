@@ -26,11 +26,11 @@ class HomeAssistantServiceCallPayload:
 class ServiceCallRequest:
     domain: str
     service: str
-    data: dict[str, object]
+    payload: dict[str, object]
 
 
 def service_call_key(request: ServiceCallRequest) -> str:
-    payload = json.dumps(request.data, sort_keys=True, default=str)
+    payload = json.dumps(request.payload, sort_keys=True, default=str)
     return f"{request.domain}:{request.service}:{payload}"
 
 
@@ -110,7 +110,8 @@ class HassDataProviderImpl(HassDataProvider):
             response = self._hass_client.call_service(
                 domain=request.domain,
                 service=request.service,
-                data=request.data,
+                payload=request.payload,
+                return_response=True,
             )
             service_call_data[key] = response
         self._service_call_data = service_call_data
