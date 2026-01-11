@@ -208,7 +208,7 @@ def test_price_aligner_averages_over_longer_slot() -> None:
 
     series = PriceForecastAligner().align(horizon, intervals)
 
-    assert series[0] == pytest.approx((0.1 * 10 + 0.3 * 5) / 15)
+    assert series[0] == pytest.approx((0.1 * 10 + 0.3 * 5) / 15)  # type: ignore[reportUnknownMemberType]
 
 
 def test_power_aligner_handles_variable_slot_sizes() -> None:
@@ -236,7 +236,7 @@ def test_power_aligner_handles_variable_slot_sizes() -> None:
     series = PowerForecastAligner().align(horizon, intervals)
 
     assert series[0] == 1.0
-    assert series[1] == pytest.approx(4.5)
+    assert series[1] == pytest.approx(4.5)  # type: ignore[reportUnknownMemberType]
 
 
 def test_power_aligner_raises_on_gap_inside_slot() -> None:

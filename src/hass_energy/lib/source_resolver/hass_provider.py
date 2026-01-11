@@ -1,5 +1,6 @@
 import datetime as dt
 from dataclasses import dataclass
+from typing import Protocol
 
 from hass_energy.lib.home_assistant import (
     HomeAssistantClient,
@@ -14,7 +15,23 @@ class HomeAssistantHistoryPayload:
     current_state: HomeAssistantStateDict
 
 
-class HassDataProvider:
+class HassDataProvider(Protocol):
+    def fetch(self) -> None: ...
+
+    def fetch_states(self) -> None: ...
+
+    def fetch_history(self) -> None: ...
+
+    def get(self, entity_id: str) -> HomeAssistantStateDict: ...
+
+    def get_history(self, entity_id: str) -> list[HomeAssistantHistoryStateDict]: ...
+
+    def mark(self, entity_id: str) -> None: ...
+
+    def mark_history(self, entity_id: str, history_days: int) -> None: ...
+
+
+class HassDataProviderImpl(HassDataProvider):
     def __init__(self, *, hass_client: HomeAssistantClient) -> None:
         self._hass_client = hass_client
         self.marked_entities: set[str] = set()
