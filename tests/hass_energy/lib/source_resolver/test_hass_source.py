@@ -10,10 +10,14 @@ from hass_energy.lib.home_assistant import (
     HomeAssistantHistoryStateDict,
     HomeAssistantStateDict,
 )
-from hass_energy.lib.source_resolver.hass_provider import HomeAssistantHistoryPayload
+from hass_energy.lib.source_resolver.hass_provider import (
+    HomeAssistantHistoryPayload,
+    HomeAssistantServiceCallPayload,
+)
 from hass_energy.lib.source_resolver.hass_source import (
     HomeAssistantAmberElectricForecastSource,
     HomeAssistantHistoricalAverageForecastSource,
+    HomeAssistantWeatherForecastSource,
 )
 
 
@@ -281,3 +285,59 @@ def test_amber_forecast_spot_requires_spot_price() -> None:
 
     with pytest.raises(ValueError, match="Spot price is required"):
         source.mapper(state)
+
+
+def test_weather_forecast_service_response_parsing() -> None:
+    source = HomeAssistantWeatherForecastSource(
+        type="home_assistant",
+        platform="weather_forecast",
+        entity="weather.oatley_hourly",
+        forecast_type="hourly",
+    )
+    payload = {
+        "service_response": {
+            "weather.oatley_hourly": {
+                "forecast": [
+                    {"datetime": "2026-01-11T17:00:00", "temperature": 21.0},
+                    {"datetime": "2026-01-11T18:00:00", "temperature": 22.5},
+                ]
+            }
+        }
+    }
+    current_state: HomeAssistantStateDict = {
+        "entity_id": "weather.oatley_hourly",
+        "state": "rainy",
+        "attributes": {"temperature": 18.9},
+        "last_changed": "2026-01-11T06:37:04+00:00",
+        "last_reported": "2026-01-11T06:37:04+00:00",
+        "last_updated": "2026-01-11T06:37:04+00:00",
+    }
+
+    current_temperature, intervals = source.mapper(
+        HomeAssistantServiceCallPayload(response=payload, current_state=current_state)
+    )
+
+    assert current_temperature == pytest.approx(18.9)  # type: ignore[reportUnknownMemberType]
+    assert len(intervals) == 2
+    assert intervals[0].start.tzinfo is not None
+    assert intervals[1].start.tzinfo is not None
+    assert intervals[0].value == pytest.approx(21.0)  # type: ignore[reportUnknownMemberType]
+    assert intervals[1].value == pytest.approx(22.5)  # type: ignore[reportUnknownMemberType]
+
+
+def test_weather_forecast_service_call_request_shape() -> None:
+    source = HomeAssistantWeatherForecastSource(
+        type="home_assistant",
+        platform="weather_forecast",
+        entity="weather.oatley_hourly",
+        forecast_type="hourly",
+    )
+
+    request = source.get_service_call_request()
+
+    assert request.domain == "weather"
+    assert request.service == "get_forecasts"
+    assert request.payload == {
+        "entity_id": "weather.oatley_hourly",
+        "type": "hourly",
+    }
