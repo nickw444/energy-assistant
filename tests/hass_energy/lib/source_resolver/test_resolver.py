@@ -1,11 +1,16 @@
 from __future__ import annotations
 
-from typing import Any
-
 import pytest
 from pydantic import BaseModel
 
-from hass_energy.lib.source_resolver.hass_provider import HomeAssistantHistoryPayload
+from hass_energy.lib.home_assistant import (
+    HomeAssistantHistoryStateDict,
+    HomeAssistantStateDict,
+)
+from hass_energy.lib.source_resolver.hass_provider import (
+    HassDataProvider,
+    HomeAssistantHistoryPayload,
+)
 from hass_energy.lib.source_resolver.hass_source import (
     HomeAssistantCurrencyEntitySource,
     HomeAssistantEntitySource,
@@ -15,16 +20,16 @@ from hass_energy.lib.source_resolver.hass_source import (
     HomeAssistantPowerKwEntitySource,
     HomeAssistantSolcastForecastSource,
 )
-from hass_energy.lib.source_resolver.resolver import ValueResolver
+from hass_energy.lib.source_resolver.resolver import ValueResolverImpl
 from hass_energy.lib.source_resolver.sources import EntitySource
 
 
-class _StubProvider:
+class _StubProvider(HassDataProvider):
     def __init__(self) -> None:
         self.marked_entities: set[str] = set()
         self.marked_history_entities: dict[str, int] = {}
-        self.states: dict[str, dict[str, Any]] = {}
-        self.history: dict[str, list[dict[str, Any]]] = {}
+        self.states: dict[str, HomeAssistantStateDict] = {}
+        self.history: dict[str, list[HomeAssistantHistoryStateDict]] = {}
         self.fetch_states_calls = 0
         self.fetch_history_calls = 0
 
@@ -34,10 +39,14 @@ class _StubProvider:
     def mark_history(self, entity_id: str, history_days: int) -> None:
         self.marked_history_entities[entity_id] = history_days
 
-    def get(self, entity_id: str) -> dict[str, Any]:
+    def fetch(self) -> None:
+        self.fetch_states()
+        self.fetch_history()
+
+    def get(self, entity_id: str) -> HomeAssistantStateDict:
         return self.states[entity_id]
 
-    def get_history(self, entity_id: str) -> list[dict[str, Any]]:
+    def get_history(self, entity_id: str) -> list[HomeAssistantHistoryStateDict]:
         return self.history[entity_id]
 
     def fetch_states(self) -> None:
@@ -62,27 +71,27 @@ class _TupleConfig(BaseModel):
 
 
 class _SimpleEntitySource(HomeAssistantEntitySource[int]):
-    def mapper(self, state: dict[str, Any]) -> int:
+    def mapper(self, state: HomeAssistantStateDict) -> int:
         return 42
 
 
 class _SimpleHistorySource(HomeAssistantHistoryEntitySource[int]):
-    def mapper(self, payload: HomeAssistantHistoryPayload) -> int:
-        return len(payload.history)
+    def mapper(self, state: HomeAssistantHistoryPayload) -> int:
+        return len(state.history)
 
 
 class _SimpleMultiSource(HomeAssistantMultiEntitySource[int]):
-    def mapper(self, states: list[dict[str, Any]]) -> int:
-        return len(states)
+    def mapper(self, state: list[HomeAssistantStateDict]) -> int:
+        return len(state)
 
 
 class _ExplodingHistorySource(HomeAssistantHistoryEntitySource[int]):
-    def mapper(self, payload: HomeAssistantHistoryPayload) -> int:
+    def mapper(self, state: HomeAssistantHistoryPayload) -> int:
         raise RuntimeError("boom")
 
 
 class _ExplodingMultiSource(HomeAssistantMultiEntitySource[int]):
-    def mapper(self, states: list[dict[str, Any]]) -> int:
+    def mapper(self, state: list[HomeAssistantStateDict]) -> int:
         raise RuntimeError("boom")
 
 
@@ -93,7 +102,7 @@ class _UnsupportedSource(EntitySource[int, int]):
 
 def test_mark_for_hydration_walks_nested_config() -> None:
     provider = _StubProvider()
-    resolver = ValueResolver(provider)
+    resolver = ValueResolverImpl(provider)
     config = _DemoConfig(
         power=HomeAssistantPowerKwEntitySource(
             type="home_assistant",
@@ -146,7 +155,7 @@ def test_mark_for_hydration_walks_nested_config() -> None:
 
 def test_mark_for_hydration_handles_tuples_and_nones() -> None:
     provider = _StubProvider()
-    resolver = ValueResolver(provider)
+    resolver = ValueResolverImpl(provider)
     config = _TupleConfig(
         primary=None,
         sources=(
@@ -168,7 +177,7 @@ def test_mark_for_hydration_handles_tuples_and_nones() -> None:
 
 def test_mark_for_hydration_marks_realtime_when_window_configured() -> None:
     provider = _StubProvider()
-    resolver = ValueResolver(provider)
+    resolver = ValueResolverImpl(provider)
     config = _DemoConfig(
         power=HomeAssistantPowerKwEntitySource(
             type="home_assistant",
@@ -214,7 +223,7 @@ def test_mark_for_hydration_marks_realtime_when_window_configured() -> None:
 
 def test_hydration_calls_provider_methods() -> None:
     provider = _StubProvider()
-    resolver = ValueResolver(provider)
+    resolver = ValueResolverImpl(provider)
 
     resolver.hydrate_all()
     resolver.hydrate_states()
@@ -222,6 +231,25 @@ def test_hydration_calls_provider_methods() -> None:
 
     assert provider.fetch_states_calls == 2
     assert provider.fetch_history_calls == 2
+
+
+def test_resolve_entity_source() -> None:
+    provider = _StubProvider()
+    provider.states["sensor.simple"] = {
+        "entity_id": "sensor.simple",
+        "state": 1,
+        "attributes": {},
+        "last_changed": "2026-01-07T03:30:00+00:00",
+        "last_reported": "2026-01-07T03:30:00+00:00",
+        "last_updated": "2026-01-07T03:30:00+00:00",
+    }
+    resolver = ValueResolverImpl(provider)
+    source = _SimpleEntitySource(
+        type="home_assistant",
+        entity="sensor.simple",
+    )
+
+    assert resolver.resolve(source) == 42
 
 
 def test_resolve_wraps_mapper_errors() -> None:
@@ -234,7 +262,7 @@ def test_resolve_wraps_mapper_errors() -> None:
         "last_reported": "2026-01-07T03:30:00+00:00",
         "last_updated": "2026-01-07T03:30:00+00:00",
     }
-    resolver = ValueResolver(provider)
+    resolver = ValueResolverImpl(provider)
     source = HomeAssistantPowerKwEntitySource(
         type="home_assistant",
         entity="sensor.load",
@@ -255,7 +283,7 @@ def test_resolve_history_source() -> None:
         "last_reported": "2026-01-07T03:30:00+00:00",
         "last_updated": "2026-01-07T03:30:00+00:00",
     }
-    resolver = ValueResolver(provider)
+    resolver = ValueResolverImpl(provider)
     source = _SimpleHistorySource(
         type="home_assistant",
         entity="sensor.history",
@@ -283,7 +311,7 @@ def test_resolve_multi_entity_source() -> None:
         "last_reported": "2026-01-07T03:30:00+00:00",
         "last_updated": "2026-01-07T03:30:00+00:00",
     }
-    resolver = ValueResolver(provider)
+    resolver = ValueResolverImpl(provider)
     source = _SimpleMultiSource(
         type="home_assistant",
         entities=["sensor.a", "sensor.b"],
@@ -303,7 +331,7 @@ def test_resolve_history_wraps_mapper_errors() -> None:
         "last_reported": "2026-01-07T03:30:00+00:00",
         "last_updated": "2026-01-07T03:30:00+00:00",
     }
-    resolver = ValueResolver(provider)
+    resolver = ValueResolverImpl(provider)
     source = _ExplodingHistorySource(
         type="home_assistant",
         entity="sensor.history",
@@ -332,7 +360,7 @@ def test_resolve_multi_entity_wraps_mapper_errors() -> None:
         "last_reported": "2026-01-07T03:30:00+00:00",
         "last_updated": "2026-01-07T03:30:00+00:00",
     }
-    resolver = ValueResolver(provider)
+    resolver = ValueResolverImpl(provider)
     source = _ExplodingMultiSource(
         type="home_assistant",
         entities=["sensor.a", "sensor.b"],
@@ -344,7 +372,7 @@ def test_resolve_multi_entity_wraps_mapper_errors() -> None:
 
 def test_resolve_unsupported_source_type() -> None:
     provider = _StubProvider()
-    resolver = ValueResolver(provider)
+    resolver = ValueResolverImpl(provider)
     source = _UnsupportedSource()
 
     with pytest.raises(ValueError, match="Unsupported source type"):

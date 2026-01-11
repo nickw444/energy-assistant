@@ -88,7 +88,7 @@ Energy management system that pulls Home Assistant data, plans using MILP (stub 
 
 ### Development
 - Format/lint: `uv run ruff check src custom_components tests`
-- Type check: `uv run pyright src custom_components`
+- Type check: `uv run pyright`
 - Entry point: `uv run hass-energy`
 
 ### Roadmap placeholders

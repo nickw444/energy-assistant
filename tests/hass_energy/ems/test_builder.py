@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from datetime import UTC, datetime, timedelta
+from typing import TypeVar, cast
 
 import pytest
 
@@ -15,6 +16,8 @@ from hass_energy.lib.source_resolver.hass_source import (
     HomeAssistantSolcastForecastSource,
 )
 from hass_energy.lib.source_resolver.models import PowerForecastInterval, PriceForecastInterval
+from hass_energy.lib.source_resolver.resolver import ValueResolver
+from hass_energy.lib.source_resolver.sources import EntitySource
 from hass_energy.models.config import AppConfig, EmsConfig, ServerConfig
 from hass_energy.models.plant import (
     GridConfig,
@@ -24,8 +27,11 @@ from hass_energy.models.plant import (
     PvConfig,
 )
 
+Q = TypeVar("Q")
+R = TypeVar("R")
 
-class DummyResolver:
+
+class DummyResolver(ValueResolver):
     def __init__(
         self,
         *,
@@ -39,18 +45,33 @@ class DummyResolver:
         self._realtime_values = realtime_values
         self._load_forecasts = load_forecasts or {}
 
-    def resolve(self, source: object) -> object:
+    def mark_for_hydration(self, value: object) -> None:
+        _ = value
+
+    def hydrate_all(self) -> None:
+        return
+
+    def hydrate_history(self) -> None:
+        return
+
+    def hydrate_states(self) -> None:
+        return
+
+    def mark(self, source: object) -> None:
+        _ = source
+
+    def resolve(self, source: EntitySource[Q, R]) -> R:
         if isinstance(source, HomeAssistantAmberElectricForecastSource):
-            return self._price_forecasts[source.entity]
+            return cast(R, self._price_forecasts[source.entity])
         if isinstance(source, HomeAssistantSolcastForecastSource):
-            return self._pv_forecasts[source.entities[0]]
+            return cast(R, self._pv_forecasts[source.entities[0]])
         if isinstance(source, HomeAssistantHistoricalAverageForecastSource):
-            return self._load_forecasts[source.entity]
+            return cast(R, self._load_forecasts[source.entity])
         if isinstance(
             source,
             (HomeAssistantPowerKwEntitySource, HomeAssistantCurrencyEntitySource),
         ):
-            return self._realtime_values[source.entity]
+            return cast(R, self._realtime_values[source.entity])
         raise TypeError(f"Unhandled source type: {type(source).__name__}")
 
 
@@ -415,6 +436,8 @@ def test_pv_forecast_reused_per_inverter() -> None:
 
     plan = EmsMilpPlanner(config, resolver=resolver).generate_ems_plan(now=now)
     step = plan.timesteps[0]
+    assert step.inverters["a"].pv_kw is not None
+    assert step.inverters["b"].pv_kw is not None
     assert abs(step.inverters["a"].pv_kw - 1.5) < 1e-6
     assert abs(step.inverters["b"].pv_kw - 1.5) < 1e-6
     pv_total = sum(inv.pv_kw or 0.0 for inv in step.inverters.values())
@@ -679,7 +702,7 @@ def test_variable_horizon_averages_into_coarse_slot() -> None:
     plan = EmsMilpPlanner(config, resolver=resolver).generate_ems_plan(now=now)
     durations = [step.duration_s for step in plan.timesteps]
     assert durations == [300.0] * 6 + [1800.0]
-    assert plan.timesteps[-1].economics.price_import == pytest.approx(9.5)
+    assert plan.timesteps[-1].economics.price_import == pytest.approx(9.5)  # type: ignore[reportUnknownMemberType]
 
 
 def test_realtime_pv_allows_missing_first_forecast_slot() -> None:
@@ -747,8 +770,8 @@ def test_realtime_pv_allows_missing_first_forecast_slot() -> None:
 
     plan = EmsMilpPlanner(config, resolver=resolver).generate_ems_plan(now=now)
     assert len(plan.timesteps) == 2
-    assert plan.timesteps[0].inverters["inv"].pv_kw == pytest.approx(2.5)
-    assert plan.timesteps[1].inverters["inv"].pv_kw == pytest.approx(1.0)
+    assert plan.timesteps[0].inverters["inv"].pv_kw == pytest.approx(2.5)  # type: ignore[reportUnknownMemberType]
+    assert plan.timesteps[1].inverters["inv"].pv_kw == pytest.approx(1.0)  # type: ignore[reportUnknownMemberType]
 
 
 def test_load_aware_curtailment_active_with_negative_price_without_export() -> None:
