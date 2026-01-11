@@ -18,8 +18,9 @@ from hass_energy.api.server import create_app
 from hass_energy.config import load_app_config
 from hass_energy.ems.planner import EmsMilpPlanner
 from hass_energy.lib.home_assistant import HomeAssistantClient
-from hass_energy.lib.source_resolver.hass_provider import HassDataProvider
-from hass_energy.lib.source_resolver.resolver import ValueResolver
+from hass_energy.lib.home_assistant_ws import HomeAssistantWebSocketClientImpl
+from hass_energy.lib.source_resolver.hass_provider import HassDataProviderImpl
+from hass_energy.lib.source_resolver.resolver import ValueResolverImpl
 from hass_energy.plotting import plot_plan
 from hass_energy.worker import Worker
 
@@ -59,10 +60,11 @@ def cli(ctx: click.Context, config: Path, log_level: str) -> int | None:
     app_config = load_app_config(config)
 
     hass_client = HomeAssistantClient(config=app_config.homeassistant)
-    hass_data_provider = HassDataProvider(hass_client=hass_client)
+    hass_data_provider = HassDataProviderImpl(hass_client=hass_client)
 
-    resolver = ValueResolver(hass_data_provider=hass_data_provider)
-    worker = Worker(app_config=app_config, resolver=resolver)
+    resolver = ValueResolverImpl(hass_data_provider=hass_data_provider)
+    ha_ws_client = HomeAssistantWebSocketClientImpl(config=app_config.homeassistant)
+    worker = Worker(app_config=app_config, resolver=resolver, ha_ws_client=ha_ws_client)
     shutdown_event = Event()
 
     def _handle_signal(signum: int, _frame: object) -> None:
@@ -166,9 +168,9 @@ def ems_solve(
 
     try:
         hass_client = HomeAssistantClient(config=app_config.homeassistant)
-        hass_data_provider = HassDataProvider(hass_client=hass_client)
+        hass_data_provider = HassDataProviderImpl(hass_client=hass_client)
 
-        resolver = ValueResolver(hass_data_provider=hass_data_provider)
+        resolver = ValueResolverImpl(hass_data_provider=hass_data_provider)
         resolver.mark_for_hydration(app_config)
         resolver.hydrate_all()
 
@@ -224,9 +226,9 @@ def ems_record_fixture(ctx: click.Context, output: Path | None, name: str | None
 
     try:
         hass_client = HomeAssistantClient(config=app_config.homeassistant)
-        hass_data_provider = HassDataProvider(hass_client=hass_client)
+        hass_data_provider = HassDataProviderImpl(hass_client=hass_client)
 
-        resolver = ValueResolver(hass_data_provider=hass_data_provider)
+        resolver = ValueResolverImpl(hass_data_provider=hass_data_provider)
         resolver.mark_for_hydration(app_config)
         resolver.hydrate_all()
     except Exception as exc:
@@ -257,9 +259,9 @@ def hydrate_load_forecast(ctx: click.Context, limit: int) -> None:
 
     try:
         hass_client = HomeAssistantClient(config=app_config.homeassistant)
-        hass_data_provider = HassDataProvider(hass_client=hass_client)
+        hass_data_provider = HassDataProviderImpl(hass_client=hass_client)
 
-        resolver = ValueResolver(hass_data_provider=hass_data_provider)
+        resolver = ValueResolverImpl(hass_data_provider=hass_data_provider)
         resolver.mark_for_hydration(app_config)
         resolver.hydrate_all()
 

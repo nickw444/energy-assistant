@@ -16,7 +16,7 @@ from hass_energy.models.config import AppConfig
 logger = logging.getLogger(__name__)
 
 _FALLBACK_INTERVAL = timedelta(minutes=1)
-_PRICE_DEBOUNCE_SECONDS = 0.75
+PRICE_DEBOUNCE_SECONDS = 0.75
 
 
 class RunTrigger(Enum):
@@ -43,6 +43,7 @@ class Worker:
         *,
         app_config: AppConfig,
         resolver: ValueResolver,
+        ha_ws_client: HomeAssistantWebSocketClient,
     ) -> None:
         self._app_config = app_config
         self._resolver = resolver
@@ -67,9 +68,9 @@ class Worker:
             app_config.plant.grid.realtime_price_import.entity,
             app_config.plant.grid.realtime_price_export.entity,
         }
-        self._ha_ws_client = HomeAssistantWebSocketClient(config=app_config.homeassistant)
+        self._ha_ws_client = ha_ws_client
 
-    def start(self) -> None:
+    def start(self, *, start_scheduler: bool = True, start_price_watcher: bool = True) -> None:
         if self._scheduler_task and not self._scheduler_task.done():
             return
         try:
@@ -80,15 +81,23 @@ class Worker:
         self._loop = loop
         self._stop_event.clear()
         self._run_requested.clear()
-        self._scheduler_task = loop.create_task(self._run_scheduler())
-        self._price_watcher_task = loop.create_task(self._run_price_watcher())
-        logger.info("Worker started (scheduler + price watcher)")
+        if start_scheduler:
+            self._scheduler_task = loop.create_task(self._run_scheduler())
+        if start_price_watcher:
+            self._price_watcher_task = loop.create_task(self._run_price_watcher())
+        logger.info(
+            "Worker started (scheduler=%s, price_watcher=%s)",
+            start_scheduler,
+            start_price_watcher,
+        )
 
     def stop(self) -> None:
-        if self._loop is None or self._scheduler_task is None:
-            logger.info("Worker stop requested (no scheduler)")
+        if self._loop is None:
+            logger.info("Worker stop requested (no event loop)")
             return
         self._stop_event.set()
+        if self._scheduler_task and not self._scheduler_task.done():
+            self._scheduler_task.cancel()
         if self._price_watcher_task and not self._price_watcher_task.done():
             self._price_watcher_task.cancel()
         if self._price_debounce_task and not self._price_debounce_task.done():
@@ -272,13 +281,18 @@ class Worker:
     def _schedule_debounced_replan(self) -> None:
         if self._price_debounce_task and not self._price_debounce_task.done():
             self._price_debounce_task.cancel()
-        if self._loop is None:
-            return
-        self._price_debounce_task = self._loop.create_task(self._debounced_replan())
+        loop = self._loop
+        if loop is None:
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                return
+            self._loop = loop
+        self._price_debounce_task = loop.create_task(self._debounced_replan())
 
     async def _debounced_replan(self) -> None:
         try:
-            await asyncio.sleep(_PRICE_DEBOUNCE_SECONDS)
+            await asyncio.sleep(PRICE_DEBOUNCE_SECONDS)
             logger.debug("Debounce elapsed, triggering price-change run")
             await self.trigger_run(RunTrigger.PRICE_CHANGE)
         except asyncio.CancelledError:
