@@ -87,7 +87,7 @@ Energy management system that pulls Home Assistant data, plans using MILP (stub 
 - Plans are written to `<data_dir>/plans/latest.json` from the config file.
 
 ### Development
-- Format/lint: `uv run ruff check src`
+- Format/lint: `uv run ruff check src custom_components tests`
 - Type check: `uv run pyright`
 - Entry point: `uv run hass-energy`
 

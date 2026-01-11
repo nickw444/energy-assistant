@@ -5,7 +5,7 @@ import json
 import logging
 import ssl
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Any, Protocol
 
 import websockets
 from websockets import ConnectionClosedError
@@ -16,7 +16,14 @@ from hass_energy.lib.home_assistant import HomeAssistantConfig, HomeAssistantSta
 logger = logging.getLogger(__name__)
 
 
-class HomeAssistantWebSocketClient:
+class HomeAssistantWebSocketClient(Protocol):
+    def subscribe_state_changes(
+        self,
+        entity_ids: set[str],
+    ) -> AsyncIterator[HomeAssistantStateDict]: ...
+
+
+class HomeAssistantWebSocketClientImpl(HomeAssistantWebSocketClient):
     """Async WebSocket client for Home Assistant state change subscriptions."""
 
     def __init__(self, *, config: HomeAssistantConfig) -> None:

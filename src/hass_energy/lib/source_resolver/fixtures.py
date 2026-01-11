@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import TypedDict
 
 from hass_energy.lib.source_resolver.hass_provider import (
+    HassDataProvider,
     HomeAssistantHistoryStateDict,
     HomeAssistantStateDict,
 )
@@ -27,7 +28,7 @@ def load_hass_fixture(path: Path) -> HassFixture:
 
 
 @dataclass(slots=True)
-class FixtureHassDataProvider:
+class FixtureHassDataProvider(HassDataProvider):
     states: dict[str, HomeAssistantStateDict]
     history: dict[str, list[HomeAssistantHistoryStateDict]]
 
@@ -52,10 +53,13 @@ class FixtureHassDataProvider:
     def get_history(self, entity_id: str) -> list[HomeAssistantHistoryStateDict]:
         return self.history[entity_id]
 
-    def mark(self, _entity_id: str) -> None:
+    def mark(self, entity_id: str) -> None:
         # Fixtures are static; no-op to satisfy resolver interface.
+        _ = entity_id
         return
 
-    def mark_history(self, _entity_id: str, _history_days: int) -> None:
+    def mark_history(self, entity_id: str, history_days: int) -> None:
         # Fixtures are static; no-op to satisfy resolver interface.
+        _ = entity_id
+        _ = history_days
         return
