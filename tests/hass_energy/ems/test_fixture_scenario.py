@@ -8,7 +8,7 @@ import pytest
 from hass_energy.config import load_app_config
 from hass_energy.ems.planner import EmsMilpPlanner
 from hass_energy.lib.source_resolver.fixtures import FixtureHassDataProvider
-from hass_energy.lib.source_resolver.resolver import ValueResolver
+from hass_energy.lib.source_resolver.resolver import ValueResolverImpl
 
 
 def _freeze_hass_source_time(monkeypatch: pytest.MonkeyPatch, frozen: datetime | None) -> None:
@@ -39,7 +39,7 @@ def test_fixture_scenario_snapshot(snapshot: object, monkeypatch: pytest.MonkeyP
     provider, captured_at = FixtureHassDataProvider.from_path(fixture_path)
     now = datetime.fromisoformat(captured_at) if captured_at else None
     _freeze_hass_source_time(monkeypatch, now)
-    resolver = ValueResolver(hass_data_provider=provider)
+    resolver = ValueResolverImpl(hass_data_provider=provider)
     resolver.mark_for_hydration(app_config)
     resolver.hydrate_all()
 

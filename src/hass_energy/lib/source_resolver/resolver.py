@@ -1,4 +1,4 @@
-from typing import TypeVar, cast
+from typing import Protocol, TypeVar, cast
 
 from pydantic import BaseModel
 
@@ -17,7 +17,21 @@ Q = TypeVar("Q")
 R = TypeVar("R")
 
 
-class ValueResolver:
+class ValueResolver(Protocol):
+    def mark_for_hydration(self, value: object) -> None: ...
+
+    def hydrate_all(self) -> None: ...
+
+    def hydrate_history(self) -> None: ...
+
+    def hydrate_states(self) -> None: ...
+
+    def resolve(self, source: EntitySource[Q, R]) -> R: ...
+
+    def mark(self, source: EntitySource[object, object]) -> None: ...
+
+
+class ValueResolverImpl(ValueResolver):
     def __init__(self, hass_data_provider: HassDataProvider) -> None:
         self._hass_data_provider = hass_data_provider
 

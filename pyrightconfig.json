@@ -1,5 +1,5 @@
 {
-  "include": ["src", "custom_components"],
+  "include": ["src", "custom_components", "tests"],
   "typeCheckingMode": "strict",
   "reportMissingImports": true,
   "reportMissingTypeStubs": false,
