@@ -17,7 +17,11 @@ import yaml
 
 from hass_energy.api.server import create_app
 from hass_energy.config import load_app_config
-from hass_energy.ems.fixture_harness import resolve_ems_fixture_paths, serialize_plan
+from hass_energy.ems.fixture_harness import (
+    EmsFixturePaths,
+    resolve_ems_fixture_paths,
+    serialize_plan,
+)
 from hass_energy.ems.planner import EmsMilpPlanner
 from hass_energy.lib.home_assistant import HomeAssistantClient
 from hass_energy.lib.home_assistant_ws import HomeAssistantWebSocketClientImpl
@@ -180,6 +184,7 @@ def ems_solve(
     _configure_logging(str(ctx.obj.get("log_level", "INFO")))
     config_path = Path(ctx.obj.get("config", Path("config.yaml")))
     use_fixture = scenario is not None
+    paths: EmsFixturePaths | None = None
     if use_fixture:
         paths = resolve_ems_fixture_paths(scenario_dir, scenario)
         if not paths.fixture_path.exists() or not paths.config_path.exists():
@@ -200,6 +205,8 @@ def ems_solve(
 
     try:
         if use_fixture:
+            if paths is None:
+                raise click.ClickException("Fixture paths not resolved.")
             provider, captured_at = FixtureHassDataProvider.from_path(paths.fixture_path)
             now = datetime.fromisoformat(captured_at) if captured_at else None
             resolver = ValueResolverImpl(hass_data_provider=provider)

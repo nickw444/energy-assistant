@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Iterator, TypedDict
+from typing import TypedDict
 
 from hass_energy.lib.source_resolver.hass_provider import (
     HassDataProvider,
