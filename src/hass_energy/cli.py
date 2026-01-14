@@ -13,14 +13,25 @@ from threading import Event
 
 import click
 import uvicorn
+import yaml
 
 from hass_energy.api.server import create_app
 from hass_energy.config import load_app_config
+from hass_energy.ems.fixture_harness import (
+    EmsFixturePaths,
+    resolve_ems_fixture_paths,
+    serialize_plan,
+)
 from hass_energy.ems.planner import EmsMilpPlanner
 from hass_energy.lib.home_assistant import HomeAssistantClient
 from hass_energy.lib.home_assistant_ws import HomeAssistantWebSocketClientImpl
+from hass_energy.lib.source_resolver.fixtures import (
+    FixtureHassDataProvider,
+    freeze_hass_source_time,
+)
 from hass_energy.lib.source_resolver.hass_provider import HassDataProviderImpl
 from hass_energy.lib.source_resolver.resolver import ValueResolverImpl
+from hass_energy.models.config import AppConfig
 from hass_energy.plotting import plot_plan
 from hass_energy.worker import Worker
 
@@ -146,6 +157,19 @@ def ems(ctx: click.Context) -> None:
     show_default=True,
     help="Enable solver output (CBC).",
 )
+@click.option(
+    "--scenario",
+    type=str,
+    default=None,
+    help="Replay a recorded scenario from tests/fixtures/ems/<name>.",
+)
+@click.option(
+    "--scenario-dir",
+    type=click.Path(path_type=Path, file_okay=False),
+    default=Path("tests/fixtures/ems"),
+    show_default=True,
+    help="Base directory containing scenario bundles.",
+)
 @click.pass_context
 def ems_solve(
     ctx: click.Context,
@@ -154,9 +178,22 @@ def ems_solve(
     plot: bool,
     plot_output: Path | None,
     solver_msg: bool,
+    scenario: str | None,
+    scenario_dir: Path,
 ) -> None:
     _configure_logging(str(ctx.obj.get("log_level", "INFO")))
     config_path = Path(ctx.obj.get("config", Path("config.yaml")))
+    use_fixture = scenario is not None
+    paths: EmsFixturePaths | None = None
+    if use_fixture:
+        paths = resolve_ems_fixture_paths(scenario_dir, scenario)
+        if not paths.fixture_path.exists() or not paths.config_path.exists():
+            raise click.ClickException(
+                "Fixture/config not found. "
+                f"Expected {paths.fixture_path} and {paths.config_path}."
+            )
+        config_path = paths.config_path
+
     app_config = load_app_config(config_path)
 
     if output is None:
@@ -167,17 +204,33 @@ def ems_solve(
         plot_output.parent.mkdir(parents=True, exist_ok=True)
 
     try:
-        hass_client = HomeAssistantClient(config=app_config.homeassistant)
-        hass_data_provider = HassDataProviderImpl(hass_client=hass_client)
+        if use_fixture:
+            if paths is None:
+                raise click.ClickException("Fixture paths not resolved.")
+            provider, captured_at = FixtureHassDataProvider.from_path(paths.fixture_path)
+            now = datetime.fromisoformat(captured_at) if captured_at else None
+            resolver = ValueResolverImpl(hass_data_provider=provider)
+            resolver.mark_for_hydration(app_config)
+            resolver.hydrate_all()
 
-        resolver = ValueResolverImpl(hass_data_provider=hass_data_provider)
-        resolver.mark_for_hydration(app_config)
-        resolver.hydrate_all()
+            click.echo("Solving EMS MILP (fixture replay)...")
+            with freeze_hass_source_time(now):
+                plan = EmsMilpPlanner(app_config, resolver=resolver).generate_ems_plan(
+                    now=now,
+                    solver_msg=solver_msg,
+                )
+        else:
+            hass_client = HomeAssistantClient(config=app_config.homeassistant)
+            hass_data_provider = HassDataProviderImpl(hass_client=hass_client)
 
-        click.echo("Solving EMS MILP...")
-        plan = EmsMilpPlanner(app_config, resolver=resolver).generate_ems_plan(
-            solver_msg=solver_msg,
-        )
+            resolver = ValueResolverImpl(hass_data_provider=hass_data_provider)
+            resolver.mark_for_hydration(app_config)
+            resolver.hydrate_all()
+
+            click.echo("Solving EMS MILP...")
+            plan = EmsMilpPlanner(app_config, resolver=resolver).generate_ems_plan(
+                solver_msg=solver_msg,
+            )
         click.echo(f"Timesteps: {len(plan.timesteps)}")
         timings = plan.timings
         click.echo(
@@ -197,32 +250,54 @@ def ems_solve(
         plot_plan(plan, title="EMS Plan", output=plot_output)
 
 
-@ems.command("record-fixture")
+@ems.command("record-scenario")
 @click.option(
-    "--output",
-    type=click.Path(path_type=Path, dir_okay=False),
-    default=None,
-    help="Write the fixture JSON to this path.",
+    "--output-dir",
+    type=click.Path(path_type=Path, file_okay=False),
+    default=Path("tests/fixtures/ems"),
+    show_default=True,
+    help="Directory to write fixture bundles.",
 )
 @click.option(
     "--name",
     type=str,
     default=None,
-    help="Fixture name (saved under tests/fixtures/ems/<name>.json).",
+    help="Scenario name (creates a subdirectory under output-dir).",
+)
+@click.option(
+    "--write-plan/--no-write-plan",
+    default=True,
+    show_default=True,
+    help="Also write a normalized plan baseline.",
+)
+@click.option(
+    "--redact/--no-redact",
+    default=True,
+    show_default=True,
+    help="Redact Home Assistant credentials in the saved config.",
+)
+@click.option(
+    "--solver-msg/--no-solver-msg",
+    default=False,
+    show_default=True,
+    help="Enable solver output (CBC).",
 )
 @click.pass_context
-def ems_record_fixture(ctx: click.Context, output: Path | None, name: str | None) -> None:
-    """Record a Home Assistant fixture for EMS tests."""
+def ems_record_scenario(
+    ctx: click.Context,
+    output_dir: Path,
+    name: str | None,
+    write_plan: bool,
+    redact: bool,
+    solver_msg: bool,
+) -> None:
+    """Record fixture data + config for offline EMS replay."""
     _configure_logging(str(ctx.obj.get("log_level", "INFO")))
     config_path = Path(ctx.obj.get("config", Path("config.yaml")))
     app_config = load_app_config(config_path)
 
-    if output is None:
-        fixture_dir = Path("tests") / "fixtures" / "ems"
-        filename = f"{name}.json" if name else "ems_fixture.json"
-        output = fixture_dir / filename
-
-    output.parent.mkdir(parents=True, exist_ok=True)
+    paths = resolve_ems_fixture_paths(output_dir, name)
+    paths.root_dir.mkdir(parents=True, exist_ok=True)
 
     try:
         hass_client = HomeAssistantClient(config=app_config.homeassistant)
@@ -231,13 +306,28 @@ def ems_record_fixture(ctx: click.Context, output: Path | None, name: str | None
         resolver = ValueResolverImpl(hass_data_provider=hass_data_provider)
         resolver.mark_for_hydration(app_config)
         resolver.hydrate_all()
+
+        captured_at = datetime.now().astimezone()
+        fixture = hass_data_provider.snapshot()
+        fixture["captured_at"] = captured_at.isoformat()
+        paths.fixture_path.write_text(json.dumps(fixture, indent=2, sort_keys=True))
+        click.echo(f"Wrote EMS fixture to {paths.fixture_path}")
+
+        config_payload = _serialize_fixture_config(app_config, redact=redact)
+        paths.config_path.write_text(yaml.safe_dump(config_payload, sort_keys=False))
+        click.echo(f"Wrote EMS config to {paths.config_path}")
+
+        if write_plan:
+            with freeze_hass_source_time(captured_at):
+                plan = EmsMilpPlanner(app_config, resolver=resolver).generate_ems_plan(
+                    now=captured_at,
+                    solver_msg=solver_msg,
+                )
+            plan_payload = serialize_plan(plan, normalize_timings=True)
+            paths.plan_path.write_text(json.dumps(plan_payload, indent=2, sort_keys=True))
+            click.echo(f"Wrote EMS baseline plan to {paths.plan_path}")
     except Exception as exc:
         raise click.ClickException(traceback.format_exc()) from exc
-
-    fixture = hass_data_provider.snapshot()
-    fixture["captured_at"] = datetime.now().astimezone().isoformat()
-    output.write_text(json.dumps(fixture, indent=2, sort_keys=True))
-    click.echo(f"Wrote EMS fixture to {output}")
 
 
 @cli.command("hydrate-load-forecast")
@@ -278,6 +368,21 @@ def hydrate_load_forecast(ctx: click.Context, limit: int) -> None:
         click.echo(
             f"{interval.start.isoformat()} -> {interval.end.isoformat()} = {interval.value:.3f} kW"
         )
+
+
+def _serialize_fixture_config(app_config: AppConfig, *, redact: bool) -> dict[str, object]:
+    payload: dict[str, object] = app_config.model_dump(mode="json")
+    server = payload.get("server")
+    if isinstance(server, dict):
+        server["data_dir"] = "./data"
+        payload["server"] = server
+    if redact:
+        homeassistant = payload.get("homeassistant")
+        if isinstance(homeassistant, dict):
+            homeassistant["token"] = "fixture-token"
+            homeassistant["base_url"] = "http://example.invalid"
+            payload["homeassistant"] = homeassistant
+    return payload
 
 
 def _parse_log_level(level_str: str) -> int:
