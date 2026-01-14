@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from hass_energy.ems.models import EmsPlanOutput
 
@@ -30,5 +30,6 @@ def serialize_plan(plan: EmsPlanOutput, *, normalize_timings: bool = True) -> di
     if normalize_timings:
         timings = payload.get("timings")
         if isinstance(timings, dict):
-            payload["timings"] = {key: 0.0 for key in timings}
+            timings_dict = cast(dict[str, object], timings)
+            payload["timings"] = {key: 0.0 for key in timings_dict}
     return payload
