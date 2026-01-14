@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
-from typing import TypedDict
+from typing import Iterator, TypedDict
 
 from hass_energy.lib.source_resolver.hass_provider import (
     HassDataProvider,
@@ -63,3 +65,29 @@ class FixtureHassDataProvider(HassDataProvider):
         _ = entity_id
         _ = history_days
         return
+
+
+@contextmanager
+def freeze_hass_source_time(frozen: datetime | None) -> Iterator[None]:
+    if frozen is None:
+        yield
+        return
+
+    import hass_energy.lib.source_resolver.hass_source as hass_source
+
+    original_datetime = hass_source.datetime.datetime
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):  # type: ignore[override]
+            if tz is None:
+                return frozen
+            if frozen.tzinfo is None:
+                return frozen.replace(tzinfo=tz)
+            return frozen.astimezone(tz)
+
+    hass_source.datetime.datetime = FrozenDateTime
+    try:
+        yield
+    finally:
+        hass_source.datetime.datetime = original_datetime
