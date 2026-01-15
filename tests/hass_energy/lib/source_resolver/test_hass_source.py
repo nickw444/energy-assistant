@@ -169,3 +169,45 @@ def test_amber_forecast_falls_back_to_per_kwh_when_advanced_missing() -> None:
 
     assert len(intervals) == 1
     assert intervals[0].value == pytest.approx(0.05)  # type: ignore[reportUnknownMemberType]
+
+
+@pytest.mark.parametrize(
+    ("blend", "expected"),
+    [
+        ("max", 0.12),
+        ("min", 0.08),
+        ("mean", 0.10),
+    ],
+)
+def test_amber_forecast_blends_advanced_and_spot(
+    blend: str,
+    expected: float,
+) -> None:
+    source = HomeAssistantAmberElectricForecastSource(
+        type="home_assistant",
+        platform="amberelectric",
+        entity="price_forecast",
+        advanced_price_blend=blend,
+    )
+    state: HomeAssistantStateDict = {
+        "entity_id": "sensor.price_forecast",
+        "state": "ok",
+        "attributes": {
+            "forecasts": [
+                {
+                    "start_time": "2026-01-07T03:30:01+00:00",
+                    "end_time": "2026-01-07T03:35:00+00:00",
+                    "advanced_price_predicted": 0.12,
+                    "per_kwh": 0.08,
+                }
+            ]
+        },
+        "last_changed": "2026-01-07T03:30:00+00:00",
+        "last_reported": "2026-01-07T03:30:00+00:00",
+        "last_updated": "2026-01-07T03:30:00+00:00",
+    }
+
+    intervals = source.mapper(state)
+
+    assert len(intervals) == 1
+    assert intervals[0].value == pytest.approx(expected)  # type: ignore[reportUnknownMemberType]

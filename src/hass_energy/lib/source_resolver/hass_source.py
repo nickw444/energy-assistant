@@ -71,15 +71,31 @@ def _parse_timestamp(value: object) -> datetime.datetime | None:
 def _amber_price_value(
     item: dict[str, object],
     use_advanced: bool | None,
+    blend: Literal["min", "max", "mean"] | None,
 ) -> float | None:
-    if use_advanced:
-        if "advanced_price_predicted" in item:
-            raw = item.get("advanced_price_predicted")
-            if raw is not None:
-                return required_float(raw)
+    spot_value: float | None = None
+    advanced_value: float | None = None
     if "per_kwh" in item:
-        return required_float(item.get("per_kwh"))
-    return None
+        spot_value = required_float(item.get("per_kwh"))
+    if "advanced_price_predicted" in item:
+        raw_advanced = item.get("advanced_price_predicted")
+        if raw_advanced is not None:
+            advanced_value = required_float(raw_advanced)
+
+    if blend is not None:
+        if spot_value is None:
+            return advanced_value
+        if advanced_value is None:
+            return spot_value
+        if blend == "min":
+            return min(spot_value, advanced_value)
+        if blend == "max":
+            return max(spot_value, advanced_value)
+        return (spot_value + advanced_value) / 2.0
+
+    if use_advanced and advanced_value is not None:
+        return advanced_value
+    return spot_value
 
 
 class HomeAssistantEntitySource(EntitySource[HomeAssistantStateDict, T]):
@@ -137,6 +153,7 @@ class HomeAssistantAmberElectricForecastSource(
     platform: Literal["amberelectric"]
     entity: str = Field(min_length=1)
     use_advanced_price_forecast: bool | None = None
+    advanced_price_blend: Literal["min", "max", "mean"] | None = None
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -164,7 +181,11 @@ class HomeAssistantAmberElectricForecastSource(
             if end is None:
                 continue
 
-            value = _amber_price_value(item, self.use_advanced_price_forecast)
+            value = _amber_price_value(
+                item,
+                self.use_advanced_price_forecast,
+                self.advanced_price_blend,
+            )
             if value is None:
                 continue
 
