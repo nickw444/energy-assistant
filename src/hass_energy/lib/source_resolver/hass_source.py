@@ -71,7 +71,14 @@ def _parse_timestamp(value: object) -> datetime.datetime | None:
 def _amber_price_value(
     item: dict[str, object],
     use_advanced: bool | None,
-    blend: Literal["min", "max", "mean"] | None,
+    mode: Literal[
+        "spot",
+        "advanced",
+        "blend_min",
+        "blend_max",
+        "blend_mean",
+    ]
+    | None,
 ) -> float | None:
     spot_value: float | None = None
     advanced_value: float | None = None
@@ -82,14 +89,18 @@ def _amber_price_value(
         if raw_advanced is not None:
             advanced_value = required_float(raw_advanced)
 
-    if blend is not None:
+    if mode is not None:
+        if mode == "spot":
+            return spot_value
+        if mode == "advanced":
+            return advanced_value
         if spot_value is None:
             return advanced_value
         if advanced_value is None:
             return spot_value
-        if blend == "min":
+        if mode == "blend_min":
             return min(spot_value, advanced_value)
-        if blend == "max":
+        if mode == "blend_max":
             return max(spot_value, advanced_value)
         return (spot_value + advanced_value) / 2.0
 
@@ -153,7 +164,13 @@ class HomeAssistantAmberElectricForecastSource(
     platform: Literal["amberelectric"]
     entity: str = Field(min_length=1)
     use_advanced_price_forecast: bool | None = None
-    advanced_price_blend: Literal["min", "max", "mean"] | None = None
+    price_forecast_mode: Literal[
+        "spot",
+        "advanced",
+        "blend_min",
+        "blend_max",
+        "blend_mean",
+    ] | None = None
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -184,7 +201,7 @@ class HomeAssistantAmberElectricForecastSource(
             value = _amber_price_value(
                 item,
                 self.use_advanced_price_forecast,
-                self.advanced_price_blend,
+                self.price_forecast_mode,
             )
             if value is None:
                 continue
