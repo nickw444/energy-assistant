@@ -92,7 +92,9 @@ def _amber_price_value(
         return spot_value
 
     if mode == "spot":
-        return spot_value if spot_value is not None else advanced_value
+        if spot_value is None:
+            raise ValueError("Spot price is required for Amber Electric spot mode")
+        return spot_value
     if mode == "advanced":
         return advanced_value if advanced_value is not None else spot_value
     if spot_value is None:
