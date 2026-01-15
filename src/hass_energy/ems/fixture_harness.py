@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
@@ -29,10 +30,12 @@ def resolve_ems_fixture_paths(base_dir: Path, name: str | None) -> EmsFixturePat
 def _round_floats(value: Any) -> Any:
     if isinstance(value, float):
         return round(value, 3)
-    if isinstance(value, dict):
-        return {key: _round_floats(item) for key, item in value.items()}
+    if isinstance(value, Mapping):
+        mapping = cast(dict[str, Any], value)
+        return {key: _round_floats(item) for key, item in mapping.items()}
     if isinstance(value, list):
-        return [_round_floats(item) for item in value]
+        list_value = cast(list[Any], value)
+        return [_round_floats(item) for item in list_value]
     return value
 
 
@@ -84,7 +87,7 @@ def _summarize_plan(plan: EmsPlanOutput, *, bucket_minutes: int) -> dict[str, An
 
     timesteps = plan.timesteps
     if not timesteps:
-        summary = {
+        summary: dict[str, Any] = {
             "meta": {
                 "generated_at": plan.generated_at.isoformat(),
                 "status": plan.status,
