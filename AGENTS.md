@@ -16,6 +16,7 @@
 - CLI `hass-energy milp` now wires the MILP v2 planner (compiler + executor); it currently fails until those phases are implemented.
 - Keep local lint commands aligned with CI; ruff checks `src`, `custom_components`, and `tests`.
 - Keep type checking aligned with CI; pyright runs against `src`, `custom_components`, and `tests`.
+- Frontend validation lives under `web/`; use `npm ci` then `npm run lint`, `npm run typecheck`, and `npm run test` (and `npm run build` when validating production assets).
 - MILP v2 slotting uses `EmsConfig.timestep_minutes` with a horizon length derived from the shortest forecast, bounded by `EmsConfig.min_horizon_minutes`, to align forecast slots to the current block start.
 - Plotting helpers live in `src/hass_energy/plotting/` and are shared by CLI.
 - A lightweight plan checker lives at `hass_energy/worker/milp/checker.py` with pytest coverage in `tests/`.
