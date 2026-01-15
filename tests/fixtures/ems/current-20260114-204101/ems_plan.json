@@ -1,505 +1,3796 @@
 {
-  "buckets": [
+  "generated_at": "2026-01-14T09:50:22.729243Z",
+  "objective_value": -4.075,
+  "status": "Optimal",
+  "timesteps": [
     {
-      "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.152,
-      "curtailment_minutes": 0.0,
-      "end": "2026-01-14T21:50:00+11:00",
-      "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.0,
-      "grid_import_kwh": 0.528,
-      "grid_net_kwh": 0.528,
-      "load_kwh": 0.681,
-      "pv_kwh": 0.002,
+      "duration_s": 300.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.12,
+        "price_import": 0.15,
+        "segment_cost": -0.095
+      },
+      "end": "2026-01-14T20:55:00+11:00",
+      "grid": {
+        "export_kw": 9.475,
+        "import_allowed": false,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": -9.475
+      },
+      "index": 0,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 10.0,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 9.976,
+          "battery_soc_kwh": 30.587,
+          "battery_soc_pct": 73.0,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.024
+        }
+      },
+      "loads": {
+        "base_kw": 0.525,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.525
+      },
       "start": "2026-01-14T20:50:00+11:00"
     },
     {
-      "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.0,
-      "curtailment_minutes": 0.0,
-      "end": "2026-01-14T22:50:00+11:00",
-      "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.0,
-      "grid_import_kwh": 0.684,
-      "grid_net_kwh": 0.684,
-      "load_kwh": 0.684,
-      "pv_kwh": 0.0,
+      "duration_s": 300.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.11,
+        "price_import": 0.15,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-14T21:00:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": false,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 1,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.646,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.646,
+          "battery_soc_kwh": 29.712,
+          "battery_soc_pct": 70.911,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.646,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.646
+      },
+      "start": "2026-01-14T20:55:00+11:00"
+    },
+    {
+      "duration_s": 300.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.07,
+        "price_import": 0.15,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-14T21:05:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": false,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 2,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.673,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.673,
+          "battery_soc_kwh": 29.655,
+          "battery_soc_pct": 70.776,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.673,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.673
+      },
+      "start": "2026-01-14T21:00:00+11:00"
+    },
+    {
+      "duration_s": 300.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.07,
+        "price_import": 0.14,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-14T21:10:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 3,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.69,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.69,
+          "battery_soc_kwh": 29.596,
+          "battery_soc_pct": 70.635,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.69,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.69
+      },
+      "start": "2026-01-14T21:05:00+11:00"
+    },
+    {
+      "duration_s": 300.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.07,
+        "price_import": 0.14,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-14T21:15:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 4,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.706,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.706,
+          "battery_soc_kwh": 29.536,
+          "battery_soc_pct": 70.491,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.706,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.706
+      },
+      "start": "2026-01-14T21:10:00+11:00"
+    },
+    {
+      "duration_s": 300.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.07,
+        "price_import": 0.14,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-14T21:20:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 5,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.717,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.717,
+          "battery_soc_kwh": 29.474,
+          "battery_soc_pct": 70.343,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.717,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.717
+      },
+      "start": "2026-01-14T21:15:00+11:00"
+    },
+    {
+      "duration_s": 300.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.07,
+        "price_import": 0.14,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-14T21:25:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 6,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.724,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.724,
+          "battery_soc_kwh": 29.411,
+          "battery_soc_pct": 70.193,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.724,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.724
+      },
+      "start": "2026-01-14T21:20:00+11:00"
+    },
+    {
+      "duration_s": 300.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.07,
+        "price_import": 0.14,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-14T21:30:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 7,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.724,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.724,
+          "battery_soc_kwh": 29.347,
+          "battery_soc_pct": 70.042,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.724,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.724
+      },
+      "start": "2026-01-14T21:25:00+11:00"
+    },
+    {
+      "duration_s": 300.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.07,
+        "price_import": 0.14,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-14T21:35:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 8,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.717,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.717,
+          "battery_soc_kwh": 29.284,
+          "battery_soc_pct": 69.89,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.717,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.717
+      },
+      "start": "2026-01-14T21:30:00+11:00"
+    },
+    {
+      "duration_s": 300.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.07,
+        "price_import": 0.14,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-14T21:40:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 9,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.703,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.703,
+          "battery_soc_kwh": 29.221,
+          "battery_soc_pct": 69.74,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.703,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.703
+      },
+      "start": "2026-01-14T21:35:00+11:00"
+    },
+    {
+      "duration_s": 300.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.07,
+        "price_import": 0.14,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-14T21:45:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 10,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.687,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.687,
+          "battery_soc_kwh": 29.159,
+          "battery_soc_pct": 69.593,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.687,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.687
+      },
+      "start": "2026-01-14T21:40:00+11:00"
+    },
+    {
+      "duration_s": 300.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.07,
+        "price_import": 0.14,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-14T21:50:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 11,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.666,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.666,
+          "battery_soc_kwh": 29.099,
+          "battery_soc_pct": 69.449,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.666,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.666
+      },
+      "start": "2026-01-14T21:45:00+11:00"
+    },
+    {
+      "duration_s": 300.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.07,
+        "price_import": 0.14,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-14T21:55:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 12,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.655,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.655,
+          "battery_soc_kwh": 29.041,
+          "battery_soc_pct": 69.31,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.655,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.655
+      },
       "start": "2026-01-14T21:50:00+11:00"
     },
     {
-      "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.0,
-      "curtailment_minutes": 0.0,
-      "end": "2026-01-14T23:50:00+11:00",
-      "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.0,
-      "grid_import_kwh": 0.582,
-      "grid_net_kwh": 0.582,
-      "load_kwh": 0.582,
-      "pv_kwh": 0.0,
+      "duration_s": 300.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.07,
+        "price_import": 0.14,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-14T22:00:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 13,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.649,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.649,
+          "battery_soc_kwh": 28.983,
+          "battery_soc_pct": 69.172,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.649,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.649
+      },
+      "start": "2026-01-14T21:55:00+11:00"
+    },
+    {
+      "duration_s": 300.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.05999999999999999,
+        "price_import": 0.13,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-14T22:05:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 14,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.656,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.656,
+          "battery_soc_kwh": 28.926,
+          "battery_soc_pct": 69.037,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.656,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.656
+      },
+      "start": "2026-01-14T22:00:00+11:00"
+    },
+    {
+      "duration_s": 300.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.06,
+        "price_import": 0.13,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-14T22:10:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 15,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.67,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.67,
+          "battery_soc_kwh": 28.869,
+          "battery_soc_pct": 68.899,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.67,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.67
+      },
+      "start": "2026-01-14T22:05:00+11:00"
+    },
+    {
+      "duration_s": 300.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.06,
+        "price_import": 0.13,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-14T22:15:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 16,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.681,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.681,
+          "battery_soc_kwh": 28.81,
+          "battery_soc_pct": 68.759,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.681,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.681
+      },
+      "start": "2026-01-14T22:10:00+11:00"
+    },
+    {
+      "duration_s": 300.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.06,
+        "price_import": 0.13,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-14T22:20:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 17,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.695,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.695,
+          "battery_soc_kwh": 28.75,
+          "battery_soc_pct": 68.616,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.695,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.695
+      },
+      "start": "2026-01-14T22:15:00+11:00"
+    },
+    {
+      "duration_s": 300.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.06,
+        "price_import": 0.13,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-14T22:25:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 18,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.706,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.706,
+          "battery_soc_kwh": 28.689,
+          "battery_soc_pct": 68.471,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.706,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.706
+      },
+      "start": "2026-01-14T22:20:00+11:00"
+    },
+    {
+      "duration_s": 300.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.06,
+        "price_import": 0.13,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-14T22:30:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 19,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.723,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.723,
+          "battery_soc_kwh": 28.627,
+          "battery_soc_pct": 68.323,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.723,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.723
+      },
+      "start": "2026-01-14T22:25:00+11:00"
+    },
+    {
+      "duration_s": 300.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.05999999999999999,
+        "price_import": 0.13,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-14T22:35:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 20,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.723,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.723,
+          "battery_soc_kwh": 28.564,
+          "battery_soc_pct": 68.172,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.723,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.723
+      },
+      "start": "2026-01-14T22:30:00+11:00"
+    },
+    {
+      "duration_s": 300.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.06,
+        "price_import": 0.13,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-14T22:40:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 21,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.708,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.708,
+          "battery_soc_kwh": 28.5,
+          "battery_soc_pct": 68.02,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.708,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.708
+      },
+      "start": "2026-01-14T22:35:00+11:00"
+    },
+    {
+      "duration_s": 300.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.06,
+        "price_import": 0.13,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-14T22:45:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 22,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.682,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.682,
+          "battery_soc_kwh": 28.438,
+          "battery_soc_pct": 67.872,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.682,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.682
+      },
+      "start": "2026-01-14T22:40:00+11:00"
+    },
+    {
+      "duration_s": 300.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.06,
+        "price_import": 0.13,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-14T22:50:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 23,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.661,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.661,
+          "battery_soc_kwh": 28.378,
+          "battery_soc_pct": 67.729,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.661,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.661
+      },
+      "start": "2026-01-14T22:45:00+11:00"
+    },
+    {
+      "duration_s": 300.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.06,
+        "price_import": 0.13,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-14T22:55:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 24,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.645,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.645,
+          "battery_soc_kwh": 28.321,
+          "battery_soc_pct": 67.591,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.645,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.645
+      },
       "start": "2026-01-14T22:50:00+11:00"
     },
     {
-      "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.0,
-      "curtailment_minutes": 0.0,
-      "end": "2026-01-15T00:50:00+11:00",
-      "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.0,
-      "grid_import_kwh": 0.594,
-      "grid_net_kwh": 0.594,
-      "load_kwh": 0.594,
-      "pv_kwh": 0.0,
-      "start": "2026-01-14T23:50:00+11:00"
+      "duration_s": 300.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.06,
+        "price_import": 0.13,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-14T23:00:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 25,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.624,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.624,
+          "battery_soc_kwh": 28.264,
+          "battery_soc_pct": 67.456,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.624,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.624
+      },
+      "start": "2026-01-14T22:55:00+11:00"
     },
     {
-      "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.0,
-      "curtailment_minutes": 0.0,
-      "end": "2026-01-15T01:50:00+11:00",
-      "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.0,
-      "grid_import_kwh": 0.607,
-      "grid_net_kwh": 0.607,
-      "load_kwh": 0.607,
-      "pv_kwh": 0.0,
-      "start": "2026-01-15T00:50:00+11:00"
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.06,
+        "price_import": 0.12,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-14T23:30:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 26,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.58,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.58,
+          "battery_soc_kwh": 28.209,
+          "battery_soc_pct": 67.325,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.58,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.58
+      },
+      "start": "2026-01-14T23:00:00+11:00"
     },
     {
-      "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.0,
-      "curtailment_minutes": 0.0,
-      "end": "2026-01-15T02:50:00+11:00",
-      "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.0,
-      "grid_import_kwh": 0.597,
-      "grid_net_kwh": 0.597,
-      "load_kwh": 0.597,
-      "pv_kwh": 0.0,
-      "start": "2026-01-15T01:50:00+11:00"
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.05,
+        "price_import": 0.12,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T00:00:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 27,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.56,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.56,
+          "battery_soc_kwh": 27.904,
+          "battery_soc_pct": 66.596,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.56,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.56
+      },
+      "start": "2026-01-14T23:30:00+11:00"
     },
     {
-      "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.0,
-      "curtailment_minutes": 0.0,
-      "end": "2026-01-15T03:50:00+11:00",
-      "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.0,
-      "grid_import_kwh": 0.597,
-      "grid_net_kwh": 0.597,
-      "load_kwh": 0.597,
-      "pv_kwh": 0.0,
-      "start": "2026-01-15T02:50:00+11:00"
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.05,
+        "price_import": 0.12,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T00:30:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 28,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.597,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.597,
+          "battery_soc_kwh": 27.609,
+          "battery_soc_pct": 65.893,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.597,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.597
+      },
+      "start": "2026-01-15T00:00:00+11:00"
     },
     {
-      "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.0,
-      "curtailment_minutes": 0.0,
-      "end": "2026-01-15T04:50:00+11:00",
-      "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.0,
-      "grid_import_kwh": 0.543,
-      "grid_net_kwh": 0.543,
-      "load_kwh": 0.543,
-      "pv_kwh": 0.0,
-      "start": "2026-01-15T03:50:00+11:00"
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.05,
+        "price_import": 0.12,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T01:00:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 29,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.606,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.606,
+          "battery_soc_kwh": 27.295,
+          "battery_soc_pct": 65.142,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.606,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.606
+      },
+      "start": "2026-01-15T00:30:00+11:00"
     },
     {
-      "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.0,
-      "curtailment_minutes": 0.0,
-      "end": "2026-01-15T05:50:00+11:00",
-      "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.0,
-      "grid_import_kwh": 0.517,
-      "grid_net_kwh": 0.517,
-      "load_kwh": 0.517,
-      "pv_kwh": 0.0,
-      "start": "2026-01-15T04:50:00+11:00"
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.06,
+        "price_import": 0.12,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T01:30:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 30,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.617,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.617,
+          "battery_soc_kwh": 26.976,
+          "battery_soc_pct": 64.381,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.617,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.617
+      },
+      "start": "2026-01-15T01:00:00+11:00"
     },
     {
-      "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.0,
-      "curtailment_minutes": 0.0,
-      "end": "2026-01-15T06:50:00+11:00",
-      "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.0,
-      "grid_import_kwh": 0.441,
-      "grid_net_kwh": 0.441,
-      "load_kwh": 0.471,
-      "pv_kwh": 0.029,
-      "start": "2026-01-15T05:50:00+11:00"
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.06,
+        "price_import": 0.13,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T02:00:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 31,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.594,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.594,
+          "battery_soc_kwh": 26.651,
+          "battery_soc_pct": 63.605,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.594,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.594
+      },
+      "start": "2026-01-15T01:30:00+11:00"
     },
     {
-      "battery_charge_kwh": 0.078,
-      "battery_discharge_kwh": 0.0,
-      "curtailment_minutes": 0.0,
-      "end": "2026-01-15T07:50:00+11:00",
-      "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.0,
-      "grid_import_kwh": 0.237,
-      "grid_net_kwh": 0.237,
-      "load_kwh": 0.497,
-      "pv_kwh": 0.339,
-      "start": "2026-01-15T06:50:00+11:00"
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.06,
+        "price_import": 0.13,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T02:30:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 32,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.595,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.595,
+          "battery_soc_kwh": 26.338,
+          "battery_soc_pct": 62.859,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.595,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.595
+      },
+      "start": "2026-01-15T02:00:00+11:00"
     },
     {
-      "battery_charge_kwh": 0.315,
-      "battery_discharge_kwh": 0.0,
-      "curtailment_minutes": 0.0,
-      "end": "2026-01-15T08:50:00+11:00",
-      "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.0,
-      "grid_import_kwh": 0.0,
-      "grid_net_kwh": 0.0,
-      "load_kwh": 0.65,
-      "pv_kwh": 0.965,
-      "start": "2026-01-15T07:50:00+11:00"
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.06,
+        "price_import": 0.13,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T03:00:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 33,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.601,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.601,
+          "battery_soc_kwh": 26.024,
+          "battery_soc_pct": 62.111,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.601,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.601
+      },
+      "start": "2026-01-15T02:30:00+11:00"
     },
     {
-      "battery_charge_kwh": 2.969,
-      "battery_discharge_kwh": 0.0,
-      "curtailment_minutes": 0.0,
-      "end": "2026-01-15T09:50:00+11:00",
-      "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.0,
-      "grid_import_kwh": 2.598,
-      "grid_net_kwh": 2.598,
-      "load_kwh": 1.083,
-      "pv_kwh": 1.454,
-      "start": "2026-01-15T08:50:00+11:00"
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.06,
+        "price_import": 0.13,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T03:30:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 34,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.594,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.594,
+          "battery_soc_kwh": 25.708,
+          "battery_soc_pct": 61.356,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.594,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.594
+      },
+      "start": "2026-01-15T03:00:00+11:00"
     },
     {
-      "battery_charge_kwh": 2.604,
-      "battery_discharge_kwh": 0.0,
-      "curtailment_minutes": 0.0,
-      "end": "2026-01-15T10:50:00+11:00",
-      "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.0,
-      "grid_import_kwh": 1.299,
-      "grid_net_kwh": 1.299,
-      "load_kwh": 0.662,
-      "pv_kwh": 1.967,
-      "start": "2026-01-15T09:50:00+11:00"
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.07,
+        "price_import": 0.14,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T04:00:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 35,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.601,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.601,
+          "battery_soc_kwh": 25.395,
+          "battery_soc_pct": 60.609,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.601,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.601
+      },
+      "start": "2026-01-15T03:30:00+11:00"
     },
     {
-      "battery_charge_kwh": 1.598,
-      "battery_discharge_kwh": 0.0,
-      "curtailment_minutes": 0.0,
-      "end": "2026-01-15T11:50:00+11:00",
-      "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.0,
-      "grid_import_kwh": 0.0,
-      "grid_net_kwh": 0.0,
-      "load_kwh": 0.64,
-      "pv_kwh": 2.238,
-      "start": "2026-01-15T10:50:00+11:00"
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.07,
+        "price_import": 0.14,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T04:30:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 36,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.547,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.547,
+          "battery_soc_kwh": 25.079,
+          "battery_soc_pct": 59.854,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.547,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.547
+      },
+      "start": "2026-01-15T04:00:00+11:00"
     },
     {
-      "battery_charge_kwh": 0.999,
-      "battery_discharge_kwh": 0.0,
-      "curtailment_minutes": 0.0,
-      "end": "2026-01-15T12:50:00+11:00",
-      "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.0,
-      "grid_import_kwh": 0.0,
-      "grid_net_kwh": 0.0,
-      "load_kwh": 1.064,
-      "pv_kwh": 2.063,
-      "start": "2026-01-15T11:50:00+11:00"
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.07,
+        "price_import": 0.14,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T05:00:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 37,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.507,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.507,
+          "battery_soc_kwh": 24.791,
+          "battery_soc_pct": 59.167,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.507,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.507
+      },
+      "start": "2026-01-15T04:30:00+11:00"
     },
     {
-      "battery_charge_kwh": 1.104,
-      "battery_discharge_kwh": 0.0,
-      "curtailment_minutes": 0.0,
-      "end": "2026-01-15T13:50:00+11:00",
-      "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.0,
-      "grid_import_kwh": 0.0,
-      "grid_net_kwh": 0.0,
-      "load_kwh": 0.733,
-      "pv_kwh": 1.837,
-      "start": "2026-01-15T12:50:00+11:00"
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.07,
+        "price_import": 0.14,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T05:30:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 38,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.523,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.523,
+          "battery_soc_kwh": 24.524,
+          "battery_soc_pct": 58.53,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.523,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.523
+      },
+      "start": "2026-01-15T05:00:00+11:00"
     },
     {
-      "battery_charge_kwh": 1.2,
-      "battery_discharge_kwh": 0.0,
-      "curtailment_minutes": 0.0,
-      "end": "2026-01-15T14:50:00+11:00",
-      "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.0,
-      "grid_import_kwh": 0.0,
-      "grid_net_kwh": 0.0,
-      "load_kwh": 0.557,
-      "pv_kwh": 1.756,
-      "start": "2026-01-15T13:50:00+11:00"
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.07,
+        "price_import": 0.14,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T06:00:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 39,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.512,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.512,
+          "battery_soc_kwh": 24.249,
+          "battery_soc_pct": 57.873,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.512,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.512
+      },
+      "start": "2026-01-15T05:30:00+11:00"
     },
     {
-      "battery_charge_kwh": 1.047,
-      "battery_discharge_kwh": 0.0,
-      "curtailment_minutes": 0.0,
-      "end": "2026-01-15T15:50:00+11:00",
-      "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.0,
-      "grid_import_kwh": 0.0,
-      "grid_net_kwh": 0.0,
-      "load_kwh": 0.513,
-      "pv_kwh": 1.559,
-      "start": "2026-01-15T14:50:00+11:00"
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.07,
+        "price_import": 0.14,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T06:30:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 40,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.462,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.448,
+          "battery_soc_kwh": 23.979,
+          "battery_soc_pct": 57.23,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.013
+        }
+      },
+      "loads": {
+        "base_kw": 0.462,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.462
+      },
+      "start": "2026-01-15T06:00:00+11:00"
     },
     {
-      "battery_charge_kwh": 0.162,
-      "battery_discharge_kwh": 0.0,
-      "curtailment_minutes": 0.0,
-      "end": "2026-01-15T16:50:00+11:00",
-      "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.692,
-      "grid_import_kwh": 0.0,
-      "grid_net_kwh": -0.692,
-      "load_kwh": 0.459,
-      "pv_kwh": 1.313,
-      "start": "2026-01-15T15:50:00+11:00"
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.07,
+        "price_import": 0.14,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T07:00:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 41,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.463,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.395,
+          "battery_soc_kwh": 23.743,
+          "battery_soc_pct": 56.666,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.068
+        }
+      },
+      "loads": {
+        "base_kw": 0.463,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.463
+      },
+      "start": "2026-01-15T06:30:00+11:00"
     },
     {
-      "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.0,
-      "curtailment_minutes": 0.0,
-      "end": "2026-01-15T17:50:00+11:00",
-      "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.466,
-      "grid_import_kwh": 0.0,
-      "grid_net_kwh": -0.466,
-      "load_kwh": 0.576,
-      "pv_kwh": 1.042,
-      "start": "2026-01-15T16:50:00+11:00"
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.05,
+        "price_import": 0.12,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T07:30:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 42,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.592,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.342,
+          "battery_soc_kwh": 23.535,
+          "battery_soc_pct": 56.17,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.25
+        }
+      },
+      "loads": {
+        "base_kw": 0.592,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.592
+      },
+      "start": "2026-01-15T07:00:00+11:00"
     },
     {
-      "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.735,
-      "curtailment_minutes": 0.0,
-      "end": "2026-01-15T18:50:00+11:00",
-      "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.013,
-      "grid_import_kwh": 0.0,
-      "grid_net_kwh": -0.013,
-      "load_kwh": 1.336,
-      "pv_kwh": 0.614,
-      "start": "2026-01-15T17:50:00+11:00"
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.04000000000000001,
+        "price_import": 0.11000000000000001,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T08:00:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 43,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.373,
+          "battery_charge_kw": 0.235,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 23.355,
+          "battery_soc_pct": 55.741,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.608
+        }
+      },
+      "loads": {
+        "base_kw": 0.373,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.373
+      },
+      "start": "2026-01-15T07:30:00+11:00"
     },
     {
-      "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 6.256,
-      "curtailment_minutes": 0.0,
-      "end": "2026-01-15T19:50:00+11:00",
-      "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 5.244,
-      "grid_import_kwh": 0.0,
-      "grid_net_kwh": -5.244,
-      "load_kwh": 1.131,
-      "pv_kwh": 0.119,
-      "start": "2026-01-15T18:50:00+11:00"
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.04000000000000001,
+        "price_import": 0.11000000000000001,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T08:30:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 44,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.587,
+          "battery_charge_kw": 0.362,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 23.467,
+          "battery_soc_pct": 56.007,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.95
+        }
+      },
+      "loads": {
+        "base_kw": 0.587,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.587
+      },
+      "start": "2026-01-15T08:00:00+11:00"
     },
     {
-      "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 2.87,
-      "curtailment_minutes": 0.0,
-      "end": "2026-01-15T20:50:00+11:00",
-      "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 1.534,
-      "grid_import_kwh": 0.0,
-      "grid_net_kwh": -1.534,
-      "load_kwh": 1.341,
-      "pv_kwh": 0.004,
-      "start": "2026-01-15T19:50:00+11:00"
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.03,
+        "price_import": 0.1,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T09:00:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 45,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.882,
+          "battery_charge_kw": 0.284,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 23.639,
+          "battery_soc_pct": 56.418,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 1.166
+        }
+      },
+      "loads": {
+        "base_kw": 0.882,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.882
+      },
+      "start": "2026-01-15T08:30:00+11:00"
     },
     {
-      "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.773,
-      "curtailment_minutes": 0.0,
-      "end": "2026-01-15T21:50:00+11:00",
-      "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.0,
-      "grid_import_kwh": 0.0,
-      "grid_net_kwh": 0.0,
-      "load_kwh": 0.773,
-      "pv_kwh": 0.0,
-      "start": "2026-01-15T20:50:00+11:00"
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.03,
+        "price_import": 0.09,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T09:30:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 46,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 1.394,
+          "battery_charge_kw": 0.002,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 23.774,
+          "battery_soc_pct": 56.74,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 1.396
+        }
+      },
+      "loads": {
+        "base_kw": 1.394,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 1.394
+      },
+      "start": "2026-01-15T09:00:00+11:00"
     },
     {
-      "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.113,
-      "curtailment_minutes": 0.0,
-      "end": "2026-01-15T22:50:00+11:00",
-      "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.0,
-      "grid_import_kwh": 0.569,
-      "grid_net_kwh": 0.569,
-      "load_kwh": 0.682,
-      "pv_kwh": 0.0,
-      "start": "2026-01-15T21:50:00+11:00"
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.020000000000000004,
+        "price_import": 0.09,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T10:00:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 47,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.716,
+          "battery_charge_kw": 0.968,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 23.775,
+          "battery_soc_pct": 56.742,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 1.684
+        }
+      },
+      "loads": {
+        "base_kw": 0.716,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.716
+      },
+      "start": "2026-01-15T09:30:00+11:00"
     },
     {
-      "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.0,
-      "curtailment_minutes": 0.0,
-      "end": "2026-01-15T23:50:00+11:00",
-      "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.0,
-      "grid_import_kwh": 0.589,
-      "grid_net_kwh": 0.589,
-      "load_kwh": 0.589,
-      "pv_kwh": 0.0,
-      "start": "2026-01-15T22:50:00+11:00"
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": -0.095,
+        "price_export": 0.010000000000000002,
+        "price_import": 0.09,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T10:30:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 48,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.659,
+          "battery_charge_kw": 1.272,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 24.235,
+          "battery_soc_pct": 57.84,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 1.931
+        }
+      },
+      "loads": {
+        "base_kw": 0.659,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.659
+      },
+      "start": "2026-01-15T10:00:00+11:00"
     },
     {
-      "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.0,
-      "curtailment_minutes": 0.0,
-      "end": "2026-01-16T00:50:00+11:00",
-      "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.0,
-      "grid_import_kwh": 0.594,
-      "grid_net_kwh": 0.594,
-      "load_kwh": 0.594,
-      "pv_kwh": 0.0,
-      "start": "2026-01-15T23:50:00+11:00"
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": 0.332,
+        "price_export": 0.010000000000000002,
+        "price_import": 0.09,
+        "segment_cost": 0.426
+      },
+      "end": "2026-01-15T11:00:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 9.477,
+        "import_violation_kw": 0.0,
+        "net_kw": 9.477
+      },
+      "index": 49,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": -8.837,
+          "battery_charge_kw": 11.0,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 24.839,
+          "battery_soc_pct": 59.281,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 2.163
+        }
+      },
+      "loads": {
+        "base_kw": 0.64,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.64
+      },
+      "start": "2026-01-15T10:30:00+11:00"
     },
     {
-      "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.0,
-      "curtailment_minutes": 0.0,
-      "end": "2026-01-16T01:50:00+11:00",
-      "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.0,
-      "grid_import_kwh": 0.607,
-      "grid_net_kwh": 0.607,
-      "load_kwh": 0.607,
-      "pv_kwh": 0.0,
-      "start": "2026-01-16T00:50:00+11:00"
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": 0.502,
+        "price_export": 0.010000000000000002,
+        "price_import": 0.09,
+        "segment_cost": 0.171
+      },
+      "end": "2026-01-15T11:30:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 3.791,
+        "import_violation_kw": 0.0,
+        "net_kw": 3.791
+      },
+      "index": 50,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": -3.137,
+          "battery_charge_kw": 5.423,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 30.064,
+          "battery_soc_pct": 71.752,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 2.286
+        }
+      },
+      "loads": {
+        "base_kw": 0.654,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.654
+      },
+      "start": "2026-01-15T11:00:00+11:00"
     },
     {
-      "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.0,
-      "curtailment_minutes": 0.0,
-      "end": "2026-01-16T02:50:00+11:00",
-      "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.0,
-      "grid_import_kwh": 0.597,
-      "grid_net_kwh": 0.597,
-      "load_kwh": 0.597,
-      "pv_kwh": 0.0,
-      "start": "2026-01-16T01:50:00+11:00"
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": 0.926,
+        "price_export": 0.010000000000000002,
+        "price_import": 0.09,
+        "segment_cost": 0.424
+      },
+      "end": "2026-01-15T12:00:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 9.414,
+        "import_violation_kw": 0.0,
+        "net_kw": 9.414
+      },
+      "index": 51,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": -8.796,
+          "battery_charge_kw": 11.0,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 32.64,
+          "battery_soc_pct": 77.899,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 2.204
+        }
+      },
+      "loads": {
+        "base_kw": 0.618,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.618
+      },
+      "start": "2026-01-15T11:30:00+11:00"
     },
     {
-      "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.0,
-      "curtailment_minutes": 0.0,
-      "end": "2026-01-16T03:50:00+11:00",
-      "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.0,
-      "grid_import_kwh": 0.597,
-      "grid_net_kwh": 0.597,
-      "load_kwh": 0.597,
-      "pv_kwh": 0.0,
-      "start": "2026-01-16T02:50:00+11:00"
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": 0.926,
+        "price_export": 0.020000000000000004,
+        "price_import": 0.1,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T12:30:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 52,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 1.23,
+          "battery_charge_kw": 0.864,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 37.865,
+          "battery_soc_pct": 90.37,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 2.094
+        }
+      },
+      "loads": {
+        "base_kw": 1.23,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 1.23
+      },
+      "start": "2026-01-15T12:00:00+11:00"
     },
     {
-      "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.0,
-      "curtailment_minutes": 0.0,
-      "end": "2026-01-16T04:50:00+11:00",
-      "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.0,
-      "grid_import_kwh": 0.543,
-      "grid_net_kwh": 0.543,
-      "load_kwh": 0.543,
-      "pv_kwh": 0.0,
-      "start": "2026-01-16T03:50:00+11:00"
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": 0.926,
+        "price_export": 0.020000000000000004,
+        "price_import": 0.1,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T13:00:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 53,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 1.037,
+          "battery_charge_kw": 0.908,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 38.275,
+          "battery_soc_pct": 91.349,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 1.946
+        }
+      },
+      "loads": {
+        "base_kw": 1.037,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 1.037
+      },
+      "start": "2026-01-15T12:30:00+11:00"
     },
     {
-      "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.0,
-      "curtailment_minutes": 0.0,
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": 0.926,
+        "price_export": 0.020000000000000004,
+        "price_import": 0.1,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T13:30:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 54,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.765,
+          "battery_charge_kw": 1.062,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 38.707,
+          "battery_soc_pct": 92.379,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 1.827
+        }
+      },
+      "loads": {
+        "base_kw": 0.765,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.765
+      },
+      "start": "2026-01-15T13:00:00+11:00"
+    },
+    {
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": 0.926,
+        "price_export": 0.020000000000000004,
+        "price_import": 0.1,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T14:00:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 55,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.533,
+          "battery_charge_kw": 1.264,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 39.211,
+          "battery_soc_pct": 93.583,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 1.796
+        }
+      },
+      "loads": {
+        "base_kw": 0.533,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.533
+      },
+      "start": "2026-01-15T13:30:00+11:00"
+    },
+    {
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": 0.926,
+        "price_export": 0.03,
+        "price_import": 0.11000000000000001,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T14:30:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 56,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.563,
+          "battery_charge_kw": 1.2,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 39.811,
+          "battery_soc_pct": 95.015,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 1.763
+        }
+      },
+      "loads": {
+        "base_kw": 0.563,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.563
+      },
+      "start": "2026-01-15T14:00:00+11:00"
+    },
+    {
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": 0.926,
+        "price_export": 0.03,
+        "price_import": 0.11000000000000001,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T15:00:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 57,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.559,
+          "battery_charge_kw": 1.168,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 40.381,
+          "battery_soc_pct": 96.375,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 1.726
+        }
+      },
+      "loads": {
+        "base_kw": 0.559,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.559
+      },
+      "start": "2026-01-15T14:30:00+11:00"
+    },
+    {
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": 0.926,
+        "price_export": 0.05,
+        "price_import": 0.12,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T15:30:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": false,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 58,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.526,
+          "battery_charge_kw": 1.055,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 40.936,
+          "battery_soc_pct": 97.699,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 1.58
+        }
+      },
+      "loads": {
+        "base_kw": 0.526,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.526
+      },
+      "start": "2026-01-15T15:00:00+11:00"
+    },
+    {
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": 0.926,
+        "price_export": 0.05,
+        "price_import": 0.12,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T16:00:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": false,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 59,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.47,
+          "battery_charge_kw": 0.975,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 41.437,
+          "battery_soc_pct": 98.894,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 1.445
+        }
+      },
+      "loads": {
+        "base_kw": 0.47,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.47
+      },
+      "start": "2026-01-15T15:30:00+11:00"
+    },
+    {
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": 0.886,
+        "price_export": 0.09,
+        "price_import": 0.12,
+        "segment_cost": -0.04
+      },
+      "end": "2026-01-15T16:30:00+11:00",
+      "grid": {
+        "export_kw": 0.893,
+        "import_allowed": false,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": -0.893
+      },
+      "index": 60,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 1.341,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 41.9,
+          "battery_soc_pct": 100.0,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 1.341
+        }
+      },
+      "loads": {
+        "base_kw": 0.448,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.448
+      },
+      "start": "2026-01-15T16:00:00+11:00"
+    },
+    {
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": 0.853,
+        "price_export": 0.09,
+        "price_import": 0.12,
+        "segment_cost": -0.033
+      },
+      "end": "2026-01-15T17:00:00+11:00",
+      "grid": {
+        "export_kw": 0.735,
+        "import_allowed": false,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": -0.735
+      },
+      "index": 61,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 1.204,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 41.9,
+          "battery_soc_pct": 100.0,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 1.204
+        }
+      },
+      "loads": {
+        "base_kw": 0.469,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.469
+      },
+      "start": "2026-01-15T16:30:00+11:00"
+    },
+    {
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": 0.824,
+        "price_export": 0.09,
+        "price_import": 0.12,
+        "segment_cost": -0.029
+      },
+      "end": "2026-01-15T17:30:00+11:00",
+      "grid": {
+        "export_kw": 0.634,
+        "import_allowed": false,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": -0.634
+      },
+      "index": 62,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 1.06,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 41.9,
+          "battery_soc_pct": 100.0,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 1.06
+        }
+      },
+      "loads": {
+        "base_kw": 0.426,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.426
+      },
+      "start": "2026-01-15T17:00:00+11:00"
+    },
+    {
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": 0.821,
+        "price_export": 0.09,
+        "price_import": 0.12,
+        "segment_cost": -0.004
+      },
+      "end": "2026-01-15T18:00:00+11:00",
+      "grid": {
+        "export_kw": 0.08,
+        "import_allowed": false,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": -0.08
+      },
+      "index": 63,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.934,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 41.9,
+          "battery_soc_pct": 100.0,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.934
+        }
+      },
+      "loads": {
+        "base_kw": 0.854,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.854
+      },
+      "start": "2026-01-15T17:30:00+11:00"
+    },
+    {
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": 0.821,
+        "price_export": 0.1,
+        "price_import": 0.14,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T18:30:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": false,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 64,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 1.326,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.643,
+          "battery_soc_kwh": 41.9,
+          "battery_soc_pct": 100.0,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.682
+        }
+      },
+      "loads": {
+        "base_kw": 1.326,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 1.326
+      },
+      "start": "2026-01-15T18:00:00+11:00"
+    },
+    {
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": 0.821,
+        "price_export": 0.12,
+        "price_import": 0.16000000000000003,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T19:00:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": false,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 65,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 1.593,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 1.24,
+          "battery_soc_kwh": 41.562,
+          "battery_soc_pct": 99.192,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.353
+        }
+      },
+      "loads": {
+        "base_kw": 1.593,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 1.593
+      },
+      "start": "2026-01-15T18:30:00+11:00"
+    },
+    {
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": 0.494,
+        "price_export": 0.15,
+        "price_import": 0.18,
+        "segment_cost": -0.327
+      },
+      "end": "2026-01-15T19:30:00+11:00",
+      "grid": {
+        "export_kw": 4.354,
+        "import_allowed": false,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": -4.354
+      },
+      "index": 66,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 5.552,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 5.45,
+          "battery_soc_kwh": 40.909,
+          "battery_soc_pct": 97.635,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.103
+        }
+      },
+      "loads": {
+        "base_kw": 1.198,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 1.198
+      },
+      "start": "2026-01-15T19:00:00+11:00"
+    },
+    {
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": -0.242,
+        "price_export": 0.16000000000000003,
+        "price_import": 0.19,
+        "segment_cost": -0.736
+      },
+      "end": "2026-01-15T20:00:00+11:00",
+      "grid": {
+        "export_kw": 9.201,
+        "import_allowed": false,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": -9.201
+      },
+      "index": 67,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 10.0,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 9.973,
+          "battery_soc_kwh": 38.041,
+          "battery_soc_pct": 90.789,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.027
+        }
+      },
+      "loads": {
+        "base_kw": 0.799,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.799
+      },
+      "start": "2026-01-15T19:30:00+11:00"
+    },
+    {
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": -0.242,
+        "price_export": 0.15,
+        "price_import": 0.19,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T20:30:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": false,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 68,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 1.64,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 1.64,
+          "battery_soc_kwh": 32.792,
+          "battery_soc_pct": 78.262,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 1.64,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 1.64
+      },
+      "start": "2026-01-15T20:00:00+11:00"
+    },
+    {
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": -0.242,
+        "price_export": 0.14,
+        "price_import": 0.18,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T21:00:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": false,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 69,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 1.163,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 1.163,
+          "battery_soc_kwh": 31.928,
+          "battery_soc_pct": 76.201,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 1.163,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 1.163
+      },
+      "start": "2026-01-15T20:30:00+11:00"
+    },
+    {
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": -0.242,
+        "price_export": 0.1,
+        "price_import": 0.17,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T21:30:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": false,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 70,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.706,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.706,
+          "battery_soc_kwh": 31.316,
+          "battery_soc_pct": 74.74,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.706,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.706
+      },
+      "start": "2026-01-15T21:00:00+11:00"
+    },
+    {
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": -0.242,
+        "price_export": 0.11000000000000001,
+        "price_import": 0.18,
+        "segment_cost": 0.0
+      },
+      "end": "2026-01-15T22:00:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.0,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.0
+      },
+      "index": 71,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.679,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.679,
+          "battery_soc_kwh": 30.945,
+          "battery_soc_pct": 73.853,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.679,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.679
+      },
+      "start": "2026-01-15T21:30:00+11:00"
+    },
+    {
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": -0.19,
+        "price_export": 0.08000000000000002,
+        "price_import": 0.15,
+        "segment_cost": 0.052
+      },
+      "end": "2026-01-15T22:30:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.689,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.689
+      },
+      "index": 72,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.0,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 30.587,
+          "battery_soc_pct": 73.0,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.689,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.689
+      },
+      "start": "2026-01-15T22:00:00+11:00"
+    },
+    {
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": -0.14,
+        "price_export": 0.08000000000000002,
+        "price_import": 0.15,
+        "segment_cost": 0.051
+      },
+      "end": "2026-01-15T23:00:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.674,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.674
+      },
+      "index": 73,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.0,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 30.587,
+          "battery_soc_pct": 73.0,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.674,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.674
+      },
+      "start": "2026-01-15T22:30:00+11:00"
+    },
+    {
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": -0.102,
+        "price_export": 0.06,
+        "price_import": 0.13,
+        "segment_cost": 0.038
+      },
+      "end": "2026-01-15T23:30:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.58,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.58
+      },
+      "index": 74,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.0,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 30.587,
+          "battery_soc_pct": 73.0,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.58,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.58
+      },
+      "start": "2026-01-15T23:00:00+11:00"
+    },
+    {
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": -0.066,
+        "price_export": 0.06,
+        "price_import": 0.13,
+        "segment_cost": 0.036
+      },
+      "end": "2026-01-16T00:00:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.56,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.56
+      },
+      "index": 75,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.0,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 30.587,
+          "battery_soc_pct": 73.0,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.56,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.56
+      },
+      "start": "2026-01-15T23:30:00+11:00"
+    },
+    {
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": -0.027,
+        "price_export": 0.06,
+        "price_import": 0.13,
+        "segment_cost": 0.039
+      },
+      "end": "2026-01-16T00:30:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.597,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.597
+      },
+      "index": 76,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.0,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 30.587,
+          "battery_soc_pct": 73.0,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.597,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.597
+      },
+      "start": "2026-01-16T00:00:00+11:00"
+    },
+    {
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": 0.013,
+        "price_export": 0.06,
+        "price_import": 0.13,
+        "segment_cost": 0.039
+      },
+      "end": "2026-01-16T01:00:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.606,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.606
+      },
+      "index": 77,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.0,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 30.587,
+          "battery_soc_pct": 73.0,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.606,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.606
+      },
+      "start": "2026-01-16T00:30:00+11:00"
+    },
+    {
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": 0.053,
+        "price_export": 0.06,
+        "price_import": 0.13,
+        "segment_cost": 0.04
+      },
+      "end": "2026-01-16T01:30:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.617,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.617
+      },
+      "index": 78,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.0,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 30.587,
+          "battery_soc_pct": 73.0,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.617,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.617
+      },
+      "start": "2026-01-16T01:00:00+11:00"
+    },
+    {
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": 0.091,
+        "price_export": 0.06,
+        "price_import": 0.13,
+        "segment_cost": 0.039
+      },
+      "end": "2026-01-16T02:00:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.594,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.594
+      },
+      "index": 79,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.0,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 30.587,
+          "battery_soc_pct": 73.0,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.594,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.594
+      },
+      "start": "2026-01-16T01:30:00+11:00"
+    },
+    {
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": 0.13,
+        "price_export": 0.06,
+        "price_import": 0.13,
+        "segment_cost": 0.039
+      },
+      "end": "2026-01-16T02:30:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.595,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.595
+      },
+      "index": 80,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.0,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 30.587,
+          "battery_soc_pct": 73.0,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.595,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.595
+      },
+      "start": "2026-01-16T02:00:00+11:00"
+    },
+    {
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": 0.169,
+        "price_export": 0.06,
+        "price_import": 0.13,
+        "segment_cost": 0.039
+      },
+      "end": "2026-01-16T03:00:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.601,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.601
+      },
+      "index": 81,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.0,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 30.587,
+          "battery_soc_pct": 73.0,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.601,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.601
+      },
+      "start": "2026-01-16T02:30:00+11:00"
+    },
+    {
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": 0.208,
+        "price_export": 0.06,
+        "price_import": 0.13,
+        "segment_cost": 0.039
+      },
+      "end": "2026-01-16T03:30:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.594,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.594
+      },
+      "index": 82,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.0,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 30.587,
+          "battery_soc_pct": 73.0,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.594,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.594
+      },
+      "start": "2026-01-16T03:00:00+11:00"
+    },
+    {
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": 0.247,
+        "price_export": 0.06,
+        "price_import": 0.13,
+        "segment_cost": 0.039
+      },
+      "end": "2026-01-16T04:00:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.601,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.601
+      },
+      "index": 83,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.0,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 30.587,
+          "battery_soc_pct": 73.0,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.601,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.601
+      },
+      "start": "2026-01-16T03:30:00+11:00"
+    },
+    {
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": 0.282,
+        "price_export": 0.06,
+        "price_import": 0.13,
+        "segment_cost": 0.036
+      },
+      "end": "2026-01-16T04:30:00+11:00",
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.547,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.547
+      },
+      "index": 84,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.0,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 30.587,
+          "battery_soc_pct": 73.0,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.547,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.547
+      },
+      "start": "2026-01-16T04:00:00+11:00"
+    },
+    {
+      "duration_s": 1800.0,
+      "economics": {
+        "cumulative_cost": 0.315,
+        "price_export": 0.06,
+        "price_import": 0.13,
+        "segment_cost": 0.033
+      },
       "end": "2026-01-16T05:00:00+11:00",
-      "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.0,
-      "grid_import_kwh": 0.084,
-      "grid_net_kwh": 0.084,
-      "load_kwh": 0.084,
-      "pv_kwh": 0.0,
-      "start": "2026-01-16T04:50:00+11:00"
+      "grid": {
+        "export_kw": 0.0,
+        "import_allowed": true,
+        "import_kw": 0.507,
+        "import_violation_kw": 0.0,
+        "net_kw": 0.507
+      },
+      "index": 85,
+      "inverters": {
+        "primary": {
+          "ac_net_kw": 0.0,
+          "battery_charge_kw": 0.0,
+          "battery_discharge_kw": 0.0,
+          "battery_soc_kwh": 30.587,
+          "battery_soc_pct": 73.0,
+          "curtailment": false,
+          "name": "Primary",
+          "pv_kw": 0.0
+        }
+      },
+      "loads": {
+        "base_kw": 0.507,
+        "evs": {
+          "tessie": {
+            "charge_kw": 0.0,
+            "connected": false,
+            "name": "Tessie",
+            "soc_kwh": 43.68,
+            "soc_pct": 56.0
+          }
+        },
+        "total_kw": 0.507
+      },
+      "start": "2026-01-16T04:30:00+11:00"
     }
   ],
-  "evs": {
-    "tessie": {
-      "charge_kwh": 0.0,
-      "connected_minutes": 0.0,
-      "soc_kwh_end": 43.68,
-      "soc_kwh_max": 43.68,
-      "soc_kwh_min": 43.68,
-      "soc_pct_end": 56.0,
-      "soc_pct_max": 56.0,
-      "soc_pct_min": 56.0
-    }
-  },
-  "inverters": {
-    "primary": {
-      "ac_net_kwh": 16.124,
-      "battery_charge_kwh": 12.077,
-      "battery_discharge_kwh": 10.899,
-      "curtailment_minutes": 0.0,
-      "pv_kwh": 17.302,
-      "soc_kwh_end": 30.587,
-      "soc_kwh_max": 41.9,
-      "soc_kwh_min": 30.427,
-      "soc_pct_end": 73.0,
-      "soc_pct_max": 100.0,
-      "soc_pct_min": 72.619
-    }
-  },
-  "meta": {
-    "bucket_minutes": 60,
-    "duration_minutes": 1930.0,
-    "generated_at": "2026-01-14T09:50:22.729243+00:00",
-    "horizon_end": "2026-01-16T05:00:00+11:00",
-    "horizon_start": "2026-01-14T20:50:00+11:00",
-    "objective_value": -3.765,
-    "status": "Optimal",
-    "timestep_minutes": {
-      "avg": 22.442,
-      "max": 30.0,
-      "min": 5.0,
-      "unique": [
-        5.0,
-        30.0
-      ]
-    },
-    "timesteps": 86
-  },
-  "prices": {
-    "export_avg": 0.063,
-    "export_max": 0.16,
-    "export_min": 0.01,
-    "import_avg": 0.128,
-    "import_max": 0.19,
-    "import_min": 0.09
-  },
-  "totals": {
-    "battery_charge_kwh": 12.077,
-    "battery_discharge_kwh": 10.899,
-    "ev_charge_kwh": 0.0,
-    "grid_export_kw_max": 9.201,
-    "grid_export_kwh": 7.949,
-    "grid_import_kw_max": 7.793,
-    "grid_import_kwh": 14.005,
-    "grid_import_violation_kwh": 0.0,
-    "grid_net_kw_max": 7.793,
-    "grid_net_kw_min": -9.201,
-    "grid_net_kwh": 6.056,
-    "load_base_kwh": 22.181,
-    "load_total_kwh": 22.181,
-    "pv_kwh": 17.302,
-    "segment_cost_total": 0.52,
-    "total_cost": 0.518
+  "timings": {
+    "build_seconds": 0.0,
+    "solve_seconds": 0.0,
+    "total_seconds": 0.0
   }
 }
