@@ -134,8 +134,9 @@ Plotting (`src/hass_energy/plotting/plan.py`):
   - Compare `/tmp/ems_plan.actual.json` with `tests/fixtures/ems/<name>/ems_plan.json`
     (or update the fixture plan intentionally if behavior changes are expected).
   - For visual inspection, add `--plot` or `--plot-output <path>` to review the plan.
-- Snapshot tests use `syrupy` with a summarized plan payload for easy diffs.
-  Set `EMS_SCENARIO=<name>` to point tests at a named fixture subdirectory.
+- Fixture baseline tests compare the generated plan JSON against the stored
+  `ems_plan.json` for each bundle. Set `EMS_SCENARIO=<name>` to target a named
+  fixture subdirectory (use `EMS_SCENARIO=root` to target the base bundle).
 
 ### Known gaps / future work
 - Controlled EV load modeling is now supported (charge-only with SoC incentives).

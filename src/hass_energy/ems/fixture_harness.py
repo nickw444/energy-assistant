@@ -25,11 +25,18 @@ def resolve_ems_fixture_paths(base_dir: Path, name: str | None) -> EmsFixturePat
     )
 
 
+def normalize_plan_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    timings = payload.get("timings")
+    if isinstance(timings, dict):
+        timings_dict = cast(dict[str, object], timings)
+        normalized = dict(payload)
+        normalized["timings"] = {key: 0.0 for key in timings_dict}
+        return normalized
+    return payload
+
+
 def serialize_plan(plan: EmsPlanOutput, *, normalize_timings: bool = True) -> dict[str, Any]:
     payload = plan.model_dump(mode="json")
     if normalize_timings:
-        timings = payload.get("timings")
-        if isinstance(timings, dict):
-            timings_dict = cast(dict[str, object], timings)
-            payload["timings"] = {key: 0.0 for key in timings_dict}
+        return normalize_plan_payload(payload)
     return payload
