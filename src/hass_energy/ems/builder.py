@@ -540,14 +540,22 @@ class MILPBuilder:
         inverter_by_id = inverters.inverters
         ev_by_id = loads.evs
 
+        # Self-consumption bias: add premium to import, discount export.
+        self_consumption_bias = self._plant.load.self_consumption_bias_pct / 100.0
+
         # Price-aware objective: minimize net cost (import cost minus export revenue).
         # When export price is exactly zero, add a tiny bonus to prefer exporting over curtailment.
+        # Self-consumption bias makes grid interaction slightly less attractive than local use.
         export_bonus = 1e-4
         objective: pulp.LpAffineExpression = pulp.lpSum(
             (
-                P_import[t] * float(price_import[t])
+                P_import[t] * float(price_import[t]) * (1.0 + self_consumption_bias)
                 - P_export[t]
-                * (export_bonus if abs(float(price_export[t])) <= 1e-9 else float(price_export[t]))
+                * (
+                    export_bonus
+                    if abs(float(price_export[t])) <= 1e-9
+                    else float(price_export[t]) * (1.0 - self_consumption_bias)
+                )
             )
             * horizon.dt_hours(t)
             for t in horizon.T
@@ -563,7 +571,9 @@ class MILPBuilder:
             (-w_early * (P_import[t] + P_export[t]) * (1.0 / (t + 1)) * horizon.dt_hours(t))
             for t in horizon.T
         )
-        # Battery throughput penalty (wear cost) from config per inverter.
+        # Battery throughput penalty (wear cost) applied to discharge only.
+        # Charging is not penalized because PV energy is free and we want to capture it.
+        # Efficiency losses are already modeled in the SoC dynamics (E[t+1] = E[t] + charge×η - discharge/η).
         for inverter in self._plant.inverters:
             battery = inverter.battery
             if battery is None:
@@ -571,17 +581,17 @@ class MILPBuilder:
             inv_vars = inverter_by_id.get(inverter.id)
             if inv_vars is None:
                 continue
+            discharge_series = inv_vars.P_batt_discharge_kw
+            if discharge_series is None:
+                continue
             wear_cost = battery.throughput_cost_per_kwh
             if wear_cost <= 0:
                 continue
-            charge_series = inv_vars.P_batt_charge_kw
-            discharge_series = inv_vars.P_batt_discharge_kw
-            if charge_series is None or discharge_series is None:
-                continue
             objective += pulp.lpSum(
-                wear_cost * (charge_series[t] + discharge_series[t]) * horizon.dt_hours(t)
+                wear_cost * discharge_series[t] * horizon.dt_hours(t)
                 for t in horizon.T
             )
+
         # Tiny tie-breaker to keep binary curtailment decisions stable across inverters.
         w_curtail_tie = 1e-6
         total = len(self._plant.inverters)
@@ -594,11 +604,14 @@ class MILPBuilder:
             # Consistent ordering bias avoids multiple equivalent curtailment choices.
             objective += pulp.lpSum(weight * series[t] * horizon.dt_hours(t) for t in horizon.T)
         # EV terminal SoC incentives (piecewise per-kWh rewards).
+        # Apply the same bias as export revenue so incentives compete fairly with export tariffs.
+        # e.g., an 8c incentive should tie with an 8c export tariff after both are biased.
         for segments in loads.ev_incentive_segments.values():
             for segment_var, incentive in segments:
                 if abs(float(incentive)) <= 1e-12:
                     continue
-                objective += -float(incentive) * segment_var
+                biased_incentive = float(incentive) * (1.0 - self_consumption_bias)
+                objective += -biased_incentive * segment_var
         # EV ramp penalties (discourage large per-slot changes in charge power).
         ramp_penalty = _EV_RAMP_PENALTY_COST
         for load in self._loads:
