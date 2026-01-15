@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Literal
 
 import pytest
 
@@ -145,7 +146,7 @@ def test_amber_forecast_falls_back_to_per_kwh_when_advanced_missing() -> None:
         type="home_assistant",
         platform="amberelectric",
         entity="price_forecast",
-        use_advanced_price_forecast=True,
+        price_forecast_mode="advanced",
     )
     state: HomeAssistantStateDict = {
         "entity_id": "sensor.price_forecast",
@@ -169,3 +170,114 @@ def test_amber_forecast_falls_back_to_per_kwh_when_advanced_missing() -> None:
 
     assert len(intervals) == 1
     assert intervals[0].value == pytest.approx(0.05)  # type: ignore[reportUnknownMemberType]
+
+
+@pytest.mark.parametrize(
+    ("blend", "expected"),
+    [
+        ("blend_max", 0.12),
+        ("blend_min", 0.08),
+        ("blend_mean", 0.10),
+    ],
+)
+def test_amber_forecast_blends_advanced_and_spot(
+    blend: Literal["blend_max", "blend_min", "blend_mean"],
+    expected: float,
+) -> None:
+    source = HomeAssistantAmberElectricForecastSource(
+        type="home_assistant",
+        platform="amberelectric",
+        entity="price_forecast",
+        price_forecast_mode=blend,
+    )
+    state: HomeAssistantStateDict = {
+        "entity_id": "sensor.price_forecast",
+        "state": "ok",
+        "attributes": {
+            "forecasts": [
+                {
+                    "start_time": "2026-01-07T03:30:01+00:00",
+                    "end_time": "2026-01-07T03:35:00+00:00",
+                    "advanced_price_predicted": 0.12,
+                    "per_kwh": 0.08,
+                }
+            ]
+        },
+        "last_changed": "2026-01-07T03:30:00+00:00",
+        "last_reported": "2026-01-07T03:30:00+00:00",
+        "last_updated": "2026-01-07T03:30:00+00:00",
+    }
+
+    intervals = source.mapper(state)
+
+    assert len(intervals) == 1
+    assert intervals[0].value == pytest.approx(expected)  # type: ignore[reportUnknownMemberType]
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected"),
+    [
+        ("spot", 0.08),
+        ("advanced", 0.12),
+    ],
+)
+def test_amber_forecast_can_force_spot_or_advanced(
+    mode: Literal["spot", "advanced"],
+    expected: float,
+) -> None:
+    source = HomeAssistantAmberElectricForecastSource(
+        type="home_assistant",
+        platform="amberelectric",
+        entity="price_forecast",
+        price_forecast_mode=mode,
+    )
+    state: HomeAssistantStateDict = {
+        "entity_id": "sensor.price_forecast",
+        "state": "ok",
+        "attributes": {
+            "forecasts": [
+                {
+                    "start_time": "2026-01-07T03:30:01+00:00",
+                    "end_time": "2026-01-07T03:35:00+00:00",
+                    "advanced_price_predicted": 0.12,
+                    "per_kwh": 0.08,
+                }
+            ]
+        },
+        "last_changed": "2026-01-07T03:30:00+00:00",
+        "last_reported": "2026-01-07T03:30:00+00:00",
+        "last_updated": "2026-01-07T03:30:00+00:00",
+    }
+
+    intervals = source.mapper(state)
+
+    assert len(intervals) == 1
+    assert intervals[0].value == pytest.approx(expected)  # type: ignore[reportUnknownMemberType]
+
+
+def test_amber_forecast_spot_requires_spot_price() -> None:
+    source = HomeAssistantAmberElectricForecastSource(
+        type="home_assistant",
+        platform="amberelectric",
+        entity="price_forecast",
+        price_forecast_mode="spot",
+    )
+    state: HomeAssistantStateDict = {
+        "entity_id": "sensor.price_forecast",
+        "state": "ok",
+        "attributes": {
+            "forecasts": [
+                {
+                    "start_time": "2026-01-07T03:30:01+00:00",
+                    "end_time": "2026-01-07T03:35:00+00:00",
+                    "advanced_price_predicted": 0.12,
+                }
+            ]
+        },
+        "last_changed": "2026-01-07T03:30:00+00:00",
+        "last_reported": "2026-01-07T03:30:00+00:00",
+        "last_updated": "2026-01-07T03:30:00+00:00",
+    }
+
+    with pytest.raises(ValueError, match="Spot price is required"):
+        source.mapper(state)
