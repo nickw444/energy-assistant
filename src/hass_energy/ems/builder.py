@@ -573,7 +573,8 @@ class MILPBuilder:
         )
         # Battery throughput penalty (wear cost) applied to discharge only.
         # Charging is not penalized because PV energy is free and we want to capture it.
-        # Efficiency losses are already modeled in the SoC dynamics (E[t+1] = E[t] + charge×η - discharge/η).
+        # Efficiency losses are already modeled in the SoC dynamics
+        # (E[t+1] = E[t] + charge * eta - discharge / eta).
         for inverter in self._plant.inverters:
             battery = inverter.battery
             if battery is None:
