@@ -12,6 +12,7 @@ wheels/
 # Local config files
 data/
 config.dev.yaml
+.worktrees/
 
 
 ._old
