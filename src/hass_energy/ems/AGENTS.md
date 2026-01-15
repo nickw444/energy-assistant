@@ -134,6 +134,7 @@ Plotting (`src/hass_energy/plotting/plan.py`):
   - `hass-energy ems solve --scenario <name> --output /tmp/ems_plan.actual.json`
   - Use `/tmp/ems_plan.actual.json` for deep debugging; the checked-in
     `tests/fixtures/ems/<name>/ems_plan.json` is a summarized baseline for diffs.
+  - Refresh the summarized baseline with `hass-energy ems refresh-baseline --name <name>`.
   - For visual inspection, add `--plot` or `--plot-output <path>` to review the plan.
 - Fixture baseline tests compare the generated plan summary against the stored
   `ems_plan.json` for each bundle. Set `EMS_SCENARIO=<name>` to target a named

@@ -444,6 +444,7 @@ EMS tests live under `tests/hass_energy/ems/`:
 Fixtures can be recorded via:
 
 - `hass-energy ems record-scenario --name <scenario>`
+- `hass-energy ems refresh-baseline --name <scenario>`
 - `hass-energy ems solve --scenario <name>`
 
 ---

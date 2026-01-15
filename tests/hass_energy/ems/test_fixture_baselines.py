@@ -79,7 +79,7 @@ def test_fixture_baseline_up_to_date(scenario: str) -> None:
     actual = summarize_plan(plan)
     expected = json.loads(paths.plan_path.read_text())
 
-    record_hint = f"hass-energy ems record-scenario --name {scenario}"
+    record_hint = f"hass-energy ems refresh-baseline --name {scenario}"
     assert actual == expected, (
         f"Fixture {scenario!r} ems_plan.json is out of date. "
         "Re-record with: " + record_hint

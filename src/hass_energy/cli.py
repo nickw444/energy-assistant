@@ -10,6 +10,7 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from threading import Event
+from typing import cast
 
 import click
 import uvicorn
@@ -23,7 +24,11 @@ from hass_energy.ems.fixture_harness import (
     summarize_plan,
 )
 from hass_energy.ems.planner import EmsMilpPlanner
-from hass_energy.lib.home_assistant import HomeAssistantClient
+from hass_energy.lib.home_assistant import (
+    HomeAssistantClient,
+    HomeAssistantHistoryStateDict,
+    HomeAssistantStateDict,
+)
 from hass_energy.lib.home_assistant_ws import HomeAssistantWebSocketClientImpl
 from hass_energy.lib.source_resolver.fixtures import (
     FixtureHassDataProvider,
@@ -318,14 +323,83 @@ def ems_record_scenario(
         click.echo(f"Wrote EMS config to {paths.config_path}")
 
         if write_plan:
+            fixture_states = cast(dict[str, HomeAssistantStateDict], fixture["states"])
+            fixture_history = cast(
+                dict[str, list[HomeAssistantHistoryStateDict]],
+                fixture["history"],
+            )
+            fixture_provider = FixtureHassDataProvider(
+                states=fixture_states,
+                history=fixture_history,
+            )
+            fixture_resolver = ValueResolverImpl(hass_data_provider=fixture_provider)
+            fixture_resolver.mark_for_hydration(app_config)
+            fixture_resolver.hydrate_all()
             with freeze_hass_source_time(captured_at):
-                plan = EmsMilpPlanner(app_config, resolver=resolver).generate_ems_plan(
+                plan = EmsMilpPlanner(app_config, resolver=fixture_resolver).generate_ems_plan(
                     now=captured_at,
                     solver_msg=solver_msg,
                 )
             plan_payload = summarize_plan(plan)
             paths.plan_path.write_text(json.dumps(plan_payload, indent=2, sort_keys=True))
             click.echo(f"Wrote EMS baseline summary to {paths.plan_path}")
+    except Exception as exc:
+        raise click.ClickException(traceback.format_exc()) from exc
+
+
+@ems.command("refresh-baseline")
+@click.option(
+    "--name",
+    type=str,
+    required=True,
+    help="Scenario name to refresh.",
+)
+@click.option(
+    "--scenario-dir",
+    type=click.Path(path_type=Path, file_okay=False),
+    default=Path("tests/fixtures/ems"),
+    show_default=True,
+    help="Base directory containing scenario bundles.",
+)
+@click.option(
+    "--solver-msg/--no-solver-msg",
+    default=False,
+    show_default=True,
+    help="Enable solver output (CBC).",
+)
+@click.pass_context
+def ems_refresh_baseline(
+    ctx: click.Context,
+    name: str,
+    scenario_dir: Path,
+    solver_msg: bool,
+) -> None:
+    """Recompute the summarized baseline from a recorded fixture."""
+    _configure_logging(str(ctx.obj.get("log_level", "INFO")))
+    paths = resolve_ems_fixture_paths(scenario_dir, name)
+    if not paths.fixture_path.exists() or not paths.config_path.exists():
+        raise click.ClickException(
+            "Fixture/config not found. "
+            f"Expected {paths.fixture_path} and {paths.config_path}."
+        )
+
+    try:
+        app_config = load_app_config(paths.config_path)
+        provider, captured_at = FixtureHassDataProvider.from_path(paths.fixture_path)
+        now = datetime.fromisoformat(captured_at) if captured_at else None
+
+        resolver = ValueResolverImpl(hass_data_provider=provider)
+        resolver.mark_for_hydration(app_config)
+        resolver.hydrate_all()
+
+        with freeze_hass_source_time(now):
+            plan = EmsMilpPlanner(app_config, resolver=resolver).generate_ems_plan(
+                now=now,
+                solver_msg=solver_msg,
+            )
+        plan_payload = summarize_plan(plan)
+        paths.plan_path.write_text(json.dumps(plan_payload, indent=2, sort_keys=True))
+        click.echo(f"Wrote EMS baseline summary to {paths.plan_path}")
     except Exception as exc:
         raise click.ClickException(traceback.format_exc()) from exc
 
