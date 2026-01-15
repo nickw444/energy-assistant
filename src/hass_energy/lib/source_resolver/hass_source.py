@@ -70,7 +70,6 @@ def _parse_timestamp(value: object) -> datetime.datetime | None:
 
 def _amber_price_value(
     item: dict[str, object],
-    use_advanced: bool | None,
     mode: Literal[
         "spot",
         "advanced",
@@ -89,24 +88,22 @@ def _amber_price_value(
         if raw_advanced is not None:
             advanced_value = required_float(raw_advanced)
 
-    if mode is not None:
-        if mode == "spot":
-            return spot_value
-        if mode == "advanced":
-            return advanced_value
-        if spot_value is None:
-            return advanced_value
-        if advanced_value is None:
-            return spot_value
-        if mode == "blend_min":
-            return min(spot_value, advanced_value)
-        if mode == "blend_max":
-            return max(spot_value, advanced_value)
-        return (spot_value + advanced_value) / 2.0
+    if mode is None:
+        return spot_value
 
-    if use_advanced and advanced_value is not None:
+    if mode == "spot":
+        return spot_value if spot_value is not None else advanced_value
+    if mode == "advanced":
+        return advanced_value if advanced_value is not None else spot_value
+    if spot_value is None:
         return advanced_value
-    return spot_value
+    if advanced_value is None:
+        return spot_value
+    if mode == "blend_min":
+        return min(spot_value, advanced_value)
+    if mode == "blend_max":
+        return max(spot_value, advanced_value)
+    return (spot_value + advanced_value) / 2.0
 
 
 class HomeAssistantEntitySource(EntitySource[HomeAssistantStateDict, T]):
@@ -163,7 +160,6 @@ class HomeAssistantAmberElectricForecastSource(
     type: Literal["home_assistant"]
     platform: Literal["amberelectric"]
     entity: str = Field(min_length=1)
-    use_advanced_price_forecast: bool | None = None
     price_forecast_mode: Literal[
         "spot",
         "advanced",
@@ -200,7 +196,6 @@ class HomeAssistantAmberElectricForecastSource(
 
             value = _amber_price_value(
                 item,
-                self.use_advanced_price_forecast,
                 self.price_forecast_mode,
             )
             if value is None:
