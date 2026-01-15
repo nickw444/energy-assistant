@@ -25,6 +25,7 @@
 - EMS fixture snapshots use summarized `tests/fixtures/ems/**/ems_plan.json` baselines (single source of truth). Refresh with `hass-energy ems refresh-baseline --name <scenario>`.
 - Planner now consumes a resolved payload (no source models). Resolved schemas live in `src/hass_energy/models/resolved.py`; resolution scaffolding/registry is under `src/hass_energy/lib/resolution/` for two-pass fetch→transform in the future.
 - This is unreleased software; schema changes can be breaking without backward-compatibility shims.
+- When config schemas change in backward-incompatible ways, update any captured scenario configs under `tests/fixtures/ems/**/ems_config.yaml` to keep fixture tests passing.
 - EMS-specific guidance lives in `src/hass_energy/ems/AGENTS.md`.
 - EMS plan `EconomicsTimestepPlan` costs are grid import/export only and exclude other objective terms (EV incentives, penalties, curtailment tie-breaks, violation penalties, battery wear).
 - EMS objective favors self-consumption via `self_consumption_bias_pct` (adds premium to import, discounts export). Battery throughput cost applies to discharge only.
