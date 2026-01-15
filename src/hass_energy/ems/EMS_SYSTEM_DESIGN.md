@@ -438,11 +438,13 @@ EMS tests live under `tests/hass_energy/ems/`:
 
 - `test_builder.py`: core MILP behavior (prices, curtailment, alignment).
 - `test_forecast_alignment.py`: strict horizon coverage and slot-0 override.
-- `test_fixture_scenario.py`: snapshot test with HA fixture data.
+- `test_fixture_baselines.py`: fixture replay against summarized `ems_plan.json`
+  baselines (set `EMS_SCENARIO` to target a specific bundle).
 
 Fixtures can be recorded via:
 
 - `hass-energy ems record-scenario --name <scenario>`
+- `hass-energy ems refresh-baseline --name <scenario>`
 - `hass-energy ems solve --scenario <name>`
 
 ---
