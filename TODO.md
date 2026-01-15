@@ -8,13 +8,15 @@
 - [x] Verify that incentives don't show in total (real) cost values
 - [x] model outputs should round to 3dp.
 - [x] dynamically set horizon to shortest forecast length
+- [x] Dynamic horizon timestep lengths
 - [ ] Implement more modular way to handle objective function
 - [ ] Implement slot -1 (pre-MPC slot) as model inputs
 - [ ] Better curtailment behaviour: Encourage curtailment even when export is going to be 0, when price is negative.
 - [ ] cache Home Assistant history values used for forecasts so we can generate a plan faster.
 - [ ] Implement new load types: constant/nonvariable load.
 - [ ] Reduce binaries and replace with continuous variables/quantisation
-- [ ] Dynamic horizon timestep lengths
+- [ ] Fix EV charging - charging never starts.
+- [ ] Better handling of incomplete horizons for our SoC terminal constraints.
 
 ## Worker
 
