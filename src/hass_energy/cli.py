@@ -20,7 +20,7 @@ from hass_energy.config import load_app_config
 from hass_energy.ems.fixture_harness import (
     EmsFixturePaths,
     resolve_ems_fixture_paths,
-    serialize_plan,
+    summarize_plan,
 )
 from hass_energy.ems.planner import EmsMilpPlanner
 from hass_energy.lib.home_assistant import HomeAssistantClient
@@ -268,7 +268,7 @@ def ems_solve(
     "--write-plan/--no-write-plan",
     default=True,
     show_default=True,
-    help="Also write a normalized plan baseline.",
+    help="Also write a summarized plan baseline.",
 )
 @click.option(
     "--redact/--no-redact",
@@ -323,9 +323,9 @@ def ems_record_scenario(
                     now=captured_at,
                     solver_msg=solver_msg,
                 )
-            plan_payload = serialize_plan(plan, normalize_timings=True)
+            plan_payload = summarize_plan(plan)
             paths.plan_path.write_text(json.dumps(plan_payload, indent=2, sort_keys=True))
-            click.echo(f"Wrote EMS baseline plan to {paths.plan_path}")
+            click.echo(f"Wrote EMS baseline summary to {paths.plan_path}")
     except Exception as exc:
         raise click.ClickException(traceback.format_exc()) from exc
 

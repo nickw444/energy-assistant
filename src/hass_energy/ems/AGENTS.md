@@ -123,20 +123,21 @@ Plotting (`src/hass_energy/plotting/plan.py`):
 - Treat the EMS solver as a black box; test inputs/outputs rather than private helpers.
 - Use recorded Home Assistant fixtures for complex scenarios. Record via
   `hass-energy ems record-scenario` (writes `ems_fixture.json`, `ems_config.yaml`,
-  and `ems_plan.json` under `tests/fixtures/ems/`; `--name` writes to a subdir).
+  and a summarized `ems_plan.json` baseline under `tests/fixtures/ems/`; `--name`
+  writes to a subdir).
 - Replay fixtures offline via `hass-energy ems solve --scenario <name>` to view
   plots or output JSON without a live Home Assistant connection.
 - When making EMS changes, validate against a checked-in fixture by replaying it
-  and comparing the generated plan JSON to the stored `ems_plan.json` for the same
-  scenario. This is the preferred offline sanity check before updating snapshots.
+  and comparing the generated plan summary to the stored `ems_plan.json` for the
+  same scenario. This is the preferred offline sanity check before updating snapshots.
   Example workflow:
   - `hass-energy ems solve --scenario <name> --output /tmp/ems_plan.actual.json`
-  - Compare `/tmp/ems_plan.actual.json` with `tests/fixtures/ems/<name>/ems_plan.json`
-    (or update the fixture plan intentionally if behavior changes are expected).
+  - Use `/tmp/ems_plan.actual.json` for deep debugging; the checked-in
+    `tests/fixtures/ems/<name>/ems_plan.json` is a summarized baseline for diffs.
   - For visual inspection, add `--plot` or `--plot-output <path>` to review the plan.
-- Fixture baseline tests compare the generated plan JSON against the stored
+- Fixture baseline tests compare the generated plan summary against the stored
   `ems_plan.json` for each bundle. Set `EMS_SCENARIO=<name>` to target a named
-  fixture subdirectory (use `EMS_SCENARIO=root` to target the base bundle).
+  fixture subdirectory.
 
 ### Known gaps / future work
 - Controlled EV load modeling is now supported (charge-only with SoC incentives).

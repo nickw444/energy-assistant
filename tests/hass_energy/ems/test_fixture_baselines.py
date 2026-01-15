@@ -12,9 +12,8 @@ import pytest
 from hass_energy.config import load_app_config
 from hass_energy.ems.fixture_harness import (
     EmsFixturePaths,
-    normalize_plan_payload,
     resolve_ems_fixture_paths,
-    serialize_plan,
+    summarize_plan,
 )
 from hass_energy.ems.planner import EmsMilpPlanner
 from hass_energy.lib.source_resolver.fixtures import (
@@ -24,17 +23,14 @@ from hass_energy.lib.source_resolver.fixtures import (
 from hass_energy.lib.source_resolver.resolver import ValueResolverImpl
 
 FIXTURE_BASE = Path("tests/fixtures/ems")
-_SCENARIO_UNSET = object()
 
 
-def _scenario_from_env() -> str | None | object:
+def _scenario_from_env() -> str | None:
     raw = os.getenv("EMS_SCENARIO")
     if raw is None:
-        return _SCENARIO_UNSET
-    name = raw.strip()
-    if name in ("", ".", "root"):
         return None
-    return name
+    name = raw.strip()
+    return name or None
 
 
 def _is_complete_bundle(paths: EmsFixturePaths) -> bool:
@@ -45,33 +41,26 @@ def _is_complete_bundle(paths: EmsFixturePaths) -> bool:
     )
 
 
-def _discover_fixture_scenarios() -> list[str | None]:
+def _discover_fixture_scenarios() -> list[str]:
     """Find all fixture bundles with a baseline plan."""
     if not FIXTURE_BASE.exists():
         return []
     scenario_env = _scenario_from_env()
-    if scenario_env is not _SCENARIO_UNSET:
+    if scenario_env:
         return [scenario_env]
 
-    scenarios: list[str | None] = []
-    root_paths = resolve_ems_fixture_paths(FIXTURE_BASE, None)
-    if _is_complete_bundle(root_paths):
-        scenarios.append(None)
+    scenarios: list[str] = []
     for child in FIXTURE_BASE.iterdir():
         if not child.is_dir():
             continue
         paths = resolve_ems_fixture_paths(FIXTURE_BASE, child.name)
         if _is_complete_bundle(paths):
             scenarios.append(child.name)
-    return sorted(scenarios, key=lambda name: name or "")
+    return sorted(scenarios)
 
 
-def _scenario_id(scenario: str | None) -> str:
-    return scenario or "root"
-
-
-@pytest.mark.parametrize("scenario", _discover_fixture_scenarios(), ids=_scenario_id)
-def test_fixture_baseline_up_to_date(scenario: str | None) -> None:
+@pytest.mark.parametrize("scenario", _discover_fixture_scenarios())
+def test_fixture_baseline_up_to_date(scenario: str) -> None:
     """Re-solve each fixture and assert it matches the stored ems_plan.json."""
     paths = resolve_ems_fixture_paths(FIXTURE_BASE, scenario)
     if not _is_complete_bundle(paths):
@@ -87,16 +76,11 @@ def test_fixture_baseline_up_to_date(scenario: str | None) -> None:
         resolver.hydrate_all()
         plan = EmsMilpPlanner(app_config, resolver=resolver).generate_ems_plan(now=now)
 
-    actual = serialize_plan(plan, normalize_timings=True)
-    expected = normalize_plan_payload(json.loads(paths.plan_path.read_text()))
+    actual = summarize_plan(plan)
+    expected = json.loads(paths.plan_path.read_text())
 
-    scenario_label = scenario or "root"
-    record_hint = (
-        "hass-energy ems record-scenario"
-        if scenario is None
-        else f"hass-energy ems record-scenario --name {scenario}"
-    )
+    record_hint = f"hass-energy ems record-scenario --name {scenario}"
     assert actual == expected, (
-        f"Fixture {scenario_label!r} ems_plan.json is out of date. "
+        f"Fixture {scenario!r} ems_plan.json is out of date. "
         "Re-record with: " + record_hint
     )
