@@ -31,12 +31,12 @@ plant:
       type: home_assistant
       platform: amberelectric
       entity: sensor.amber_general_forecast
-      use_advanced_price_forecast: true
+      price_forecast_mode: advanced
     price_export_forecast:
       type: home_assistant
       platform: amberelectric
       entity: sensor.amber_feed_in_forecast
-      use_advanced_price_forecast: true
+      price_forecast_mode: advanced
     
     import_forbidden_periods:
       - start: "14:55"
