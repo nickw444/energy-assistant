@@ -145,7 +145,7 @@ def test_amber_forecast_falls_back_to_per_kwh_when_advanced_missing() -> None:
         type="home_assistant",
         platform="amberelectric",
         entity="price_forecast",
-        use_advanced_price_forecast=True,
+        price_forecast_mode="advanced",
     )
     state: HomeAssistantStateDict = {
         "entity_id": "sensor.price_forecast",
