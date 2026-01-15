@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Literal
 
 import pytest
 
@@ -180,7 +181,7 @@ def test_amber_forecast_falls_back_to_per_kwh_when_advanced_missing() -> None:
     ],
 )
 def test_amber_forecast_blends_advanced_and_spot(
-    blend: str,
+    blend: Literal["blend_max", "blend_min", "blend_mean"],
     expected: float,
 ) -> None:
     source = HomeAssistantAmberElectricForecastSource(
@@ -221,7 +222,7 @@ def test_amber_forecast_blends_advanced_and_spot(
     ],
 )
 def test_amber_forecast_can_force_spot_or_advanced(
-    mode: str,
+    mode: Literal["spot", "advanced"],
     expected: float,
 ) -> None:
     source = HomeAssistantAmberElectricForecastSource(
