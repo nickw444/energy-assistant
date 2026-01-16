@@ -463,6 +463,10 @@ def write_plan_image(
     """
     fig, _ = _build_plan_figure(plan, include_hover=False)
     fig.write_image(str(output), width=width, height=height, format="jpeg", scale=2)
+    if not output.exists():
+        raise ValueError(f"Failed to write plan image to {output}")
+    if output.stat().st_size == 0:
+        raise ValueError(f"Plan image {output} is empty")
 
 
 def _normalize_time(value: datetime, *, local_tz: tzinfo) -> datetime:
