@@ -20,6 +20,7 @@ from hass_energy.api.server import create_app
 from hass_energy.config import load_app_config
 from hass_energy.ems.fixture_harness import (
     EmsFixturePaths,
+    compute_plan_hash,
     resolve_ems_fixture_paths,
     summarize_plan,
 )
@@ -37,7 +38,7 @@ from hass_energy.lib.source_resolver.fixtures import (
 from hass_energy.lib.source_resolver.hass_provider import HassDataProviderImpl
 from hass_energy.lib.source_resolver.resolver import ValueResolverImpl
 from hass_energy.models.config import AppConfig
-from hass_energy.plotting import plot_plan_html
+from hass_energy.plotting import plot_plan_html, write_plan_image
 from hass_energy.worker import Worker
 
 LOG_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
@@ -347,6 +348,13 @@ def ems_record_scenario(
             plan_payload = summarize_plan(plan)
             paths.plan_path.write_text(json.dumps(plan_payload, indent=2, sort_keys=True))
             click.echo(f"Wrote EMS baseline summary to {paths.plan_path}")
+
+            plan_hash = compute_plan_hash(plan_payload)
+            paths.hash_path.write_text(plan_hash + "\n")
+            click.echo(f"Wrote plan hash to {paths.hash_path}")
+
+            write_plan_image(plan, paths.plot_path)
+            click.echo(f"Wrote plan image to {paths.plot_path}")
     except Exception as exc:
         raise click.ClickException(traceback.format_exc()) from exc
 
@@ -404,6 +412,17 @@ def ems_refresh_baseline(
         plan_payload = summarize_plan(plan)
         paths.plan_path.write_text(json.dumps(plan_payload, indent=2, sort_keys=True))
         click.echo(f"Wrote EMS baseline summary to {paths.plan_path}")
+
+        new_hash = compute_plan_hash(plan_payload)
+        old_hash = paths.hash_path.read_text().strip() if paths.hash_path.exists() else None
+        if new_hash != old_hash:
+            paths.hash_path.write_text(new_hash + "\n")
+            click.echo(f"Wrote plan hash to {paths.hash_path}")
+
+            write_plan_image(plan, paths.plot_path)
+            click.echo(f"Wrote plan image to {paths.plot_path}")
+        else:
+            click.echo("Plan unchanged, skipping image regeneration.")
     except Exception as exc:
         raise click.ClickException(traceback.format_exc()) from exc
 
