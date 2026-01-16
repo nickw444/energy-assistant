@@ -15,6 +15,7 @@ from hass_energy.ems.horizon import Horizon, floor_to_interval_boundary
 from hass_energy.ems.models import ResolvedForecasts
 from hass_energy.lib.source_resolver.models import PowerForecastInterval
 from hass_energy.lib.source_resolver.resolver import ValueResolver
+from hass_energy.models.config import EmsConfig
 from hass_energy.models.loads import ControlledEvLoad, LoadConfig, NonVariableLoad
 from hass_energy.models.plant import PlantConfig, TimeWindow
 
@@ -58,6 +59,8 @@ class InverterVars:
     P_batt_discharge_kw: dict[int, pulp.LpVariable] | None
     # Battery SoC variables at slot boundaries (indexed 0..N).
     E_batt_kwh: dict[int, pulp.LpVariable] | None
+    # Terminal SoC shortfall slack (kWh) when softening the terminal constraint.
+    E_batt_terminal_shortfall_kwh: pulp.LpVariable | None
     # Curtailment binary variables per timestep t (None if curtailment disabled).
     Curtail_inv: dict[int, pulp.LpVariable] | None
 
@@ -112,10 +115,12 @@ class MILPBuilder:
         plant: PlantConfig,
         loads: list[LoadConfig],
         resolver: ValueResolver,
+        ems_config: EmsConfig,
     ):
         self._plant = plant
         self._loads = loads
         self._resolver = resolver
+        self._ems_config = ems_config
         self._power_aligner = PowerForecastAligner()
         self._price_aligner = PriceForecastAligner()
 
@@ -380,6 +385,7 @@ class MILPBuilder:
                     P_batt_charge_kw=None,
                     P_batt_discharge_kw=None,
                     E_batt_kwh=None,
+                    E_batt_terminal_shortfall_kwh=None,
                     Curtail_inv=curtail_vars,
                 )
                 continue
@@ -445,10 +451,27 @@ class MILPBuilder:
                 E_batt_kwh[0] == initial_soc_kwh,
                 f"batt_soc_initial_{inv_id}",
             )
-            problem += (
-                E_batt_kwh[horizon.num_intervals] >= initial_soc_kwh,
-                f"batt_soc_terminal_{inv_id}",
-            )
+            terminal_shortfall_kwh: pulp.LpVariable | None = None
+            if self._should_soften_terminal_soc(horizon):
+                terminal_target_kwh = self._terminal_soc_target_kwh(
+                    horizon,
+                    initial_soc_kwh=initial_soc_kwh,
+                    reserve_kwh=reserve_kwh,
+                )
+                terminal_shortfall_kwh = pulp.LpVariable(
+                    f"E_batt_{inv_id}_terminal_shortfall_kwh",
+                    lowBound=0,
+                )
+                problem += (
+                    E_batt_kwh[horizon.num_intervals] + terminal_shortfall_kwh
+                    >= terminal_target_kwh,
+                    f"batt_soc_terminal_{inv_id}",
+                )
+            else:
+                problem += (
+                    E_batt_kwh[horizon.num_intervals] >= initial_soc_kwh,
+                    f"batt_soc_terminal_{inv_id}",
+                )
 
             for t in T:
                 # Block grid export unless battery stays above reserve SoC for this slot.
@@ -498,6 +521,7 @@ class MILPBuilder:
                 P_batt_charge_kw=P_batt_charge,
                 P_batt_discharge_kw=P_batt_discharge,
                 E_batt_kwh=E_batt_kwh,
+                E_batt_terminal_shortfall_kwh=terminal_shortfall_kwh,
                 Curtail_inv=curtail_vars,
             )
 
@@ -592,6 +616,13 @@ class MILPBuilder:
                 wear_cost * discharge_series[t] * horizon.dt_hours(t)
                 for t in horizon.T
             )
+        terminal_penalty = self._terminal_soc_penalty_per_kwh(horizon, price_import)
+        if terminal_penalty > 0:
+            for inverter in self._plant.inverters:
+                inv_vars = inverter_by_id.get(inverter.id)
+                if inv_vars is None or inv_vars.E_batt_terminal_shortfall_kwh is None:
+                    continue
+                objective += terminal_penalty * inv_vars.E_batt_terminal_shortfall_kwh
 
         # Tiny tie-breaker to keep binary curtailment decisions stable across inverters.
         w_curtail_tie = 1e-6
@@ -638,6 +669,51 @@ class MILPBuilder:
                 anchor_var = ev_vars.Ev_charge_anchor_kw
                 objective += anchor_penalty * anchor_var * horizon.dt_hours(0)
         problem += objective
+
+    def _should_soften_terminal_soc(self, horizon: Horizon) -> bool:
+        cfg = self._ems_config.terminal_soc
+        if cfg.mode == "hard":
+            return False
+        if cfg.mode == "soft":
+            return True
+        short_horizon_minutes = cfg.short_horizon_minutes
+        if short_horizon_minutes is None:
+            return False
+        return _horizon_duration_minutes(horizon) < short_horizon_minutes
+
+    def _terminal_soc_target_kwh(
+        self,
+        horizon: Horizon,
+        *,
+        initial_soc_kwh: float,
+        reserve_kwh: float,
+    ) -> float:
+        short_horizon_minutes = self._ems_config.terminal_soc.short_horizon_minutes
+        if short_horizon_minutes is None:
+            return initial_soc_kwh
+        horizon_minutes = _horizon_duration_minutes(horizon)
+        if short_horizon_minutes <= 0:
+            return initial_soc_kwh
+        ratio = min(1.0, horizon_minutes / short_horizon_minutes)
+        floor_kwh = min(initial_soc_kwh, reserve_kwh)
+        return floor_kwh + ratio * (initial_soc_kwh - floor_kwh)
+
+    def _terminal_soc_penalty_per_kwh(
+        self,
+        horizon: Horizon,
+        price_import: list[float],
+    ) -> float:
+        cfg = self._ems_config.terminal_soc
+        penalty = cfg.penalty_per_kwh
+        if penalty is None:
+            penalty = _average_price(price_import)
+        penalty = max(0.0, float(penalty))
+        short_horizon_minutes = cfg.short_horizon_minutes
+        if short_horizon_minutes is not None:
+            horizon_minutes = _horizon_duration_minutes(horizon)
+            if horizon_minutes < short_horizon_minutes:
+                penalty *= horizon_minutes / short_horizon_minutes
+        return penalty
 
     def _build_loads(
         self,
@@ -932,3 +1008,15 @@ def _minute_in_window(minute_of_day: int, start: int, end: int) -> bool:
     if start < end:
         return start <= minute_of_day < end
     return minute_of_day >= start or minute_of_day < end
+
+
+def _horizon_duration_minutes(horizon: Horizon) -> float:
+    if not horizon.slots:
+        return 0.0
+    return (horizon.slots[-1].end - horizon.start).total_seconds() / 60.0
+
+
+def _average_price(values: list[float]) -> float:
+    if not values:
+        return 0.0
+    return sum(values) / len(values)
