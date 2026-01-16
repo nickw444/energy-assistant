@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import timedelta
@@ -15,6 +17,8 @@ class EmsFixturePaths:
     fixture_path: Path
     config_path: Path
     plan_path: Path
+    plot_path: Path
+    hash_path: Path
 
 
 def resolve_ems_fixture_paths(base_dir: Path, name: str | None) -> EmsFixturePaths:
@@ -24,7 +28,20 @@ def resolve_ems_fixture_paths(base_dir: Path, name: str | None) -> EmsFixturePat
         fixture_path=root_dir / "ems_fixture.json",
         config_path=root_dir / "ems_config.yaml",
         plan_path=root_dir / "ems_plan.json",
+        plot_path=root_dir / "ems_plan.jpeg",
+        hash_path=root_dir / "ems_plan.hash",
     )
+
+
+def compute_plan_hash(plan_summary: dict[str, Any]) -> str:
+    """Compute a stable hash from the plan summary for change detection."""
+    normalized = dict(plan_summary)
+    if "meta" in normalized:
+        meta = dict(normalized["meta"])
+        meta.pop("generated_at", None)
+        normalized["meta"] = meta
+    serialized = json.dumps(normalized, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(serialized.encode()).hexdigest()[:16]
 
 
 def _round_floats(value: Any) -> Any:
