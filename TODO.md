@@ -20,36 +20,38 @@
 
 ## Worker
 
-- [ ] Based on configuration, eagerly re-plan when realtime cost changes.
+- [x] Based on configuration, eagerly re-plan when realtime cost changes.
+- [x] Observe price sensor and reevaluate on new price value
 
 ## Home Assistant Integration
 
 - [ ] Review/Unslopify the Home Assistant integration
-- [ ] Main Device returning slot parameters
+- [x] Main Device returning slot parameters
     - MPC values from Slot 0
 - [ ] Sub-Devices for Loads
     - EV Loads
         - [ ] Dynamic Charge By Time + Charge By Reward
         - [ ] Connect Requested By (e.g. the time charge will start based on the plan)
-- [ ] Graphing outputs (camera entity?)
 - [ ] Use Home Assistant integration to feed entity states to the API rather than separate token access.
+- [ ] Make the quantiser modulate charge rates
 
 
 ## Home Assistant Automations/Integrations
 
-- [ ] Control inverter curtailment
-- [ ] Control inverter work modes
+- [x] Control inverter curtailment
+- [x] Control inverter work modes
 - [ ] Notify when EV connect is requested
 - [ ] Start/Stop/Modulate EV charging rate
 
-## Quantization Layer
+## Quantization Layer (builtin)
 
 - [ ] Quantize outputs into discrete inverter actions
 - [ ] Support outputs directly to Home Assistant.
+  - [ ] Pre-defined modules for inverter integrations
 
 ## API
 
-- [ ] Improve API models to reflect plant heirarchy 
+- [x] Improve API models to reflect plant heirarchy 
 
 ## Web UI
 
@@ -64,7 +66,7 @@
 ## Predictions
 
 - [x] Wrap load forecast so we can extend the forecast dynamically to price forecast length
-- [ ] Linearly interpolate realtime load value into load forecast so that high realtime loads are factored into forecast.
+- [x] Linearly interpolate realtime load value into load forecast so that high realtime loads are factored into forecast.
 - [ ] Predict longer term pricing forecasts based on historical data with an ML model
     - Note: Sometimes Amber and AEMO forecasts are truncated? So ML based forecast predictor will be necessary to produce a good plan. - Seems to be based on AEMO pricing publishing times.
     - If price forecast is truncated, then we could allow % based terminal SoC? e.g. 12hr forecast -> 50% of current SoC.?
