@@ -94,6 +94,18 @@ def test_fixture_plot_up_to_date(scenario: str) -> None:
     if not _is_complete_bundle(paths):
         pytest.skip("EMS fixture scenario not recorded.")
 
+    if paths.hash_path.exists() and not paths.plot_path.exists():
+        pytest.fail(
+            f"Fixture {scenario!r} has ems_plan.hash without ems_plan.jpeg. "
+            f"Re-record with: hass-energy ems refresh-baseline --name {scenario}"
+        )
+
+    if paths.plot_path.exists() and not paths.hash_path.exists():
+        pytest.fail(
+            f"Fixture {scenario!r} has ems_plan.jpeg without ems_plan.hash. "
+            f"Re-record with: hass-energy ems refresh-baseline --name {scenario}"
+        )
+
     if not paths.hash_path.exists():
         pytest.fail(
             f"Fixture {scenario!r} missing ems_plan.hash. "
