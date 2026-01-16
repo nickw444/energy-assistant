@@ -350,11 +350,11 @@ def ems_record_scenario(
             click.echo(f"Wrote EMS baseline summary to {paths.plan_path}")
 
             plan_hash = compute_plan_hash(plan_payload)
-            paths.hash_path.write_text(plan_hash + "\n")
-            click.echo(f"Wrote plan hash to {paths.hash_path}")
-
             write_plan_image(plan, paths.plot_path)
             click.echo(f"Wrote plan image to {paths.plot_path}")
+
+            paths.hash_path.write_text(plan_hash + "\n")
+            click.echo(f"Wrote plan hash to {paths.hash_path}")
     except Exception as exc:
         raise click.ClickException(traceback.format_exc()) from exc
 
@@ -416,11 +416,11 @@ def ems_refresh_baseline(
         new_hash = compute_plan_hash(plan_payload)
         old_hash = paths.hash_path.read_text().strip() if paths.hash_path.exists() else None
         if new_hash != old_hash:
-            paths.hash_path.write_text(new_hash + "\n")
-            click.echo(f"Wrote plan hash to {paths.hash_path}")
-
             write_plan_image(plan, paths.plot_path)
             click.echo(f"Wrote plan image to {paths.plot_path}")
+
+            paths.hash_path.write_text(new_hash + "\n")
+            click.echo(f"Wrote plan hash to {paths.hash_path}")
         else:
             click.echo("Plan unchanged, skipping image regeneration.")
     except Exception as exc:
