@@ -12,6 +12,7 @@ import pytest
 from hass_energy.config import load_app_config
 from hass_energy.ems.fixture_harness import (
     EmsFixturePaths,
+    compute_plan_hash,
     resolve_ems_fixture_paths,
     summarize_plan,
 )
@@ -82,5 +83,36 @@ def test_fixture_baseline_up_to_date(scenario: str) -> None:
     record_hint = f"hass-energy ems refresh-baseline --name {scenario}"
     assert actual == expected, (
         f"Fixture {scenario!r} ems_plan.json is out of date. "
+        "Re-record with: " + record_hint
+    )
+
+
+@pytest.mark.parametrize("scenario", _discover_fixture_scenarios())
+def test_fixture_plot_up_to_date(scenario: str) -> None:
+    """Assert the stored ems_plan.jpeg matches the current plan hash."""
+    paths = resolve_ems_fixture_paths(FIXTURE_BASE, scenario)
+    if not _is_complete_bundle(paths):
+        pytest.skip("EMS fixture scenario not recorded.")
+
+    if not paths.hash_path.exists():
+        pytest.fail(
+            f"Fixture {scenario!r} missing ems_plan.hash. "
+            f"Re-record with: hass-energy ems refresh-baseline --name {scenario}"
+        )
+
+    if not paths.plot_path.exists():
+        pytest.fail(
+            f"Fixture {scenario!r} missing ems_plan.jpeg. "
+            f"Re-record with: hass-energy ems refresh-baseline --name {scenario}"
+        )
+
+    stored_hash = paths.hash_path.read_text().strip()
+    expected = json.loads(paths.plan_path.read_text())
+    actual_hash = compute_plan_hash(expected)
+
+    record_hint = f"hass-energy ems refresh-baseline --name {scenario}"
+    assert stored_hash == actual_hash, (
+        f"Fixture {scenario!r} ems_plan.jpeg is out of date "
+        f"(hash mismatch: stored={stored_hash}, expected={actual_hash}). "
         "Re-record with: " + record_hint
     )
