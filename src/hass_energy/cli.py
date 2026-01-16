@@ -37,7 +37,7 @@ from hass_energy.lib.source_resolver.fixtures import (
 from hass_energy.lib.source_resolver.hass_provider import HassDataProviderImpl
 from hass_energy.lib.source_resolver.resolver import ValueResolverImpl
 from hass_energy.models.config import AppConfig
-from hass_energy.plotting import plot_plan
+from hass_energy.plotting import plot_plan_html
 from hass_energy.worker import Worker
 
 LOG_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
@@ -154,7 +154,7 @@ def ems(ctx: click.Context) -> None:
     "--plot-output",
     type=click.Path(path_type=Path, dir_okay=False),
     default=None,
-    help="Save the plot to this path instead of showing it.",
+    help="Save the interactive HTML plot to this path.",
 )
 @click.option(
     "--solver-msg/--no-solver-msg",
@@ -252,7 +252,11 @@ def ems_solve(
     if stdout:
         click.echo(json.dumps(plan.model_dump(mode="json"), indent=2, sort_keys=True))
     if plot:
-        plot_plan(plan, title="EMS Plan", output=plot_output)
+        html_output = plot_output or Path("ems_plan.html")
+        if html_output.suffix != ".html":
+            html_output = html_output.with_suffix(".html")
+        plot_plan_html(plan, output=html_output)
+        click.echo(f"Wrote interactive HTML plot to {html_output}")
 
 
 @ems.command("record-scenario")
