@@ -30,11 +30,15 @@ plant:
       entity: sensor.amber_general_forecast
       platform: amberelectric
       price_forecast_mode: spot
+      price_forecast_extension_hours: 24
+      price_forecast_extension_median: 0.25
     price_export_forecast:
       type: home_assistant
       entity: sensor.amber_feed_in_forecast
       platform: amberelectric
       price_forecast_mode: spot
+      price_forecast_extension_hours: 24
+      price_forecast_extension_median: 0.1
     import_forbidden_periods:
     - start: '14:55'
       end: '21:05'

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import statistics
 from typing import Annotated, Literal, TypeVar, cast
 
 from pydantic import ConfigDict, Field, model_validator
@@ -169,8 +170,25 @@ class HomeAssistantAmberElectricForecastSource(
         "blend_max",
         "blend_mean",
     ] | None = None
+    price_forecast_extension_hours: int | None = Field(default=None, ge=1, le=168)
+    price_forecast_extension_median: float | None = None
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    @model_validator(mode="after")
+    def _validate_extension(self) -> HomeAssistantAmberElectricForecastSource:
+        if self.price_forecast_extension_hours is None:
+            if self.price_forecast_extension_median is not None:
+                raise ValueError(
+                    "price_forecast_extension_hours must be set when "
+                    "price_forecast_extension_median is provided"
+                )
+        elif self.price_forecast_extension_median is None:
+            raise ValueError(
+                "price_forecast_extension_median is required when "
+                "price_forecast_extension_hours is set"
+            )
+        return self
 
     def mapper(self, state: HomeAssistantStateDict) -> list[PriceForecastInterval]:
         attributes = state["attributes"]
@@ -205,7 +223,82 @@ class HomeAssistantAmberElectricForecastSource(
 
             intervals.append(PriceForecastInterval(start=start, end=end, value=value))
 
+        return _extend_amber_price_forecast(
+            intervals,
+            extension_hours=self.price_forecast_extension_hours,
+            extension_median=self.price_forecast_extension_median,
+        )
+
+
+_AMBER_PRICE_EXTENSION_CURVE = [
+    0.7,
+    0.65,
+    0.6,
+    0.6,
+    0.65,
+    0.8,
+    1.0,
+    1.2,
+    1.3,
+    1.1,
+    1.0,
+    0.95,
+    0.9,
+    0.85,
+    0.9,
+    1.1,
+    1.3,
+    1.55,
+    1.45,
+    1.25,
+    1.05,
+    0.95,
+    0.85,
+    0.75,
+]
+_AMBER_PRICE_EXTENSION_CURVE_MEDIAN = statistics.median(_AMBER_PRICE_EXTENSION_CURVE)
+
+
+def _amber_extension_multiplier(timestamp: datetime.datetime) -> float:
+    hour = timestamp.hour % 24
+    return _AMBER_PRICE_EXTENSION_CURVE[hour] / _AMBER_PRICE_EXTENSION_CURVE_MEDIAN
+
+
+def _amber_interval_minutes(
+    interval: PriceForecastInterval,
+    *,
+    default_minutes: int = 30,
+) -> int:
+    duration_minutes = int((interval.end - interval.start).total_seconds() / 60.0)
+    return duration_minutes if duration_minutes > 0 else default_minutes
+
+
+def _extend_amber_price_forecast(
+    intervals: list[PriceForecastInterval],
+    *,
+    extension_hours: int | None,
+    extension_median: float | None,
+) -> list[PriceForecastInterval]:
+    if extension_hours is None or extension_median is None:
         return intervals
+    if not intervals:
+        return intervals
+    last_interval = max(intervals, key=lambda interval: interval.end)
+    last_end = last_interval.end
+    extension_end = last_end + datetime.timedelta(hours=extension_hours)
+    if last_end >= extension_end:
+        return intervals
+    interval_minutes = _amber_interval_minutes(last_interval)
+    extended = list(intervals)
+    cursor = last_end
+    while cursor < extension_end:
+        slot_end = cursor + datetime.timedelta(minutes=interval_minutes)
+        if slot_end > extension_end:
+            slot_end = extension_end
+        price = extension_median * _amber_extension_multiplier(cursor)
+        extended.append(PriceForecastInterval(start=cursor, end=slot_end, value=price))
+        cursor = slot_end
+    return extended
 
 
 class HomeAssistantSolcastForecastSource(

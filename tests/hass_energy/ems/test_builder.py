@@ -9,6 +9,9 @@ import pytest
 from hass_energy.ems.planner import EmsMilpPlanner
 from hass_energy.lib.home_assistant import HomeAssistantConfig
 from hass_energy.lib.source_resolver.hass_source import (
+    _AMBER_PRICE_EXTENSION_CURVE,
+    _AMBER_PRICE_EXTENSION_CURVE_MEDIAN,
+    _extend_amber_price_forecast,
     HomeAssistantAmberElectricForecastSource,
     HomeAssistantCurrencyEntitySource,
     HomeAssistantHistoricalAverageForecastSource,
@@ -62,7 +65,13 @@ class DummyResolver(ValueResolver):
 
     def resolve(self, source: EntitySource[Q, R]) -> R:
         if isinstance(source, HomeAssistantAmberElectricForecastSource):
-            return cast(R, self._price_forecasts[source.entity])
+            intervals = self._price_forecasts[source.entity]
+            intervals = _extend_amber_price_forecast(
+                intervals,
+                extension_hours=source.price_forecast_extension_hours,
+                extension_median=source.price_forecast_extension_median,
+            )
+            return cast(R, intervals)
         if isinstance(source, HomeAssistantSolcastForecastSource):
             return cast(R, self._pv_forecasts[source.entities[0]])
         if isinstance(source, HomeAssistantHistoricalAverageForecastSource):
@@ -83,6 +92,9 @@ def _make_config(
     min_horizon_minutes: int | None = None,
     high_res_timestep_minutes: int | None = None,
     high_res_horizon_minutes: int | None = None,
+    price_forecast_extension_hours: int | None = None,
+    price_forecast_extension_import_median: float | None = None,
+    price_forecast_extension_export_median: float | None = None,
 ) -> AppConfig:
     if min_horizon_minutes is None:
         min_horizon_minutes = timestep_minutes * 2
@@ -100,11 +112,15 @@ def _make_config(
             type="home_assistant",
             platform="amberelectric",
             entity="price_import_forecast",
+            price_forecast_extension_hours=price_forecast_extension_hours,
+            price_forecast_extension_median=price_forecast_extension_import_median,
         ),
         price_export_forecast=HomeAssistantAmberElectricForecastSource(
             type="home_assistant",
             platform="amberelectric",
             entity="price_export_forecast",
+            price_forecast_extension_hours=price_forecast_extension_hours,
+            price_forecast_extension_median=price_forecast_extension_export_median,
         ),
         import_forbidden_periods=[],
     )
@@ -540,6 +556,65 @@ def test_horizon_uses_shortest_forecast() -> None:
 
     plan = EmsMilpPlanner(config, resolver=resolver).generate_ems_plan(now=now)
     assert len(plan.timesteps) == 2
+
+
+def test_price_forecast_extension_expands_horizon() -> None:
+    now = datetime(2025, 12, 27, 10, 2, tzinfo=UTC)
+    config = _make_config(
+        timestep_minutes=30,
+        min_horizon_minutes=60,
+        price_forecast_extension_hours=2,
+        price_forecast_extension_import_median=0.2,
+        price_forecast_extension_export_median=0.1,
+    )
+    interval_minutes = config.ems.timestep_minutes
+    start = now.replace(minute=0, second=0, microsecond=0)
+
+    resolver = DummyResolver(
+        price_forecasts={
+            "price_import_forecast": _price_intervals(
+                start,
+                interval_minutes=interval_minutes,
+                num_intervals=2,
+                value=0.3,
+            ),
+            "price_export_forecast": _price_intervals(
+                start,
+                interval_minutes=interval_minutes,
+                num_intervals=2,
+                value=0.05,
+            ),
+        },
+        pv_forecasts={
+            "pv_forecast": _power_intervals(
+                start,
+                interval_minutes=interval_minutes,
+                num_intervals=4,
+                value=0.0,
+            )
+        },
+        load_forecasts={
+            "load_forecast": _power_intervals(
+                start,
+                interval_minutes=interval_minutes,
+                num_intervals=4,
+                value=0.0,
+            )
+        },
+        realtime_values={
+            "load": 0.0,
+            "price_import": 0.3,
+            "price_export": 0.05,
+            "grid": 0.0,
+        },
+    )
+
+    plan = EmsMilpPlanner(config, resolver=resolver).generate_ems_plan(now=now)
+    assert len(plan.timesteps) == 4
+    expected_multiplier = _AMBER_PRICE_EXTENSION_CURVE[11] / _AMBER_PRICE_EXTENSION_CURVE_MEDIAN
+    assert plan.timesteps[2].economics.price_import == pytest.approx(
+        0.2 * expected_multiplier
+    )
 
 
 def test_horizon_errors_when_shorter_than_min_horizon_minutes() -> None:

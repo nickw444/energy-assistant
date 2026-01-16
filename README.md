@@ -44,10 +44,16 @@ Energy management system that pulls Home Assistant data, plans using MILP (stub 
          type: home_assistant
          platform: amberelectric
          entity: sensor.price_import_forecast
+         # Optional: extend price forecasts when they are shorter than the planning horizon.
+         # price_forecast_extension_hours: 24
+         # price_forecast_extension_median: 0.25
        price_export_forecast:
          type: home_assistant
          platform: amberelectric
          entity: sensor.price_export_forecast
+         # Optional: extend price forecasts when they are shorter than the planning horizon.
+         # price_forecast_extension_hours: 24
+         # price_forecast_extension_median: 0.1
      load:
        realtime_load_power:
          type: home_assistant
