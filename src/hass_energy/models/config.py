@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -9,11 +10,27 @@ from hass_energy.models.loads import LoadConfig
 from hass_energy.models.plant import PlantConfig
 
 
+class TerminalSocConfig(BaseModel):
+    # Hard enforces end SoC >= start SoC; soft allows slack; adaptive softens only
+    # when the horizon is shorter than short_horizon_minutes.
+    mode: Literal["hard", "soft", "adaptive"] = "adaptive"
+    # Threshold that defines a short horizon for adaptive softening. When the
+    # horizon is shorter than this, the terminal target is relaxed toward reserve
+    # and the shortfall penalty is scaled by the horizon ratio.
+    short_horizon_minutes: int | None = Field(default=1440, ge=1, le=525600)
+    # Penalty applied per kWh of terminal SoC shortfall when softened. Defaults
+    # to the average import price if unset.
+    penalty_per_kwh: float | None = Field(default=None, ge=0)
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class EmsConfig(BaseModel):
     timestep_minutes: int = Field(default=5, ge=1, le=1440)
     min_horizon_minutes: int = Field(default=120, ge=1, le=525600)
     high_res_timestep_minutes: int | None = Field(default=None, ge=1, le=1440)
     high_res_horizon_minutes: int | None = Field(default=None, ge=1, le=525600)
+    terminal_soc: TerminalSocConfig = Field(default_factory=TerminalSocConfig)
 
     model_config = ConfigDict(extra="forbid")
 
