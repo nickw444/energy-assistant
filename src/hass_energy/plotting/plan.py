@@ -408,7 +408,9 @@ def plot_plan_html(
         });
     })();
     """
-    html_content: str = fig.to_html(full_html=True, include_plotlyjs=True, post_script=legend_hover_script)
+    html_content: str = fig.to_html(
+        full_html=True, include_plotlyjs=True, post_script=legend_hover_script
+    )
 
     fullscreen_css = """<style>
 html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
