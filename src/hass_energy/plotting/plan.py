@@ -279,6 +279,11 @@ def _build_plan_figure(
         max(abs(p) for p in price_export) if price_export else 0,
         0.01,
     )
+    soc_values = [
+        value for series in (*batt_soc_pct.values(), *ev_soc_pct.values()) for value in series
+    ]
+    soc_max = max((abs(value) for value in soc_values), default=0.0)
+    soc_axis_max = max(soc_max, 100.0) * 1.05
 
     power_max = max(
         max(abs(v) for v in grid_net) if grid_net else 0,
@@ -318,8 +323,10 @@ def _build_plan_figure(
             "overlaying": "y",
             "side": "right",
             "showgrid": False,
-            "range": [0, 105],
+            "range": [-soc_axis_max, soc_axis_max],
             "ticksuffix": "%",
+            "zeroline": True,
+            "zerolinecolor": "rgba(128, 128, 128, 0.5)",
         },
         yaxis3={
             "title": "Price ($)",

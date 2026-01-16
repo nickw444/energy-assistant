@@ -379,12 +379,19 @@ def ems_record_scenario(
     show_default=True,
     help="Enable solver output (CBC).",
 )
+@click.option(
+    "--force-image/--no-force-image",
+    default=False,
+    show_default=True,
+    help="Regenerate the plot image even if the plan hash is unchanged.",
+)
 @click.pass_context
 def ems_refresh_baseline(
     ctx: click.Context,
     name: str,
     scenario_dir: Path,
     solver_msg: bool,
+    force_image: bool,
 ) -> None:
     """Recompute the summarized baseline from a recorded fixture."""
     _configure_logging(str(ctx.obj.get("log_level", "INFO")))
@@ -416,11 +423,14 @@ def ems_refresh_baseline(
         new_hash = compute_plan_hash(plan_payload)
         old_hash = paths.hash_path.read_text().strip() if paths.hash_path.exists() else None
         if new_hash != old_hash:
-            write_plan_image(plan, paths.plot_path)
-            click.echo(f"Wrote plan image to {paths.plot_path}")
-
             paths.hash_path.write_text(new_hash + "\n")
             click.echo(f"Wrote plan hash to {paths.hash_path}")
+
+            write_plan_image(plan, paths.plot_path)
+            click.echo(f"Wrote plan image to {paths.plot_path}")
+        elif force_image:
+            write_plan_image(plan, paths.plot_path)
+            click.echo(f"Wrote plan image to {paths.plot_path}")
         else:
             click.echo("Plan unchanged, skipping image regeneration.")
     except Exception as exc:
