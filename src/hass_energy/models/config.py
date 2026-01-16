@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -9,11 +10,20 @@ from hass_energy.models.loads import LoadConfig
 from hass_energy.models.plant import PlantConfig
 
 
+class TerminalSocConfig(BaseModel):
+    mode: Literal["adaptive"]
+    short_horizon_minutes: int = Field(ge=1, le=525600)
+    penalty_per_kwh: float | None = Field(default=None, ge=0)
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class EmsConfig(BaseModel):
     timestep_minutes: int = Field(default=5, ge=1, le=1440)
     min_horizon_minutes: int = Field(default=120, ge=1, le=525600)
     high_res_timestep_minutes: int | None = Field(default=None, ge=1, le=1440)
     high_res_horizon_minutes: int | None = Field(default=None, ge=1, le=525600)
+    terminal_soc: TerminalSocConfig | None = None
 
     model_config = ConfigDict(extra="forbid")
 
