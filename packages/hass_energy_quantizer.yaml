@@ -62,7 +62,8 @@ automation:
         {{ export_limit_normal_kw | round(1) }}
         {%- endif %}
 
-      fc_kw: "{{ max_charge_kw }}"
+      fc_kw: >-
+        {{ [[charge_kw, max_charge_kw] | min, 0] | max | round(2) }}
       fd_kw: "{{ max_discharge_kw }}"
 
     action:
