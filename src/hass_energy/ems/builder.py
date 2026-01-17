@@ -607,15 +607,21 @@ class MILPBuilder:
             if inv_vars is None:
                 continue
             discharge_series = inv_vars.P_batt_discharge_kw
-            if discharge_series is None:
+            charge_series = inv_vars.P_batt_charge_kw
+            if discharge_series is None or charge_series is None:
                 continue
-            wear_cost = battery.throughput_cost_per_kwh
-            if wear_cost <= 0:
-                continue
-            objective += pulp.lpSum(
-                wear_cost * discharge_series[t] * horizon.dt_hours(t)
-                for t in horizon.T
-            )
+            discharge_cost = battery.discharge_cost_per_kwh
+            charge_cost = battery.charge_cost_per_kwh
+            if discharge_cost > 0:
+                objective += pulp.lpSum(
+                    discharge_cost * discharge_series[t] * horizon.dt_hours(t)
+                    for t in horizon.T
+                )
+            if charge_cost > 0:
+                objective += pulp.lpSum(
+                    charge_cost * charge_series[t] * horizon.dt_hours(t)
+                    for t in horizon.T
+                )
         terminal_penalty = self._terminal_soc_penalty_per_kwh(horizon, price_import)
         if terminal_penalty > 0:
             for inverter in self._plant.inverters:
