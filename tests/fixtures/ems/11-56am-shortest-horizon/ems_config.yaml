@@ -1,0 +1,121 @@
+server:
+  host: 127.0.0.1
+  port: 8000
+  data_dir: ./data
+homeassistant:
+  base_url: http://example.invalid
+  token: fixture-token
+  verify_tls: true
+  timeout_seconds: 30.0
+ems:
+  timestep_minutes: 30
+  min_horizon_minutes: 720
+  high_res_timestep_minutes: 5
+  high_res_horizon_minutes: 120
+  terminal_soc:
+    mode: adaptive
+    short_horizon_minutes: 1440
+    penalty_per_kwh: 0.21
+plant:
+  grid:
+    max_import_kw: 13.0
+    max_export_kw: 13.0
+    realtime_grid_power:
+      type: home_assistant
+      entity: sensor.hass_energy_grid_power_smoothed_1m
+    realtime_price_import:
+      type: home_assistant
+      entity: sensor.amber_general_price_non_estimate
+    realtime_price_export:
+      type: home_assistant
+      entity: sensor.amber_feed_in_price_non_estimate
+    price_import_forecast:
+      type: home_assistant
+      entity: sensor.amber_general_forecast
+      platform: amberelectric
+      price_forecast_mode: spot
+    price_export_forecast:
+      type: home_assistant
+      entity: sensor.amber_feed_in_forecast
+      platform: amberelectric
+      price_forecast_mode: spot
+    import_forbidden_periods:
+    - start: '14:55'
+      end: '21:05'
+  load:
+    realtime_load_power:
+      type: home_assistant
+      entity: sensor.hass_energy_load_power_uncontrolled_smoothed_1m
+    forecast:
+      type: home_assistant
+      entity: sensor.hass_energy_load_power_uncontrolled_smoothed_15m
+      history_days: 3
+      platform: historical_average
+      unit: W
+      interval_duration: 5
+      forecast_horizon_hours: 48
+      realtime_window_minutes: 180
+    self_consumption_bias_pct: 20.0
+  inverters:
+  - id: primary
+    name: Primary
+    peak_power_kw: 10.0
+    curtailment: load-aware
+    pv:
+      realtime_power:
+        type: home_assistant
+        entity: sensor.hass_energy_pv_power_smoothed_1m
+      forecast:
+        type: home_assistant
+        entities:
+        - sensor.solcast_pv_forecast_forecast_today
+        - sensor.solcast_pv_forecast_forecast_tomorrow
+        - sensor.solcast_pv_forecast_forecast_day_3
+        platform: solcast
+    battery:
+      capacity_kwh: 41.9
+      storage_efficiency_pct: 95.0
+      throughput_cost_per_kwh: 0.01
+      min_soc_pct: 11.0
+      max_soc_pct: 100.0
+      reserve_soc_pct: 30.0
+      max_charge_kw: 11.0
+      max_discharge_kw: 10.0
+      state_of_charge_pct:
+        type: home_assistant
+        entity: sensor.inverter_battery_soc
+      realtime_power:
+        type: home_assistant
+        entity: sensor.hass_energy_battery_power_smoothed_1m
+loads:
+- id: tessie
+  name: Tessie
+  load_type: controlled_ev
+  min_power_kw: 2.4
+  max_power_kw: 7.4
+  energy_kwh: 78.0
+  connected:
+    type: home_assistant
+    entity: binary_sensor.hass_energy_tessie_connected_at_home
+  can_connect:
+    type: home_assistant
+    entity: binary_sensor.hass_energy_tessie_can_connect
+  allowed_connect_times:
+  - start: 08:00
+    end: '21:00'
+  connect_grace_minutes: 60
+  realtime_power:
+    type: home_assistant
+    entity: sensor.tesla_wall_connector_power
+  state_of_charge_pct:
+    type: home_assistant
+    entity: sensor.tessie_battery
+  soc_incentives:
+  - target_soc_pct: 40.0
+    incentive: 0.12
+  - target_soc_pct: 60.0
+    incentive: 0.08
+  - target_soc_pct: 80.0
+    incentive: 0.04
+  - target_soc_pct: 90.0
+    incentive: 0.0
