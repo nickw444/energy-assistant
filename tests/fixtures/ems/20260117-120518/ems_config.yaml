@@ -55,7 +55,6 @@ plant:
       interval_duration: 5
       forecast_horizon_hours: 48
       realtime_window_minutes: 180
-    self_consumption_bias_pct: 20.0
   inverters:
   - id: primary
     name: Primary

@@ -57,7 +57,6 @@ plant:
     forecast:
       type: home_assistant
 
-    self_consumption_bias_pct: 20.0
       platform: historical_average
       entity: sensor.hass_energy_load_power_smoothed_15m
       history_days: 3
