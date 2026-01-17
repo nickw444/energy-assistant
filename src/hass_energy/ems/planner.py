@@ -47,6 +47,7 @@ class EmsMilpPlanner:
             plant=self._app_config.plant,
             loads=self._app_config.loads,
             resolver=self._resolver,
+            ems_config=self._app_config.ems,
         )
         high_res_timestep = self._app_config.ems.high_res_timestep_minutes
         high_res_horizon = self._app_config.ems.high_res_horizon_minutes

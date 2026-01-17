@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 PlanRunStatus = Literal["queued", "running", "completed", "failed"]
 PlanStatus = Literal[
@@ -131,10 +131,19 @@ class PlanAwaitResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class TerminalSocConfig(BaseModel):
+    mode: Literal["hard", "soft", "adaptive"] = "adaptive"
+    short_horizon_minutes: int | None = 1440
+    penalty_per_kwh: float | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class EmsConfig(BaseModel):
     timestep_minutes: int
     min_horizon_minutes: int
     high_res_timestep_minutes: int | None = None
     high_res_horizon_minutes: int | None = None
+    terminal_soc: TerminalSocConfig = Field(default_factory=TerminalSocConfig)
 
     model_config = ConfigDict(extra="forbid")
