@@ -1,7 +1,7 @@
 {
   "buckets": [
     {
-      "battery_charge_kwh": 0.732,
+      "battery_charge_kwh": 0.886,
       "battery_discharge_kwh": 0.0,
       "curtailment_minutes": 60.0,
       "end": "2026-01-17T13:05:00+11:00",
@@ -10,7 +10,7 @@
       "grid_import_kwh": 0.0,
       "grid_net_kwh": 0.0,
       "load_kwh": 1.17,
-      "pv_kwh": 1.902,
+      "pv_kwh": 2.056,
       "start": "2026-01-17T12:05:00+11:00"
     },
     {
@@ -40,7 +40,7 @@
       "start": "2026-01-17T14:05:00+11:00"
     },
     {
-      "battery_charge_kwh": 1.048,
+      "battery_charge_kwh": 0.895,
       "battery_discharge_kwh": 0.036,
       "curtailment_minutes": 55.0,
       "end": "2026-01-17T16:05:00+11:00",
@@ -49,7 +49,7 @@
       "grid_import_kwh": 0.0,
       "grid_net_kwh": -0.102,
       "load_kwh": 0.466,
-      "pv_kwh": 1.58,
+      "pv_kwh": 1.426,
       "start": "2026-01-17T15:05:00+11:00"
     },
     {
@@ -255,7 +255,7 @@
     "generated_at": "2026-01-17T01:05:25.117219+00:00",
     "horizon_end": "2026-01-18T05:00:00+11:00",
     "horizon_start": "2026-01-17T12:05:00+11:00",
-    "objective_value": -4.868,
+    "objective_value": -4.867,
     "status": "Optimal",
     "timestep_minutes": {
       "avg": 17.5,

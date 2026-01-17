@@ -531,7 +531,8 @@ class MILPBuilder:
                     f"batt_soc_step_{inv_id}_t{t}",
                 )
 
-            # Flow-split variables keep PV export unpenalized while allowing battery export penalties.
+            # Flow-split variables keep PV export unpenalized while allowing
+            # battery export penalties.
             pv_load = pulp.LpVariable.dicts(f"P_pv_{inv_id}_load_kw", T, lowBound=0)
             pv_export = pulp.LpVariable.dicts(f"P_pv_{inv_id}_export_kw", T, lowBound=0)
             pv_charge = pulp.LpVariable.dicts(f"P_pv_{inv_id}_charge_kw", T, lowBound=0)
@@ -697,9 +698,20 @@ class MILPBuilder:
                     charge_cost * charge_series[t] * horizon.dt_hours(t)
                     for t in horizon.T
                 )
+            # Tiny time-weighted throughput penalty to stabilize dispatch ordering
+            # across equivalent-cost slots without affecting economics.
+            w_batt_time = 1e-6
+            objective += pulp.lpSum(
+                w_batt_time
+                * (charge_series[t] + discharge_series[t])
+                * (t + 1)
+                * horizon.dt_hours(t)
+                for t in horizon.T
+            )
             export_penalty = battery.export_penalty_per_kwh
             batt_export_series = inverters.battery_export_kw.get(inverter.id)
-            # Battery export penalty discourages low-value battery -> grid export (PV export untouched).
+            # Battery export penalty discourages low-value battery -> grid export
+            # while leaving PV export untouched.
             if export_penalty > 0 and batt_export_series is not None:
                 objective += pulp.lpSum(
                     export_penalty * batt_export_series[t] * horizon.dt_hours(t)

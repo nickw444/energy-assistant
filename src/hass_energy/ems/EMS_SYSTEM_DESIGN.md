@@ -365,13 +365,15 @@ The objective is a sum of:
    - `charge_cost_per_kwh * charge + discharge_cost_per_kwh * discharge`.
 5. **Battery export penalty** (optional):
    - `export_penalty_per_kwh * battery_export` on battery-to-grid flow.
-6. **Curtailment tie-breaker**:
+6. **Battery timing tie-breaker**:
+   - Tiny time-weighted throughput penalty to stabilize dispatch ordering.
+7. **Curtailment tie-breaker**:
    - Small weighted bias on `Curtail_inv` to stabilize equivalent solutions.
-7. **EV incentive rewards**:
+8. **EV incentive rewards**:
    - Subtract incentive per kWh on terminal SoC segments.
-8. **EV ramp penalties**:
+9. **EV ramp penalties**:
    - Penalize `Ev_charge_ramp_kw[t]` for `t > 0`.
-9. **EV anchor penalty**:
+10. **EV anchor penalty**:
    - Penalize `Ev_charge_anchor_kw` at slot 0.
 
 ---
