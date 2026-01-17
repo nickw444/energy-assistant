@@ -29,12 +29,12 @@ plant:
       type: home_assistant
       entity: sensor.amber_general_forecast
       platform: amberelectric
-      price_forecast_mode: advanced
+      price_forecast_mode: spot
     price_export_forecast:
       type: home_assistant
       entity: sensor.amber_feed_in_forecast
       platform: amberelectric
-      price_forecast_mode: advanced
+      price_forecast_mode: spot
     import_forbidden_periods:
     - start: '14:55'
       end: '21:05'
@@ -51,6 +51,7 @@ plant:
       interval_duration: 5
       forecast_horizon_hours: 48
       realtime_window_minutes: 180
+    self_consumption_bias_pct: 20.0
   inverters:
   - id: primary
     name: Primary
@@ -71,9 +72,9 @@ plant:
       capacity_kwh: 41.9
       storage_efficiency_pct: 95.0
       throughput_cost_per_kwh: 0.01
-      min_soc_pct: 10.0
+      min_soc_pct: 11.0
       max_soc_pct: 100.0
-      reserve_soc_pct: 25.0
+      reserve_soc_pct: 30.0
       max_charge_kw: 11.0
       max_discharge_kw: 10.0
       state_of_charge_pct:
