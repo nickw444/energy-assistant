@@ -279,6 +279,11 @@ def _build_plan_figure(
         max(abs(p) for p in price_export) if price_export else 0,
         0.01,
     )
+    soc_values = [
+        value for series in (*batt_soc_pct.values(), *ev_soc_pct.values()) for value in series
+    ]
+    soc_max = max((abs(value) for value in soc_values), default=0.0)
+    soc_axis_max = max(soc_max, 100.0) * 1.05
 
     power_max = max(
         max(abs(v) for v in grid_net) if grid_net else 0,
@@ -304,6 +309,7 @@ def _build_plan_figure(
             "gridcolor": "rgba(128, 128, 128, 0.2)",
             "tickformat": "%I:%M %p\n%d %b",
             "hoverformat": "%Y-%m-%d %H:%M",
+            "domain": [0.0, 0.88],
         },
         yaxis={
             "title": "Power (kW)",
@@ -314,22 +320,35 @@ def _build_plan_figure(
             "range": [-power_max, power_max],
         },
         yaxis2={
-            "title": "SoC (%)",
+            "title": {"text": "SoC (%)", "standoff": 10},
             "overlaying": "y",
             "side": "right",
+            "anchor": "free",
+            "position": 0.98,
             "showgrid": False,
-            "range": [0, 105],
+            "range": [-soc_axis_max, soc_axis_max],
+            "tickmode": "array",
+            "tickvals": [0, 20, 40, 60, 80, 100],
             "ticksuffix": "%",
+            "zeroline": True,
+            "zerolinecolor": "rgba(128, 128, 128, 0.5)",
+            "ticklabelposition": "outside right",
+            "ticklabelstandoff": 4,
+            "ticks": "outside",
         },
         yaxis3={
-            "title": "Price ($)",
+            "title": {"text": "Price ($)", "standoff": 12},
             "overlaying": "y",
             "side": "right",
-            "position": 0.95,
+            "position": 0.92,
             "anchor": "free",
             "showgrid": False,
             "range": [-price_max * 1.1, price_max * 1.1],
             "tickformat": ".2f",
+            "ticklabelposition": "outside right",
+            "ticklabelstandoff": 4,
+            "ticks": "outside",
+            "tickfont": {"size": 10},
         },
         legend={
             "orientation": "h",
@@ -344,7 +363,7 @@ def _build_plan_figure(
         hovermode="x unified",
         plot_bgcolor="white",
         paper_bgcolor="white",
-        margin={"l": 60, "r": 120, "t": 50, "b": 100},
+        margin={"l": 60, "r": 130, "t": 50, "b": 100},
     )
 
     return fig, total_cost
