@@ -31,12 +31,12 @@ plant:
       type: home_assistant
       platform: amberelectric
       entity: sensor.amber_general_forecast
-      price_forecast_mode: advanced
+      price_forecast_mode: spot
     price_export_forecast:
       type: home_assistant
       platform: amberelectric
       entity: sensor.amber_feed_in_forecast
-      price_forecast_mode: advanced
+      price_forecast_mode: spot
     
     import_forbidden_periods:
       - start: "14:55"
@@ -51,6 +51,8 @@ plant:
     
     forecast:
       type: home_assistant
+
+    self_consumption_bias_pct: 20.0
       platform: historical_average
       entity: sensor.hass_energy_load_power_smoothed_15m
       history_days: 3
@@ -84,12 +86,12 @@ plant:
         capacity_kwh: 41.9
         storage_efficiency_pct: 96.0 # Charge/discharge storage efficiency
         throughput_cost_per_kwh: 0.01 # Wear cost per kWh charged or discharged
-        min_soc_pct: 10.0
+        min_soc_pct: 11.0
         max_soc_pct: 100.0
 
         # Specify a level of reserve to ensure some energy is always left in the battery
         # for grid outages or other emergencies.
-        reserve_soc_pct: 25.0
+        reserve_soc_pct: 30.0
 
         # Optional, if different from inverter parameters. e.g. DC-coupled batteries could charge 
         # from PV at a higher rate than the inverter peak power.
