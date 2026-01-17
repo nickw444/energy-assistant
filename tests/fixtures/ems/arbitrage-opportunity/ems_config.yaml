@@ -12,6 +12,11 @@ ems:
   min_horizon_minutes: 720
   high_res_timestep_minutes: 5
   high_res_horizon_minutes: 120
+  terminal_soc:
+    mode: adaptive
+    short_horizon_minutes: 1440
+    penalty_per_kwh: 0.21
+
 plant:
   grid:
     max_import_kw: 13.0

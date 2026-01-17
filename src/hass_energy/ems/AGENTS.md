@@ -87,7 +87,10 @@ model at the start of the horizon:
   - SoC bounds from `min_soc_pct` and `max_soc_pct`.
   - Grid export is blocked when SoC is below `reserve_soc_pct` (self-consumption can still discharge to `min_soc_pct`).
   - SoC update uses `storage_efficiency_pct`.
-  - Terminal SoC constraint: `E_batt[end] >= E_batt[start]`.
+  - Terminal SoC constraint: hard by default; when `ems.terminal_soc.mode` is `soft` or
+    `adaptive` (and the horizon is shorter than `terminal_soc.short_horizon_minutes`),
+    the target SoC is relaxed toward the reserve level and enforced with a slack
+    variable plus per-kWh penalty.
 - AC balance (system):
   - `P_grid_import + sum(P_inv_ac_net_kw) - P_grid_export == load + controllable_loads`.
 
@@ -101,6 +104,10 @@ model at the start of the horizon:
   - `throughput_cost_per_kwh` applied to **discharge only** (not charge).
   - Charging is not penalized so PV energy is captured freely.
   - Efficiency losses are already in the SoC dynamics constraints.
+- Terminal SoC shortfall penalty:
+  - Applied when the terminal constraint is softened; default penalty uses the average
+    import price (unless `ems.terminal_soc.penalty_per_kwh` is set) and scales with
+    the horizon ratio vs `terminal_soc.short_horizon_minutes`.
 - EV SoC incentives:
   - Piecewise per-kWh rewards for reaching terminal SoC targets.
   - Incentives are scaled by `(1 - self_consumption_bias)` so they compete fairly with export tariffs (an 8c incentive ties with an 8c export tariff).
