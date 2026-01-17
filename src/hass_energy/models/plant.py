@@ -60,7 +60,8 @@ class PvConfig(BaseModel):
 class BatteryConfig(BaseModel):
     capacity_kwh: float = Field(ge=0)
     storage_efficiency_pct: float = Field(gt=0, le=100)
-    throughput_cost_per_kwh: float = Field(default=0.0, ge=0)
+    charge_cost_per_kwh: float = Field(default=0.0, ge=0)
+    discharge_cost_per_kwh: float = Field(default=0.0, ge=0)
     min_soc_pct: float = Field(ge=0, le=100)
     max_soc_pct: float = Field(ge=0, le=100)
     reserve_soc_pct: float = Field(ge=0, le=100)

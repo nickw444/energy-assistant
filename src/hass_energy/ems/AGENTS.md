@@ -100,9 +100,9 @@ model at the start of the horizon:
   - Self-consumption bias (`plant.load.self_consumption_bias_pct`) adds a premium to import prices and discount to export revenue, favoring local consumption.
 - Forbidden import violations:
   - Large penalty on `P_grid_import_violation_kw`.
-- Battery wear (discharge only):
-  - `throughput_cost_per_kwh` applied to **discharge only** (not charge).
-  - Charging is not penalized so PV energy is captured freely.
+- Battery wear:
+  - `discharge_cost_per_kwh` applied to discharge, `charge_cost_per_kwh` applied to charge.
+  - Both default to 0.0; set `charge_cost_per_kwh: 0.0` to capture PV energy freely.
   - Efficiency losses are already in the SoC dynamics constraints.
 - Terminal SoC shortfall penalty:
   - Applied when the terminal constraint is softened; default penalty uses the average
