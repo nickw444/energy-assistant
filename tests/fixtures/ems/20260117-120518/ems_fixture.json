@@ -1,424 +1,12 @@
 {
-  "captured_at": "2026-01-17T11:56:51.107864+11:00",
+  "captured_at": "2026-01-17T12:05:25.117219+11:00",
   "history": {
     "sensor.hass_energy_load_power_uncontrolled_smoothed_15m": [
       {
         "attributes": {},
         "entity_id": "sensor.hass_energy_load_power_uncontrolled_smoothed_15m",
-        "last_changed": "2026-01-14T00:56:50.434960+00:00",
-        "last_updated": "2026-01-14T00:56:50.434960+00:00",
-        "state": "669.78"
-      },
-      {
-        "last_changed": "2026-01-14T00:56:51.798650+00:00",
-        "state": "668.74"
-      },
-      {
-        "last_changed": "2026-01-14T00:56:56.796297+00:00",
-        "state": "670.15"
-      },
-      {
-        "last_changed": "2026-01-14T00:57:01.795895+00:00",
-        "state": "670.69"
-      },
-      {
-        "last_changed": "2026-01-14T00:57:06.800729+00:00",
-        "state": "669.64"
-      },
-      {
-        "last_changed": "2026-01-14T00:57:11.799603+00:00",
-        "state": "672.1"
-      },
-      {
-        "last_changed": "2026-01-14T00:57:16.808654+00:00",
-        "state": "671.22"
-      },
-      {
-        "last_changed": "2026-01-14T00:57:21.809300+00:00",
-        "state": "671.53"
-      },
-      {
-        "last_changed": "2026-01-14T00:57:26.803524+00:00",
-        "state": "673.91"
-      },
-      {
-        "last_changed": "2026-01-14T00:57:31.800862+00:00",
-        "state": "673.09"
-      },
-      {
-        "last_changed": "2026-01-14T00:57:36.804079+00:00",
-        "state": "675.83"
-      },
-      {
-        "last_changed": "2026-01-14T00:57:41.808618+00:00",
-        "state": "676.47"
-      },
-      {
-        "last_changed": "2026-01-14T00:57:46.811728+00:00",
-        "state": "677.07"
-      },
-      {
-        "last_changed": "2026-01-14T00:57:51.811047+00:00",
-        "state": "679.61"
-      },
-      {
-        "last_changed": "2026-01-14T00:57:56.818010+00:00",
-        "state": "678.6"
-      },
-      {
-        "last_changed": "2026-01-14T00:58:01.803789+00:00",
-        "state": "679.26"
-      },
-      {
-        "last_changed": "2026-01-14T00:58:06.816733+00:00",
-        "state": "681.7"
-      },
-      {
-        "last_changed": "2026-01-14T00:58:11.807518+00:00",
-        "state": "680.92"
-      },
-      {
-        "last_changed": "2026-01-14T00:58:16.814432+00:00",
-        "state": "683.26"
-      },
-      {
-        "last_changed": "2026-01-14T00:58:21.806758+00:00",
-        "state": "684.11"
-      },
-      {
-        "last_changed": "2026-01-14T00:58:26.815983+00:00",
-        "state": "682.93"
-      },
-      {
-        "last_changed": "2026-01-14T00:58:31.816978+00:00",
-        "state": "685.4"
-      },
-      {
-        "last_changed": "2026-01-14T00:58:36.817544+00:00",
-        "state": "684.3"
-      },
-      {
-        "last_changed": "2026-01-14T00:58:41.821778+00:00",
-        "state": "685.07"
-      },
-      {
-        "last_changed": "2026-01-14T00:58:46.821762+00:00",
-        "state": "687.57"
-      },
-      {
-        "last_changed": "2026-01-14T00:58:51.816442+00:00",
-        "state": "686.64"
-      },
-      {
-        "last_changed": "2026-01-14T00:58:56.864158+00:00",
-        "state": "687.69"
-      },
-      {
-        "last_changed": "2026-01-14T00:59:01.920775+00:00",
-        "state": "688.35"
-      },
-      {
-        "last_changed": "2026-01-14T00:59:06.868753+00:00",
-        "state": "687.41"
-      },
-      {
-        "last_changed": "2026-01-14T00:59:11.921981+00:00",
-        "state": "690.08"
-      },
-      {
-        "last_changed": "2026-01-14T00:59:16.874062+00:00",
-        "state": "689.01"
-      },
-      {
-        "last_changed": "2026-01-14T00:59:21.906910+00:00",
-        "state": "689.64"
-      },
-      {
-        "last_changed": "2026-01-14T00:59:26.935610+00:00",
-        "state": "692.19"
-      },
-      {
-        "last_changed": "2026-01-14T00:59:31.866852+00:00",
-        "state": "691.36"
-      },
-      {
-        "last_changed": "2026-01-14T00:59:36.934720+00:00",
-        "state": "694.06"
-      },
-      {
-        "last_changed": "2026-01-14T00:59:41.923626+00:00",
-        "state": "694.15"
-      },
-      {
-        "last_changed": "2026-01-14T00:59:46.922295+00:00",
-        "state": "695.01"
-      },
-      {
-        "last_changed": "2026-01-14T00:59:51.926994+00:00",
-        "state": "697.47"
-      },
-      {
-        "last_changed": "2026-01-14T00:59:56.932598+00:00",
-        "state": "696.7"
-      },
-      {
-        "last_changed": "2026-01-14T01:00:01.873445+00:00",
-        "state": "697.44"
-      },
-      {
-        "last_changed": "2026-01-14T01:00:06.883415+00:00",
-        "state": "700.24"
-      },
-      {
-        "last_changed": "2026-01-14T01:00:11.917056+00:00",
-        "state": "699.22"
-      },
-      {
-        "last_changed": "2026-01-14T01:00:16.883870+00:00",
-        "state": "699.59"
-      },
-      {
-        "last_changed": "2026-01-14T01:00:21.873271+00:00",
-        "state": "701.66"
-      },
-      {
-        "last_changed": "2026-01-14T01:00:26.876285+00:00",
-        "state": "700.5"
-      },
-      {
-        "last_changed": "2026-01-14T01:00:31.942225+00:00",
-        "state": "703.3"
-      },
-      {
-        "last_changed": "2026-01-14T01:00:36.887855+00:00",
-        "state": "702.26"
-      },
-      {
-        "last_changed": "2026-01-14T01:00:41.877601+00:00",
-        "state": "703.1"
-      },
-      {
-        "last_changed": "2026-01-14T01:00:46.886850+00:00",
-        "state": "705.73"
-      },
-      {
-        "last_changed": "2026-01-14T01:00:51.890099+00:00",
-        "state": "704.61"
-      },
-      {
-        "last_changed": "2026-01-14T01:00:56.883201+00:00",
-        "state": "706.19"
-      },
-      {
-        "last_changed": "2026-01-14T01:01:01.890346+00:00",
-        "state": "706.9"
-      },
-      {
-        "last_changed": "2026-01-14T01:01:06.887435+00:00",
-        "state": "705.65"
-      },
-      {
-        "last_changed": "2026-01-14T01:01:11.889385+00:00",
-        "state": "708.55"
-      },
-      {
-        "last_changed": "2026-01-14T01:01:16.884504+00:00",
-        "state": "707.53"
-      },
-      {
-        "last_changed": "2026-01-14T01:01:21.888053+00:00",
-        "state": "708.32"
-      },
-      {
-        "last_changed": "2026-01-14T01:01:26.891549+00:00",
-        "state": "711.11"
-      },
-      {
-        "last_changed": "2026-01-14T01:01:31.891724+00:00",
-        "state": "709.77"
-      },
-      {
-        "last_changed": "2026-01-14T01:01:36.889585+00:00",
-        "state": "712.58"
-      },
-      {
-        "last_changed": "2026-01-14T01:01:41.900593+00:00",
-        "state": "715.66"
-      },
-      {
-        "last_changed": "2026-01-14T01:01:46.891044+00:00",
-        "state": "714.46"
-      },
-      {
-        "last_changed": "2026-01-14T01:01:51.892431+00:00",
-        "state": "717.17"
-      },
-      {
-        "last_changed": "2026-01-14T01:01:56.898967+00:00",
-        "state": "716.04"
-      },
-      {
-        "last_changed": "2026-01-14T01:02:01.894686+00:00",
-        "state": "716.76"
-      },
-      {
-        "last_changed": "2026-01-14T01:02:06.904002+00:00",
-        "state": "719.52"
-      },
-      {
-        "last_changed": "2026-01-14T01:02:11.897329+00:00",
-        "state": "718.96"
-      },
-      {
-        "last_changed": "2026-01-14T01:02:16.904427+00:00",
-        "state": "719.76"
-      },
-      {
-        "last_changed": "2026-01-14T01:02:21.899256+00:00",
-        "state": "722.12"
-      },
-      {
-        "last_changed": "2026-01-14T01:02:26.898893+00:00",
-        "state": "721.38"
-      },
-      {
-        "last_changed": "2026-01-14T01:02:31.918034+00:00",
-        "state": "724.68"
-      },
-      {
-        "last_changed": "2026-01-14T01:02:36.922692+00:00",
-        "state": "724.1"
-      },
-      {
-        "last_changed": "2026-01-14T01:02:41.922628+00:00",
-        "state": "725.43"
-      },
-      {
-        "last_changed": "2026-01-14T01:02:46.912559+00:00",
-        "state": "728.75"
-      },
-      {
-        "last_changed": "2026-01-14T01:02:51.910966+00:00",
-        "state": "727.97"
-      },
-      {
-        "last_changed": "2026-01-14T01:02:56.915697+00:00",
-        "state": "730.58"
-      },
-      {
-        "last_changed": "2026-01-14T01:03:01.913460+00:00",
-        "state": "731.8"
-      },
-      {
-        "last_changed": "2026-01-14T01:03:06.913319+00:00",
-        "state": "731.05"
-      },
-      {
-        "last_changed": "2026-01-14T01:03:11.909316+00:00",
-        "state": "734.38"
-      },
-      {
-        "last_changed": "2026-01-14T01:03:16.910770+00:00",
-        "state": "733.54"
-      },
-      {
-        "last_changed": "2026-01-14T01:03:21.907396+00:00",
-        "state": "734.34"
-      },
-      {
-        "last_changed": "2026-01-14T01:03:26.914806+00:00",
-        "state": "737.09"
-      },
-      {
-        "last_changed": "2026-01-14T01:03:31.921892+00:00",
-        "state": "735.95"
-      },
-      {
-        "last_changed": "2026-01-14T01:03:36.914930+00:00",
-        "state": "738.63"
-      },
-      {
-        "last_changed": "2026-01-14T01:03:41.915001+00:00",
-        "state": "741.53"
-      },
-      {
-        "last_changed": "2026-01-14T01:03:46.923734+00:00",
-        "state": "740.28"
-      },
-      {
-        "last_changed": "2026-01-14T01:03:51.917673+00:00",
-        "state": "742.98"
-      },
-      {
-        "last_changed": "2026-01-14T01:03:56.924587+00:00",
-        "state": "741.77"
-      },
-      {
-        "last_changed": "2026-01-14T01:04:01.917530+00:00",
-        "state": "741.82"
-      },
-      {
-        "last_changed": "2026-01-14T01:04:06.923196+00:00",
-        "state": "744.47"
-      },
-      {
-        "last_changed": "2026-01-14T01:04:11.917409+00:00",
-        "state": "743.38"
-      },
-      {
-        "last_changed": "2026-01-14T01:04:16.924934+00:00",
-        "state": "743.75"
-      },
-      {
-        "last_changed": "2026-01-14T01:04:21.918977+00:00",
-        "state": "745.57"
-      },
-      {
-        "last_changed": "2026-01-14T01:04:26.924831+00:00",
-        "state": "744.3"
-      },
-      {
-        "last_changed": "2026-01-14T01:04:31.923544+00:00",
-        "state": "747.05"
-      },
-      {
-        "last_changed": "2026-01-14T01:04:36.928734+00:00",
-        "state": "745.63"
-      },
-      {
-        "last_changed": "2026-01-14T01:04:41.928722+00:00",
-        "state": "746.08"
-      },
-      {
-        "last_changed": "2026-01-14T01:04:46.930001+00:00",
-        "state": "748.5"
-      },
-      {
-        "last_changed": "2026-01-14T01:04:51.924330+00:00",
-        "state": "747.26"
-      },
-      {
-        "last_changed": "2026-01-14T01:04:56.930974+00:00",
-        "state": "749.01"
-      },
-      {
-        "last_changed": "2026-01-14T01:05:01.928742+00:00",
-        "state": "749.53"
-      },
-      {
-        "last_changed": "2026-01-14T01:05:06.925448+00:00",
-        "state": "748.22"
-      },
-      {
-        "last_changed": "2026-01-14T01:05:11.929545+00:00",
-        "state": "750.87"
-      },
-      {
-        "last_changed": "2026-01-14T01:05:16.954697+00:00",
-        "state": "749.25"
-      },
-      {
-        "last_changed": "2026-01-14T01:05:21.935651+00:00",
+        "last_changed": "2026-01-14T01:05:24.486950+00:00",
+        "last_updated": "2026-01-14T01:05:24.486950+00:00",
         "state": "749.79"
       },
       {
@@ -199304,6 +198892,406 @@
       {
         "last_changed": "2026-01-17T00:56:45.023732+00:00",
         "state": "563.16"
+      },
+      {
+        "last_changed": "2026-01-17T00:56:50.025526+00:00",
+        "state": "562.5"
+      },
+      {
+        "last_changed": "2026-01-17T00:56:55.162882+00:00",
+        "state": "561.94"
+      },
+      {
+        "last_changed": "2026-01-17T00:57:00.026185+00:00",
+        "state": "561.46"
+      },
+      {
+        "last_changed": "2026-01-17T00:57:05.030708+00:00",
+        "state": "561.02"
+      },
+      {
+        "last_changed": "2026-01-17T00:57:10.032633+00:00",
+        "state": "560.32"
+      },
+      {
+        "last_changed": "2026-01-17T00:57:15.030481+00:00",
+        "state": "559.79"
+      },
+      {
+        "last_changed": "2026-01-17T00:57:20.029633+00:00",
+        "state": "559.17"
+      },
+      {
+        "last_changed": "2026-01-17T00:57:25.022356+00:00",
+        "state": "558.56"
+      },
+      {
+        "last_changed": "2026-01-17T00:57:30.030429+00:00",
+        "state": "557.92"
+      },
+      {
+        "last_changed": "2026-01-17T00:57:35.027564+00:00",
+        "state": "557.29"
+      },
+      {
+        "last_changed": "2026-01-17T00:57:45.030289+00:00",
+        "state": "556.14"
+      },
+      {
+        "last_changed": "2026-01-17T00:57:50.033959+00:00",
+        "state": "555.5"
+      },
+      {
+        "last_changed": "2026-01-17T00:57:55.028955+00:00",
+        "state": "554.9"
+      },
+      {
+        "last_changed": "2026-01-17T00:58:00.027584+00:00",
+        "state": "554.36"
+      },
+      {
+        "last_changed": "2026-01-17T00:58:05.032047+00:00",
+        "state": "553.82"
+      },
+      {
+        "last_changed": "2026-01-17T00:58:10.037843+00:00",
+        "state": "553.26"
+      },
+      {
+        "last_changed": "2026-01-17T00:58:15.032267+00:00",
+        "state": "552.68"
+      },
+      {
+        "last_changed": "2026-01-17T00:58:20.040757+00:00",
+        "state": "552.11"
+      },
+      {
+        "last_changed": "2026-01-17T00:58:25.035569+00:00",
+        "state": "551.67"
+      },
+      {
+        "last_changed": "2026-01-17T00:58:30.034728+00:00",
+        "state": "551.03"
+      },
+      {
+        "last_changed": "2026-01-17T00:58:35.042600+00:00",
+        "state": "550.47"
+      },
+      {
+        "last_changed": "2026-01-17T00:58:40.038031+00:00",
+        "state": "549.9"
+      },
+      {
+        "last_changed": "2026-01-17T00:58:45.041338+00:00",
+        "state": "549.46"
+      },
+      {
+        "last_changed": "2026-01-17T00:58:50.039564+00:00",
+        "state": "549.53"
+      },
+      {
+        "last_changed": "2026-01-17T00:58:55.040663+00:00",
+        "state": "549.43"
+      },
+      {
+        "last_changed": "2026-01-17T00:59:00.054471+00:00",
+        "state": "549.41"
+      },
+      {
+        "last_changed": "2026-01-17T00:59:05.049141+00:00",
+        "state": "549.29"
+      },
+      {
+        "last_changed": "2026-01-17T00:59:10.049238+00:00",
+        "state": "549.35"
+      },
+      {
+        "last_changed": "2026-01-17T00:59:15.044343+00:00",
+        "state": "549.28"
+      },
+      {
+        "last_changed": "2026-01-17T00:59:20.047823+00:00",
+        "state": "549.15"
+      },
+      {
+        "last_changed": "2026-01-17T00:59:25.049071+00:00",
+        "state": "549.06"
+      },
+      {
+        "last_changed": "2026-01-17T00:59:30.048440+00:00",
+        "state": "548.93"
+      },
+      {
+        "last_changed": "2026-01-17T00:59:35.049573+00:00",
+        "state": "548.84"
+      },
+      {
+        "last_changed": "2026-01-17T00:59:40.044607+00:00",
+        "state": "548.8"
+      },
+      {
+        "last_changed": "2026-01-17T00:59:45.053153+00:00",
+        "state": "548.77"
+      },
+      {
+        "last_changed": "2026-01-17T00:59:50.050156+00:00",
+        "state": "548.84"
+      },
+      {
+        "last_changed": "2026-01-17T00:59:55.049705+00:00",
+        "state": "548.98"
+      },
+      {
+        "last_changed": "2026-01-17T01:00:00.058711+00:00",
+        "state": "549.02"
+      },
+      {
+        "last_changed": "2026-01-17T01:00:05.064701+00:00",
+        "state": "549.13"
+      },
+      {
+        "last_changed": "2026-01-17T01:00:10.153181+00:00",
+        "state": "549.11"
+      },
+      {
+        "last_changed": "2026-01-17T01:00:15.063589+00:00",
+        "state": "549.18"
+      },
+      {
+        "last_changed": "2026-01-17T01:00:20.102477+00:00",
+        "state": "549.23"
+      },
+      {
+        "last_changed": "2026-01-17T01:00:30.058141+00:00",
+        "state": "549.27"
+      },
+      {
+        "last_changed": "2026-01-17T01:00:35.049598+00:00",
+        "state": "549.31"
+      },
+      {
+        "last_changed": "2026-01-17T01:00:40.058467+00:00",
+        "state": "549.34"
+      },
+      {
+        "last_changed": "2026-01-17T01:00:45.056660+00:00",
+        "state": "549.46"
+      },
+      {
+        "last_changed": "2026-01-17T01:00:50.052209+00:00",
+        "state": "549.47"
+      },
+      {
+        "last_changed": "2026-01-17T01:00:55.056350+00:00",
+        "state": "549.53"
+      },
+      {
+        "last_changed": "2026-01-17T01:01:00.192367+00:00",
+        "state": "549.57"
+      },
+      {
+        "last_changed": "2026-01-17T01:01:05.060957+00:00",
+        "state": "549.68"
+      },
+      {
+        "last_changed": "2026-01-17T01:01:10.061981+00:00",
+        "state": "549.7"
+      },
+      {
+        "last_changed": "2026-01-17T01:01:15.084737+00:00",
+        "state": "549.78"
+      },
+      {
+        "last_changed": "2026-01-17T01:01:20.066341+00:00",
+        "state": "549.92"
+      },
+      {
+        "last_changed": "2026-01-17T01:01:25.062282+00:00",
+        "state": "549.98"
+      },
+      {
+        "last_changed": "2026-01-17T01:01:30.062998+00:00",
+        "state": "550.15"
+      },
+      {
+        "last_changed": "2026-01-17T01:01:35.061517+00:00",
+        "state": "550.23"
+      },
+      {
+        "last_changed": "2026-01-17T01:01:40.062974+00:00",
+        "state": "550.34"
+      },
+      {
+        "last_changed": "2026-01-17T01:01:45.068531+00:00",
+        "state": "550.39"
+      },
+      {
+        "last_changed": "2026-01-17T01:01:50.072053+00:00",
+        "state": "550.54"
+      },
+      {
+        "last_changed": "2026-01-17T01:01:55.069916+00:00",
+        "state": "550.77"
+      },
+      {
+        "last_changed": "2026-01-17T01:02:00.063858+00:00",
+        "state": "550.97"
+      },
+      {
+        "last_changed": "2026-01-17T01:02:05.431271+00:00",
+        "state": "550.99"
+      },
+      {
+        "last_changed": "2026-01-17T01:02:10.362473+00:00",
+        "state": "551.03"
+      },
+      {
+        "last_changed": "2026-01-17T01:02:15.369832+00:00",
+        "state": "551.11"
+      },
+      {
+        "last_changed": "2026-01-17T01:02:20.363494+00:00",
+        "state": "551.24"
+      },
+      {
+        "last_changed": "2026-01-17T01:02:25.363427+00:00",
+        "state": "551.39"
+      },
+      {
+        "last_changed": "2026-01-17T01:02:30.376275+00:00",
+        "state": "551.15"
+      },
+      {
+        "last_changed": "2026-01-17T01:02:35.367063+00:00",
+        "state": "550.87"
+      },
+      {
+        "last_changed": "2026-01-17T01:02:40.371626+00:00",
+        "state": "550.41"
+      },
+      {
+        "last_changed": "2026-01-17T01:02:45.370934+00:00",
+        "state": "550.09"
+      },
+      {
+        "last_changed": "2026-01-17T01:02:50.373890+00:00",
+        "state": "550.16"
+      },
+      {
+        "last_changed": "2026-01-17T01:02:55.368796+00:00",
+        "state": "550.2"
+      },
+      {
+        "last_changed": "2026-01-17T01:03:00.375624+00:00",
+        "state": "550.19"
+      },
+      {
+        "last_changed": "2026-01-17T01:03:05.376882+00:00",
+        "state": "550.23"
+      },
+      {
+        "last_changed": "2026-01-17T01:03:15.375505+00:00",
+        "state": "550.3"
+      },
+      {
+        "last_changed": "2026-01-17T01:03:20.380194+00:00",
+        "state": "550.25"
+      },
+      {
+        "last_changed": "2026-01-17T01:03:25.378823+00:00",
+        "state": "550.28"
+      },
+      {
+        "last_changed": "2026-01-17T01:03:30.378459+00:00",
+        "state": "550.22"
+      },
+      {
+        "last_changed": "2026-01-17T01:03:35.380721+00:00",
+        "state": "550.08"
+      },
+      {
+        "last_changed": "2026-01-17T01:03:40.377429+00:00",
+        "state": "549.97"
+      },
+      {
+        "last_changed": "2026-01-17T01:03:45.380390+00:00",
+        "state": "549.83"
+      },
+      {
+        "last_changed": "2026-01-17T01:03:50.381216+00:00",
+        "state": "549.77"
+      },
+      {
+        "last_changed": "2026-01-17T01:03:55.420079+00:00",
+        "state": "549.68"
+      },
+      {
+        "last_changed": "2026-01-17T01:04:00.387322+00:00",
+        "state": "549.52"
+      },
+      {
+        "last_changed": "2026-01-17T01:04:05.387968+00:00",
+        "state": "549.5"
+      },
+      {
+        "last_changed": "2026-01-17T01:04:10.498428+00:00",
+        "state": "549.45"
+      },
+      {
+        "last_changed": "2026-01-17T01:04:15.621001+00:00",
+        "state": "549.3"
+      },
+      {
+        "last_changed": "2026-01-17T01:04:20.386750+00:00",
+        "state": "549.28"
+      },
+      {
+        "last_changed": "2026-01-17T01:04:25.386189+00:00",
+        "state": "549.29"
+      },
+      {
+        "last_changed": "2026-01-17T01:04:30.387174+00:00",
+        "state": "549.31"
+      },
+      {
+        "last_changed": "2026-01-17T01:04:35.388932+00:00",
+        "state": "549.23"
+      },
+      {
+        "last_changed": "2026-01-17T01:04:40.391969+00:00",
+        "state": "549.16"
+      },
+      {
+        "last_changed": "2026-01-17T01:04:45.391077+00:00",
+        "state": "549.05"
+      },
+      {
+        "last_changed": "2026-01-17T01:04:50.390529+00:00",
+        "state": "549.02"
+      },
+      {
+        "last_changed": "2026-01-17T01:04:55.403935+00:00",
+        "state": "549.09"
+      },
+      {
+        "last_changed": "2026-01-17T01:05:00.394809+00:00",
+        "state": "549.08"
+      },
+      {
+        "last_changed": "2026-01-17T01:05:05.396485+00:00",
+        "state": "548.99"
+      },
+      {
+        "last_changed": "2026-01-17T01:05:10.454904+00:00",
+        "state": "548.98"
+      },
+      {
+        "last_changed": "2026-01-17T01:05:15.389597+00:00",
+        "state": "548.99"
+      },
+      {
+        "last_changed": "2026-01-17T01:05:20.387394+00:00",
+        "state": "549.03"
       }
     ]
   },
@@ -199354,40 +199342,10 @@
             "date": "2026-01-17",
             "descriptor": "extremely_low",
             "duration": 5,
-            "end_time": "2026-01-17T01:05:00+00:00",
-            "nem_date": "2026-01-17T11:05:00+10:00",
-            "per_kwh": -0.03,
-            "renewables": 79,
-            "spike_status": "none",
-            "spot_per_kwh": -0.02,
-            "start_time": "2026-01-17T01:00:01+00:00"
-          },
-          {
-            "advanced_price_high": -0.01,
-            "advanced_price_low": -0.03,
-            "advanced_price_predicted": -0.02,
-            "date": "2026-01-17",
-            "descriptor": "extremely_low",
-            "duration": 5,
-            "end_time": "2026-01-17T01:10:00+00:00",
-            "nem_date": "2026-01-17T11:10:00+10:00",
-            "per_kwh": -0.04,
-            "renewables": 81,
-            "spike_status": "none",
-            "spot_per_kwh": -0.03,
-            "start_time": "2026-01-17T01:05:01+00:00"
-          },
-          {
-            "advanced_price_high": -0.01,
-            "advanced_price_low": -0.03,
-            "advanced_price_predicted": -0.02,
-            "date": "2026-01-17",
-            "descriptor": "extremely_low",
-            "duration": 5,
             "end_time": "2026-01-17T01:15:00+00:00",
             "nem_date": "2026-01-17T11:15:00+10:00",
             "per_kwh": -0.03,
-            "renewables": 81,
+            "renewables": 80,
             "spike_status": "none",
             "spot_per_kwh": -0.02,
             "start_time": "2026-01-17T01:10:01+00:00"
@@ -199416,10 +199374,10 @@
             "duration": 5,
             "end_time": "2026-01-17T01:25:00+00:00",
             "nem_date": "2026-01-17T11:25:00+10:00",
-            "per_kwh": -0.03,
-            "renewables": 79,
+            "per_kwh": -0.04,
+            "renewables": 81,
             "spike_status": "none",
-            "spot_per_kwh": -0.02,
+            "spot_per_kwh": -0.03,
             "start_time": "2026-01-17T01:20:01+00:00"
           },
           {
@@ -199431,11 +199389,26 @@
             "duration": 5,
             "end_time": "2026-01-17T01:30:00+00:00",
             "nem_date": "2026-01-17T11:30:00+10:00",
-            "per_kwh": -0.03,
-            "renewables": 80,
+            "per_kwh": -0.04,
+            "renewables": 81,
             "spike_status": "none",
-            "spot_per_kwh": -0.02,
+            "spot_per_kwh": -0.03,
             "start_time": "2026-01-17T01:25:01+00:00"
+          },
+          {
+            "advanced_price_high": 0.0,
+            "advanced_price_low": -0.03,
+            "advanced_price_predicted": -0.02,
+            "date": "2026-01-17",
+            "descriptor": "extremely_low",
+            "duration": 5,
+            "end_time": "2026-01-17T01:35:00+00:00",
+            "nem_date": "2026-01-17T11:35:00+10:00",
+            "per_kwh": -0.04,
+            "renewables": 81,
+            "spike_status": "none",
+            "spot_per_kwh": -0.03,
+            "start_time": "2026-01-17T01:30:01+00:00"
           },
           {
             "advanced_price_high": 0.01,
@@ -199443,14 +199416,74 @@
             "advanced_price_predicted": -0.02,
             "date": "2026-01-17",
             "descriptor": "extremely_low",
-            "duration": 30,
-            "end_time": "2026-01-17T02:00:00+00:00",
-            "nem_date": "2026-01-17T12:00:00+10:00",
-            "per_kwh": -0.02,
+            "duration": 5,
+            "end_time": "2026-01-17T01:40:00+00:00",
+            "nem_date": "2026-01-17T11:40:00+10:00",
+            "per_kwh": -0.04,
+            "renewables": 82,
+            "spike_status": "none",
+            "spot_per_kwh": -0.03,
+            "start_time": "2026-01-17T01:35:01+00:00"
+          },
+          {
+            "advanced_price_high": 0.01,
+            "advanced_price_low": -0.03,
+            "advanced_price_predicted": -0.02,
+            "date": "2026-01-17",
+            "descriptor": "extremely_low",
+            "duration": 5,
+            "end_time": "2026-01-17T01:45:00+00:00",
+            "nem_date": "2026-01-17T11:45:00+10:00",
+            "per_kwh": -0.04,
             "renewables": 81,
             "spike_status": "none",
-            "spot_per_kwh": -0.01,
-            "start_time": "2026-01-17T01:30:01+00:00"
+            "spot_per_kwh": -0.03,
+            "start_time": "2026-01-17T01:40:01+00:00"
+          },
+          {
+            "advanced_price_high": 0.01,
+            "advanced_price_low": -0.03,
+            "advanced_price_predicted": -0.02,
+            "date": "2026-01-17",
+            "descriptor": "extremely_low",
+            "duration": 5,
+            "end_time": "2026-01-17T01:50:00+00:00",
+            "nem_date": "2026-01-17T11:50:00+10:00",
+            "per_kwh": -0.04,
+            "renewables": 81,
+            "spike_status": "none",
+            "spot_per_kwh": -0.03,
+            "start_time": "2026-01-17T01:45:01+00:00"
+          },
+          {
+            "advanced_price_high": 0.01,
+            "advanced_price_low": -0.03,
+            "advanced_price_predicted": -0.02,
+            "date": "2026-01-17",
+            "descriptor": "extremely_low",
+            "duration": 5,
+            "end_time": "2026-01-17T01:55:00+00:00",
+            "nem_date": "2026-01-17T11:55:00+10:00",
+            "per_kwh": -0.04,
+            "renewables": 80,
+            "spike_status": "none",
+            "spot_per_kwh": -0.03,
+            "start_time": "2026-01-17T01:50:01+00:00"
+          },
+          {
+            "advanced_price_high": 0.01,
+            "advanced_price_low": -0.03,
+            "advanced_price_predicted": -0.02,
+            "date": "2026-01-17",
+            "descriptor": "extremely_low",
+            "duration": 5,
+            "end_time": "2026-01-17T02:00:00+00:00",
+            "nem_date": "2026-01-17T12:00:00+10:00",
+            "per_kwh": -0.04,
+            "renewables": 80,
+            "spike_status": "none",
+            "spot_per_kwh": -0.03,
+            "start_time": "2026-01-17T01:55:01+00:00"
           },
           {
             "advanced_price_high": 0.02,
@@ -199461,10 +199494,10 @@
             "duration": 30,
             "end_time": "2026-01-17T02:30:00+00:00",
             "nem_date": "2026-01-17T12:30:00+10:00",
-            "per_kwh": -0.02,
-            "renewables": 81,
+            "per_kwh": -0.03,
+            "renewables": 78,
             "spike_status": "none",
-            "spot_per_kwh": -0.01,
+            "spot_per_kwh": -0.02,
             "start_time": "2026-01-17T02:00:01+00:00"
           },
           {
@@ -199476,14 +199509,14 @@
             "duration": 30,
             "end_time": "2026-01-17T03:00:00+00:00",
             "nem_date": "2026-01-17T13:00:00+10:00",
-            "per_kwh": -0.02,
-            "renewables": 79,
+            "per_kwh": -0.03,
+            "renewables": 76,
             "spike_status": "none",
-            "spot_per_kwh": -0.01,
+            "spot_per_kwh": -0.02,
             "start_time": "2026-01-17T02:30:01+00:00"
           },
           {
-            "advanced_price_high": 0.03,
+            "advanced_price_high": 0.02,
             "advanced_price_low": -0.02,
             "advanced_price_predicted": -0.01,
             "date": "2026-01-17",
@@ -199492,7 +199525,7 @@
             "end_time": "2026-01-17T03:30:00+00:00",
             "nem_date": "2026-01-17T13:30:00+10:00",
             "per_kwh": -0.02,
-            "renewables": 80,
+            "renewables": 78,
             "spike_status": "none",
             "spot_per_kwh": -0.01,
             "start_time": "2026-01-17T03:00:01+00:00"
@@ -199507,7 +199540,7 @@
             "end_time": "2026-01-17T04:00:00+00:00",
             "nem_date": "2026-01-17T14:00:00+10:00",
             "per_kwh": -0.02,
-            "renewables": 78,
+            "renewables": 80,
             "spike_status": "none",
             "spot_per_kwh": -0.01,
             "start_time": "2026-01-17T03:30:01+00:00"
@@ -199522,7 +199555,7 @@
             "end_time": "2026-01-17T04:30:00+00:00",
             "nem_date": "2026-01-17T14:30:00+10:00",
             "per_kwh": -0.01,
-            "renewables": 77,
+            "renewables": 76,
             "spike_status": "none",
             "spot_per_kwh": -0.01,
             "start_time": "2026-01-17T04:00:01+00:00"
@@ -199532,29 +199565,29 @@
             "advanced_price_low": -0.0,
             "advanced_price_predicted": 0.02,
             "date": "2026-01-17",
-            "descriptor": "low",
+            "descriptor": "extremely_low",
             "duration": 30,
             "end_time": "2026-01-17T05:00:00+00:00",
             "nem_date": "2026-01-17T15:00:00+10:00",
-            "per_kwh": 0.0,
-            "renewables": 74,
+            "per_kwh": -0.01,
+            "renewables": 75,
             "spike_status": "none",
-            "spot_per_kwh": 0.0,
+            "spot_per_kwh": -0.01,
             "start_time": "2026-01-17T04:30:01+00:00"
           },
           {
-            "advanced_price_high": 0.09,
+            "advanced_price_high": 0.1,
             "advanced_price_low": 0.04,
             "advanced_price_predicted": 0.06,
             "date": "2026-01-17",
-            "descriptor": "high",
+            "descriptor": "low",
             "duration": 30,
             "end_time": "2026-01-17T05:30:00+00:00",
             "nem_date": "2026-01-17T15:30:00+10:00",
-            "per_kwh": 0.06,
-            "renewables": 70,
+            "per_kwh": 0.04,
+            "renewables": 72,
             "spike_status": "none",
-            "spot_per_kwh": 0.02,
+            "spot_per_kwh": 0.0,
             "start_time": "2026-01-17T05:00:01+00:00"
           },
           {
@@ -199566,29 +199599,29 @@
             "duration": 30,
             "end_time": "2026-01-17T06:00:00+00:00",
             "nem_date": "2026-01-17T16:00:00+10:00",
-            "per_kwh": 0.08,
-            "renewables": 66,
+            "per_kwh": 0.06,
+            "renewables": 68,
             "spike_status": "none",
-            "spot_per_kwh": 0.04,
+            "spot_per_kwh": 0.02,
             "start_time": "2026-01-17T05:30:01+00:00"
           },
           {
             "advanced_price_high": 0.1,
             "advanced_price_low": 0.04,
-            "advanced_price_predicted": 0.07,
+            "advanced_price_predicted": 0.06,
             "date": "2026-01-17",
-            "descriptor": "high",
+            "descriptor": "low",
             "duration": 30,
             "end_time": "2026-01-17T06:30:00+00:00",
             "nem_date": "2026-01-17T16:30:00+10:00",
-            "per_kwh": 0.05,
-            "renewables": 63,
+            "per_kwh": 0.04,
+            "renewables": 62,
             "spike_status": "none",
-            "spot_per_kwh": 0.01,
+            "spot_per_kwh": 0.0,
             "start_time": "2026-01-17T06:00:01+00:00"
           },
           {
-            "advanced_price_high": 0.1,
+            "advanced_price_high": 0.09,
             "advanced_price_low": 0.04,
             "advanced_price_predicted": 0.07,
             "date": "2026-01-17",
@@ -199612,7 +199645,7 @@
             "end_time": "2026-01-17T07:30:00+00:00",
             "nem_date": "2026-01-17T17:30:00+10:00",
             "per_kwh": 0.04,
-            "renewables": 52,
+            "renewables": 53,
             "spike_status": "none",
             "spot_per_kwh": -0.0,
             "start_time": "2026-01-17T07:00:01+00:00"
@@ -199686,10 +199719,10 @@
             "duration": 30,
             "end_time": "2026-01-17T10:00:00+00:00",
             "nem_date": "2026-01-17T20:00:00+10:00",
-            "per_kwh": 0.09,
+            "per_kwh": 0.07,
             "renewables": 28,
             "spike_status": "none",
-            "spot_per_kwh": 0.05,
+            "spot_per_kwh": 0.03,
             "start_time": "2026-01-17T09:30:01+00:00"
           },
           {
@@ -199701,14 +199734,14 @@
             "duration": 30,
             "end_time": "2026-01-17T10:30:00+00:00",
             "nem_date": "2026-01-17T20:30:00+10:00",
-            "per_kwh": 0.04,
+            "per_kwh": 0.01,
             "renewables": 28,
             "spike_status": "none",
-            "spot_per_kwh": 0.04,
+            "spot_per_kwh": 0.01,
             "start_time": "2026-01-17T10:00:01+00:00"
           },
           {
-            "advanced_price_high": 0.07,
+            "advanced_price_high": 0.08,
             "advanced_price_low": 0.03,
             "advanced_price_predicted": 0.05,
             "date": "2026-01-17",
@@ -199739,8 +199772,8 @@
           },
           {
             "advanced_price_high": 0.07,
-            "advanced_price_low": 0.04,
-            "advanced_price_predicted": 0.06,
+            "advanced_price_low": 0.03,
+            "advanced_price_predicted": 0.05,
             "date": "2026-01-17",
             "descriptor": "low",
             "duration": 30,
@@ -199769,7 +199802,7 @@
           },
           {
             "advanced_price_high": 0.08,
-            "advanced_price_low": 0.04,
+            "advanced_price_low": 0.05,
             "advanced_price_predicted": 0.06,
             "date": "2026-01-17",
             "descriptor": "high",
@@ -199785,7 +199818,7 @@
           {
             "advanced_price_high": 0.07,
             "advanced_price_low": 0.04,
-            "advanced_price_predicted": 0.05,
+            "advanced_price_predicted": 0.06,
             "date": "2026-01-17",
             "descriptor": "high",
             "duration": 30,
@@ -199806,10 +199839,10 @@
             "duration": 30,
             "end_time": "2026-01-17T14:00:00+00:00",
             "nem_date": "2026-01-18T00:00:00+10:00",
-            "per_kwh": 0.05,
-            "renewables": 31,
+            "per_kwh": 0.06,
+            "renewables": 30,
             "spike_status": "none",
-            "spot_per_kwh": 0.05,
+            "spot_per_kwh": 0.06,
             "start_time": "2026-01-17T13:30:01+00:00"
           },
           {
@@ -199938,47 +199971,47 @@
         "unit_of_measurement": "$/kWh"
       },
       "context": {
-        "id": "01KF4Q6HP5BM2239NEQC619CK2",
+        "id": "01KF4QRGFEM3FK45DN8DNG7Q2G",
         "parent_id": null,
         "user_id": null
       },
       "entity_id": "sensor.amber_feed_in_forecast",
       "last_changed": "2026-01-17T00:43:12.849546+00:00",
-      "last_reported": "2026-01-17T00:55:33.829700+00:00",
-      "last_updated": "2026-01-17T00:55:33.829700+00:00",
+      "last_reported": "2026-01-17T01:05:22.414332+00:00",
+      "last_updated": "2026-01-17T01:05:22.414332+00:00",
       "state": "-0.03"
     },
     "sensor.amber_feed_in_price_non_estimate": {
       "attributes": {
-        "advanced_price_high": null,
-        "advanced_price_low": null,
-        "advanced_price_predicted": null,
+        "advanced_price_high": -0.01,
+        "advanced_price_low": -0.03,
+        "advanced_price_predicted": -0.02,
         "attribution": "Data provided by Amber Electric",
         "channel_type": "feedIn",
         "date": "2026-01-17",
         "duration": 5,
-        "end_time": "2026-01-17T01:00:00+00:00",
-        "estimate": false,
-        "estimated_price": null,
+        "end_time": "2026-01-17T01:10:00+00:00",
+        "estimate": true,
+        "estimated_price": -0.03,
         "friendly_name": "Amber - Feed In Price (non-estimate)",
-        "nem_date": "2026-01-17T11:00:00+10:00",
-        "per_kwh": -0.02,
-        "renewables": 82,
+        "nem_date": "2026-01-17T11:10:00+10:00",
+        "per_kwh": -0.03,
+        "renewables": 80,
         "spike_status": "none",
-        "spot_per_kwh": -0.01,
-        "start_time": "2026-01-17T00:55:01+00:00",
+        "spot_per_kwh": -0.02,
+        "start_time": "2026-01-17T01:05:01+00:00",
         "state_class": "measurement",
         "unit_of_measurement": "$/kWh"
       },
       "context": {
-        "id": "01KF4Q6HP36WERHX1F8CDXPZWY",
+        "id": "01KF4QR571M3Q9KHX6NQ502071",
         "parent_id": null,
         "user_id": null
       },
       "entity_id": "sensor.amber_feed_in_price_non_estimate",
       "last_changed": "2026-01-17T00:55:33.827901+00:00",
-      "last_reported": "2026-01-17T00:55:33.827901+00:00",
-      "last_updated": "2026-01-17T00:55:33.827901+00:00",
+      "last_reported": "2026-01-17T01:05:10.881701+00:00",
+      "last_updated": "2026-01-17T01:05:10.881701+00:00",
       "state": "-0.02"
     },
     "sensor.amber_general_forecast": {
@@ -199988,37 +200021,7 @@
         "forecasts": [
           {
             "advanced_price_high": 0.07,
-            "advanced_price_low": 0.04,
-            "advanced_price_predicted": 0.05,
-            "date": "2026-01-17",
-            "descriptor": "extremely_low",
-            "duration": 5,
-            "end_time": "2026-01-17T01:05:00+00:00",
-            "nem_date": "2026-01-17T11:05:00+10:00",
-            "per_kwh": 0.05,
-            "renewables": 79,
-            "spike_status": "none",
-            "spot_per_kwh": -0.02,
-            "start_time": "2026-01-17T01:00:01+00:00"
-          },
-          {
-            "advanced_price_high": 0.07,
-            "advanced_price_low": 0.04,
-            "advanced_price_predicted": 0.05,
-            "date": "2026-01-17",
-            "descriptor": "extremely_low",
-            "duration": 5,
-            "end_time": "2026-01-17T01:10:00+00:00",
-            "nem_date": "2026-01-17T11:10:00+10:00",
-            "per_kwh": 0.04,
-            "renewables": 81,
-            "spike_status": "none",
-            "spot_per_kwh": -0.03,
-            "start_time": "2026-01-17T01:05:01+00:00"
-          },
-          {
-            "advanced_price_high": 0.07,
-            "advanced_price_low": 0.04,
+            "advanced_price_low": 0.05,
             "advanced_price_predicted": 0.05,
             "date": "2026-01-17",
             "descriptor": "extremely_low",
@@ -200026,14 +200029,14 @@
             "end_time": "2026-01-17T01:15:00+00:00",
             "nem_date": "2026-01-17T11:15:00+10:00",
             "per_kwh": 0.04,
-            "renewables": 81,
+            "renewables": 80,
             "spike_status": "none",
             "spot_per_kwh": -0.02,
             "start_time": "2026-01-17T01:10:01+00:00"
           },
           {
             "advanced_price_high": 0.07,
-            "advanced_price_low": 0.04,
+            "advanced_price_low": 0.05,
             "advanced_price_predicted": 0.05,
             "date": "2026-01-17",
             "descriptor": "extremely_low",
@@ -200047,34 +200050,64 @@
             "start_time": "2026-01-17T01:15:01+00:00"
           },
           {
-            "advanced_price_high": 0.08,
-            "advanced_price_low": 0.04,
-            "advanced_price_predicted": 0.05,
+            "advanced_price_high": 0.07,
+            "advanced_price_low": 0.05,
+            "advanced_price_predicted": 0.06,
             "date": "2026-01-17",
             "descriptor": "extremely_low",
             "duration": 5,
             "end_time": "2026-01-17T01:25:00+00:00",
             "nem_date": "2026-01-17T11:25:00+10:00",
             "per_kwh": 0.04,
-            "renewables": 79,
+            "renewables": 81,
             "spike_status": "none",
-            "spot_per_kwh": -0.02,
+            "spot_per_kwh": -0.03,
             "start_time": "2026-01-17T01:20:01+00:00"
           },
           {
             "advanced_price_high": 0.08,
             "advanced_price_low": 0.05,
-            "advanced_price_predicted": 0.05,
+            "advanced_price_predicted": 0.06,
             "date": "2026-01-17",
             "descriptor": "extremely_low",
             "duration": 5,
             "end_time": "2026-01-17T01:30:00+00:00",
             "nem_date": "2026-01-17T11:30:00+10:00",
             "per_kwh": 0.04,
-            "renewables": 80,
+            "renewables": 81,
             "spike_status": "none",
-            "spot_per_kwh": -0.02,
+            "spot_per_kwh": -0.03,
             "start_time": "2026-01-17T01:25:01+00:00"
+          },
+          {
+            "advanced_price_high": 0.08,
+            "advanced_price_low": 0.05,
+            "advanced_price_predicted": 0.06,
+            "date": "2026-01-17",
+            "descriptor": "extremely_low",
+            "duration": 5,
+            "end_time": "2026-01-17T01:35:00+00:00",
+            "nem_date": "2026-01-17T11:35:00+10:00",
+            "per_kwh": 0.03,
+            "renewables": 81,
+            "spike_status": "none",
+            "spot_per_kwh": -0.03,
+            "start_time": "2026-01-17T01:30:01+00:00"
+          },
+          {
+            "advanced_price_high": 0.08,
+            "advanced_price_low": 0.05,
+            "advanced_price_predicted": 0.06,
+            "date": "2026-01-17",
+            "descriptor": "extremely_low",
+            "duration": 5,
+            "end_time": "2026-01-17T01:40:00+00:00",
+            "nem_date": "2026-01-17T11:40:00+10:00",
+            "per_kwh": 0.04,
+            "renewables": 82,
+            "spike_status": "none",
+            "spot_per_kwh": -0.03,
+            "start_time": "2026-01-17T01:35:01+00:00"
           },
           {
             "advanced_price_high": 0.09,
@@ -200082,14 +200115,59 @@
             "advanced_price_predicted": 0.06,
             "date": "2026-01-17",
             "descriptor": "extremely_low",
-            "duration": 30,
-            "end_time": "2026-01-17T02:00:00+00:00",
-            "nem_date": "2026-01-17T12:00:00+10:00",
-            "per_kwh": 0.05,
+            "duration": 5,
+            "end_time": "2026-01-17T01:45:00+00:00",
+            "nem_date": "2026-01-17T11:45:00+10:00",
+            "per_kwh": 0.03,
             "renewables": 81,
             "spike_status": "none",
-            "spot_per_kwh": -0.01,
-            "start_time": "2026-01-17T01:30:01+00:00"
+            "spot_per_kwh": -0.03,
+            "start_time": "2026-01-17T01:40:01+00:00"
+          },
+          {
+            "advanced_price_high": 0.08,
+            "advanced_price_low": 0.05,
+            "advanced_price_predicted": 0.06,
+            "date": "2026-01-17",
+            "descriptor": "extremely_low",
+            "duration": 5,
+            "end_time": "2026-01-17T01:50:00+00:00",
+            "nem_date": "2026-01-17T11:50:00+10:00",
+            "per_kwh": 0.04,
+            "renewables": 81,
+            "spike_status": "none",
+            "spot_per_kwh": -0.03,
+            "start_time": "2026-01-17T01:45:01+00:00"
+          },
+          {
+            "advanced_price_high": 0.09,
+            "advanced_price_low": 0.05,
+            "advanced_price_predicted": 0.06,
+            "date": "2026-01-17",
+            "descriptor": "extremely_low",
+            "duration": 5,
+            "end_time": "2026-01-17T01:55:00+00:00",
+            "nem_date": "2026-01-17T11:55:00+10:00",
+            "per_kwh": 0.04,
+            "renewables": 80,
+            "spike_status": "none",
+            "spot_per_kwh": -0.03,
+            "start_time": "2026-01-17T01:50:01+00:00"
+          },
+          {
+            "advanced_price_high": 0.09,
+            "advanced_price_low": 0.05,
+            "advanced_price_predicted": 0.06,
+            "date": "2026-01-17",
+            "descriptor": "extremely_low",
+            "duration": 5,
+            "end_time": "2026-01-17T02:00:00+00:00",
+            "nem_date": "2026-01-17T12:00:00+10:00",
+            "per_kwh": 0.04,
+            "renewables": 80,
+            "spike_status": "none",
+            "spot_per_kwh": -0.03,
+            "start_time": "2026-01-17T01:55:01+00:00"
           },
           {
             "advanced_price_high": 0.09,
@@ -200100,10 +200178,10 @@
             "duration": 30,
             "end_time": "2026-01-17T02:30:00+00:00",
             "nem_date": "2026-01-17T12:30:00+10:00",
-            "per_kwh": 0.06,
-            "renewables": 81,
+            "per_kwh": 0.05,
+            "renewables": 78,
             "spike_status": "none",
-            "spot_per_kwh": -0.01,
+            "spot_per_kwh": -0.02,
             "start_time": "2026-01-17T02:00:01+00:00"
           },
           {
@@ -200115,10 +200193,10 @@
             "duration": 30,
             "end_time": "2026-01-17T03:00:00+00:00",
             "nem_date": "2026-01-17T13:00:00+10:00",
-            "per_kwh": 0.06,
-            "renewables": 79,
+            "per_kwh": 0.05,
+            "renewables": 76,
             "spike_status": "none",
-            "spot_per_kwh": -0.01,
+            "spot_per_kwh": -0.02,
             "start_time": "2026-01-17T02:30:01+00:00"
           },
           {
@@ -200130,8 +200208,8 @@
             "duration": 30,
             "end_time": "2026-01-17T03:30:00+00:00",
             "nem_date": "2026-01-17T13:30:00+10:00",
-            "per_kwh": 0.06,
-            "renewables": 80,
+            "per_kwh": 0.05,
+            "renewables": 78,
             "spike_status": "none",
             "spot_per_kwh": -0.01,
             "start_time": "2026-01-17T03:00:01+00:00"
@@ -200146,7 +200224,7 @@
             "end_time": "2026-01-17T04:00:00+00:00",
             "nem_date": "2026-01-17T14:00:00+10:00",
             "per_kwh": 0.06,
-            "renewables": 78,
+            "renewables": 80,
             "spike_status": "none",
             "spot_per_kwh": -0.01,
             "start_time": "2026-01-17T03:30:01+00:00"
@@ -200161,7 +200239,7 @@
             "end_time": "2026-01-17T04:30:00+00:00",
             "nem_date": "2026-01-17T14:30:00+10:00",
             "per_kwh": 0.06,
-            "renewables": 77,
+            "renewables": 76,
             "spike_status": "none",
             "spot_per_kwh": -0.01,
             "start_time": "2026-01-17T04:00:01+00:00"
@@ -200176,13 +200254,13 @@
             "end_time": "2026-01-17T05:00:00+00:00",
             "nem_date": "2026-01-17T15:00:00+10:00",
             "per_kwh": 0.06,
-            "renewables": 74,
+            "renewables": 75,
             "spike_status": "none",
-            "spot_per_kwh": 0.0,
+            "spot_per_kwh": -0.01,
             "start_time": "2026-01-17T04:30:01+00:00"
           },
           {
-            "advanced_price_high": 0.12,
+            "advanced_price_high": 0.13,
             "advanced_price_low": 0.06,
             "advanced_price_predicted": 0.09,
             "date": "2026-01-17",
@@ -200190,10 +200268,10 @@
             "duration": 30,
             "end_time": "2026-01-17T05:30:00+00:00",
             "nem_date": "2026-01-17T15:30:00+10:00",
-            "per_kwh": 0.08,
-            "renewables": 70,
+            "per_kwh": 0.06,
+            "renewables": 72,
             "spike_status": "none",
-            "spot_per_kwh": 0.02,
+            "spot_per_kwh": 0.0,
             "start_time": "2026-01-17T05:00:01+00:00"
           },
           {
@@ -200205,10 +200283,10 @@
             "duration": 30,
             "end_time": "2026-01-17T06:00:00+00:00",
             "nem_date": "2026-01-17T16:00:00+10:00",
-            "per_kwh": 0.1,
-            "renewables": 66,
+            "per_kwh": 0.08,
+            "renewables": 68,
             "spike_status": "none",
-            "spot_per_kwh": 0.04,
+            "spot_per_kwh": 0.02,
             "start_time": "2026-01-17T05:30:01+00:00"
           },
           {
@@ -200221,15 +200299,15 @@
             "end_time": "2026-01-17T06:30:00+00:00",
             "nem_date": "2026-01-17T16:30:00+10:00",
             "per_kwh": 0.07,
-            "renewables": 63,
+            "renewables": 62,
             "spike_status": "none",
-            "spot_per_kwh": 0.01,
+            "spot_per_kwh": 0.0,
             "start_time": "2026-01-17T06:00:01+00:00"
           },
           {
-            "advanced_price_high": 0.13,
+            "advanced_price_high": 0.12,
             "advanced_price_low": 0.06,
-            "advanced_price_predicted": 0.1,
+            "advanced_price_predicted": 0.09,
             "date": "2026-01-17",
             "descriptor": "extremely_low",
             "duration": 30,
@@ -200251,7 +200329,7 @@
             "end_time": "2026-01-17T07:30:00+00:00",
             "nem_date": "2026-01-17T17:30:00+10:00",
             "per_kwh": 0.06,
-            "renewables": 52,
+            "renewables": 53,
             "spike_status": "none",
             "spot_per_kwh": -0.0,
             "start_time": "2026-01-17T07:00:01+00:00"
@@ -200273,7 +200351,7 @@
           },
           {
             "advanced_price_high": 0.14,
-            "advanced_price_low": 0.08,
+            "advanced_price_low": 0.07,
             "advanced_price_predicted": 0.11,
             "date": "2026-01-17",
             "descriptor": "extremely_low",
@@ -200325,10 +200403,10 @@
             "duration": 30,
             "end_time": "2026-01-17T10:00:00+00:00",
             "nem_date": "2026-01-17T20:00:00+10:00",
-            "per_kwh": 0.12,
+            "per_kwh": 0.1,
             "renewables": 28,
             "spike_status": "none",
-            "spot_per_kwh": 0.05,
+            "spot_per_kwh": 0.03,
             "start_time": "2026-01-17T09:30:01+00:00"
           },
           {
@@ -200340,14 +200418,14 @@
             "duration": 30,
             "end_time": "2026-01-17T10:30:00+00:00",
             "nem_date": "2026-01-17T20:30:00+10:00",
-            "per_kwh": 0.1,
+            "per_kwh": 0.07,
             "renewables": 28,
             "spike_status": "none",
-            "spot_per_kwh": 0.04,
+            "spot_per_kwh": 0.01,
             "start_time": "2026-01-17T10:00:01+00:00"
           },
           {
-            "advanced_price_high": 0.14,
+            "advanced_price_high": 0.15,
             "advanced_price_low": 0.1,
             "advanced_price_predicted": 0.12,
             "date": "2026-01-17",
@@ -200363,7 +200441,7 @@
           },
           {
             "advanced_price_high": 0.14,
-            "advanced_price_low": 0.1,
+            "advanced_price_low": 0.09,
             "advanced_price_predicted": 0.12,
             "date": "2026-01-17",
             "descriptor": "extremely_low",
@@ -200377,7 +200455,7 @@
             "start_time": "2026-01-17T11:00:01+00:00"
           },
           {
-            "advanced_price_high": 0.15,
+            "advanced_price_high": 0.14,
             "advanced_price_low": 0.1,
             "advanced_price_predicted": 0.12,
             "date": "2026-01-17",
@@ -200445,14 +200523,14 @@
             "duration": 30,
             "end_time": "2026-01-17T14:00:00+00:00",
             "nem_date": "2026-01-18T00:00:00+10:00",
-            "per_kwh": 0.12,
-            "renewables": 31,
+            "per_kwh": 0.13,
+            "renewables": 30,
             "spike_status": "none",
-            "spot_per_kwh": 0.05,
+            "spot_per_kwh": 0.06,
             "start_time": "2026-01-17T13:30:01+00:00"
           },
           {
-            "advanced_price_high": 0.14,
+            "advanced_price_high": 0.13,
             "advanced_price_low": 0.1,
             "advanced_price_predicted": 0.12,
             "date": "2026-01-18",
@@ -200497,7 +200575,7 @@
             "start_time": "2026-01-17T15:00:01+00:00"
           },
           {
-            "advanced_price_high": 0.14,
+            "advanced_price_high": 0.13,
             "advanced_price_low": 0.11,
             "advanced_price_predicted": 0.12,
             "date": "2026-01-18",
@@ -200542,7 +200620,7 @@
             "start_time": "2026-01-17T16:30:01+00:00"
           },
           {
-            "advanced_price_high": 0.13,
+            "advanced_price_high": 0.14,
             "advanced_price_low": 0.1,
             "advanced_price_predicted": 0.12,
             "date": "2026-01-18",
@@ -200577,47 +200655,47 @@
         "unit_of_measurement": "$/kWh"
       },
       "context": {
-        "id": "01KF4Q6HP4AM3WBR2JETSB4VYS",
+        "id": "01KF4QRGFDK4CWC8GB0PFM8YTA",
         "parent_id": null,
         "user_id": null
       },
       "entity_id": "sensor.amber_general_forecast",
-      "last_changed": "2026-01-17T00:50:06.252685+00:00",
-      "last_reported": "2026-01-17T00:55:33.828733+00:00",
-      "last_updated": "2026-01-17T00:55:33.828733+00:00",
-      "state": "0.05"
+      "last_changed": "2026-01-17T01:00:09.772247+00:00",
+      "last_reported": "2026-01-17T01:05:22.413373+00:00",
+      "last_updated": "2026-01-17T01:05:22.413373+00:00",
+      "state": "0.04"
     },
     "sensor.amber_general_price_non_estimate": {
       "attributes": {
-        "advanced_price_high": null,
-        "advanced_price_low": null,
-        "advanced_price_predicted": null,
+        "advanced_price_high": 0.06,
+        "advanced_price_low": 0.05,
+        "advanced_price_predicted": 0.05,
         "attribution": "Data provided by Amber Electric",
         "channel_type": "general",
         "date": "2026-01-17",
         "duration": 5,
-        "end_time": "2026-01-17T01:00:00+00:00",
-        "estimate": false,
-        "estimated_price": null,
+        "end_time": "2026-01-17T01:10:00+00:00",
+        "estimate": true,
+        "estimated_price": 0.04,
         "friendly_name": "Amber - General Price (non-estimate)",
-        "nem_date": "2026-01-17T11:00:00+10:00",
-        "per_kwh": 0.05,
-        "renewables": 82,
+        "nem_date": "2026-01-17T11:10:00+10:00",
+        "per_kwh": 0.04,
+        "renewables": 80,
         "spike_status": "none",
-        "spot_per_kwh": -0.01,
-        "start_time": "2026-01-17T00:55:01+00:00",
+        "spot_per_kwh": -0.02,
+        "start_time": "2026-01-17T01:05:01+00:00",
         "state_class": "measurement",
         "unit_of_measurement": "$/kWh"
       },
       "context": {
-        "id": "01KF4Q6HP3TY2PHZJN76SSWQBH",
+        "id": "01KF4QRGFC3WCHSDT1N3JM57VQ",
         "parent_id": null,
         "user_id": null
       },
       "entity_id": "sensor.amber_general_price_non_estimate",
       "last_changed": "2026-01-17T00:21:03.488146+00:00",
-      "last_reported": "2026-01-17T00:55:33.827563+00:00",
-      "last_updated": "2026-01-17T00:55:33.827563+00:00",
+      "last_reported": "2026-01-17T01:05:22.412414+00:00",
+      "last_updated": "2026-01-17T01:05:22.412414+00:00",
       "state": "0.05"
     },
     "sensor.hass_energy_battery_power_smoothed_1m": {
@@ -200670,15 +200748,15 @@
         "unit_of_measurement": "W"
       },
       "context": {
-        "id": "01KF4Q8W39DWB2KXW11BW3HV4B",
+        "id": "01KF4QREG3PKTK7A0W2HAYF80V",
         "parent_id": null,
         "user_id": null
       },
       "entity_id": "sensor.hass_energy_load_power_uncontrolled_smoothed_15m",
-      "last_changed": "2026-01-17T00:56:50.025526+00:00",
-      "last_reported": "2026-01-17T00:56:50.025526+00:00",
-      "last_updated": "2026-01-17T00:56:50.025526+00:00",
-      "state": "562.5"
+      "last_changed": "2026-01-17T01:05:20.387394+00:00",
+      "last_reported": "2026-01-17T01:05:20.387394+00:00",
+      "last_updated": "2026-01-17T01:05:20.387394+00:00",
+      "state": "549.03"
     },
     "sensor.hass_energy_load_power_uncontrolled_smoothed_1m": {
       "attributes": {
@@ -200690,15 +200768,15 @@
         "unit_of_measurement": "W"
       },
       "context": {
-        "id": "01KF4Q8W38GHXY8KCEDPYDDZE8",
+        "id": "01KF4QREG26TZK8626C5PNYDWS",
         "parent_id": null,
         "user_id": null
       },
       "entity_id": "sensor.hass_energy_load_power_uncontrolled_smoothed_1m",
-      "last_changed": "2026-01-17T00:56:50.024944+00:00",
-      "last_reported": "2026-01-17T00:56:50.024944+00:00",
-      "last_updated": "2026-01-17T00:56:50.024944+00:00",
-      "state": "517.25"
+      "last_changed": "2026-01-17T01:05:20.386911+00:00",
+      "last_reported": "2026-01-17T01:05:20.386911+00:00",
+      "last_updated": "2026-01-17T01:05:20.386911+00:00",
+      "state": "528.51"
     },
     "sensor.hass_energy_pv_power_smoothed_1m": {
       "attributes": {
@@ -200710,15 +200788,15 @@
         "unit_of_measurement": "W"
       },
       "context": {
-        "id": "01KF4Q8W36H6BZXDQ0RD9GWBW8",
+        "id": "01KF4QREFZP1Z58YQJBCS7NFEK",
         "parent_id": null,
         "user_id": null
       },
       "entity_id": "sensor.hass_energy_pv_power_smoothed_1m",
-      "last_changed": "2026-01-17T00:56:50.022385+00:00",
-      "last_reported": "2026-01-17T00:56:50.022385+00:00",
-      "last_updated": "2026-01-17T00:56:50.022385+00:00",
-      "state": "2174.57"
+      "last_changed": "2026-01-17T01:05:20.383791+00:00",
+      "last_reported": "2026-01-17T01:05:20.383791+00:00",
+      "last_updated": "2026-01-17T01:05:20.383791+00:00",
+      "state": "2160.51"
     },
     "sensor.inverter_battery_soc": {
       "attributes": {
@@ -200728,15 +200806,15 @@
         "unit_of_measurement": "%"
       },
       "context": {
-        "id": "01KF4PY17ABG4F6Y4303PSENVY",
+        "id": "01KF4QCV1XXHAZTGR1DXFMNSN0",
         "parent_id": null,
         "user_id": null
       },
       "entity_id": "sensor.inverter_battery_soc",
-      "last_changed": "2026-01-17T00:50:54.829995+00:00",
-      "last_reported": "2026-01-17T00:50:54.829995+00:00",
-      "last_updated": "2026-01-17T00:50:54.829995+00:00",
-      "state": "75"
+      "last_changed": "2026-01-17T00:59:00.032367+00:00",
+      "last_reported": "2026-01-17T00:59:00.032367+00:00",
+      "last_updated": "2026-01-17T00:59:00.032367+00:00",
+      "state": "76"
     },
     "sensor.solcast_pv_forecast_forecast_day_3": {
       "attributes": {
