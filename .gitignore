@@ -14,6 +14,10 @@ data/
 config.dev.yaml
 .worktrees/
 
+# Node / frontend
+node_modules/
+web/.vite/
+web/dist/
 
 ._old
 
