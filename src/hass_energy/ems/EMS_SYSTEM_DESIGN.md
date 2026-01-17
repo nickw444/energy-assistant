@@ -128,7 +128,7 @@ Fields:
 
 - `capacity_kwh`
 - `storage_efficiency_pct`
-- `throughput_cost_per_kwh`
+- `charge_cost_per_kwh`, `discharge_cost_per_kwh`
 - `min_soc_pct`, `max_soc_pct`, `reserve_soc_pct`
 - `max_charge_kw`, `max_discharge_kw` (optional)
 - `state_of_charge_pct` (realtime)
@@ -362,7 +362,7 @@ The objective is a sum of:
 3. **Early-flow tie-breaker**:
    - Tiny negative weight on `(P_import + P_export) / (t+1)` to bias flow earlier.
 4. **Battery wear cost**:
-   - `throughput_cost_per_kwh * (charge + discharge)`.
+   - `charge_cost_per_kwh * charge + discharge_cost_per_kwh * discharge`.
 5. **Curtailment tie-breaker**:
    - Small weighted bias on `Curtail_inv` to stabilize equivalent solutions.
 6. **EV incentive rewards**:
