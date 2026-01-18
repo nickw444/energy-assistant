@@ -306,9 +306,9 @@ def _build_plan_figure(
         title={
             "text": (
                 "EMS Plan | "
-                f"Cost: ${total_cost:.2f} | "
-                f"Grid Export: {total_export_kwh:.2f} kWh | "
-                f"Grid Import: {total_import_kwh:.2f} kWh"
+                f"Cost 💰: ${total_cost:.2f} | "
+                f"Grid Export 📤: {total_export_kwh:.2f} kWh | "
+                f"Grid Import 📥: {total_import_kwh:.2f} kWh"
             ),
             "x": 0.5,
             "xanchor": "center",
