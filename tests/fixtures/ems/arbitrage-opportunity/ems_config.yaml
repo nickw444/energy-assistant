@@ -78,6 +78,7 @@ plant:
       storage_efficiency_pct: 95.0
       charge_cost_per_kwh: 0.0
       discharge_cost_per_kwh: 0.01
+      export_penalty_per_kwh: 0.1
       min_soc_pct: 11.0
       max_soc_pct: 100.0
       reserve_soc_pct: 30.0
