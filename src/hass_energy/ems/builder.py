@@ -71,6 +71,8 @@ class InverterBuild:
     inverters: dict[str, InverterVars]
     # Battery export flow per inverter id (kW per timestep).
     battery_export_kw: dict[str, dict[int, pulp.LpVariable]]
+    # PV export flow per inverter id (kW per timestep).
+    pv_export_kw: dict[str, dict[int, pulp.LpVariable]]
 
 
 @dataclass(slots=True)
@@ -601,7 +603,11 @@ class MILPBuilder:
                 f"grid_export_split_t{t}",
             )
 
-        return InverterBuild(inverters=inverters, battery_export_kw=batt_export_by_inv)
+        return InverterBuild(
+            inverters=inverters,
+            battery_export_kw=batt_export_by_inv,
+            pv_export_kw=pv_export_by_inv,
+        )
 
     def _build_ac_balance(
         self,
@@ -647,15 +653,19 @@ class MILPBuilder:
         # When export price is exactly zero, add a tiny bonus to prefer exporting over curtailment.
         # Self-consumption bias makes grid interaction slightly less attractive than local use.
         export_bonus = 1e-4
+        # Effective export price series used consistently for revenue and penalties.
+        export_price_eff = [
+            (
+                export_bonus
+                if abs(float(price_export[t])) <= 1e-9
+                else float(price_export[t]) * (1.0 - self_consumption_bias)
+            )
+            for t in horizon.T
+        ]
         objective: pulp.LpAffineExpression = pulp.lpSum(
             (
                 P_import[t] * float(price_import[t]) * (1.0 + self_consumption_bias)
-                - P_export[t]
-                * (
-                    export_bonus
-                    if abs(float(price_export[t])) <= 1e-9
-                    else float(price_export[t]) * (1.0 - self_consumption_bias)
-                )
+                - P_export[t] * export_price_eff[t]
             )
             * horizon.dt_hours(t)
             for t in horizon.T
@@ -715,6 +725,27 @@ class MILPBuilder:
             if export_penalty > 0 and batt_export_series is not None:
                 objective += pulp.lpSum(
                     export_penalty * batt_export_series[t] * horizon.dt_hours(t)
+                    for t in horizon.T
+                )
+            pv_export_series = inverters.pv_export_kw.get(inverter.id)
+            if pv_export_series is not None:
+                # PV export penalty targets the PV-export + battery-discharge-to-load pattern
+                # where PV is sent to the grid while the battery covers household load. Without
+                # this term, serving load with PV is "free" but has no explicit reward, while
+                # exporting PV earns revenue. If export=0.06 and bias=20%, export value=0.048/kWh
+                # beats a 0.01/kWh battery discharge cost, so the model prefers exporting PV and
+                # discharging the battery to serve load.
+                pv_export_penalty_eps = 1e-4
+                objective += pulp.lpSum(
+                    max(
+                        0.0,
+                        min(
+                            export_price_eff[t],
+                            export_price_eff[t] - discharge_cost + pv_export_penalty_eps,
+                        ),
+                    )
+                    * pv_export_series[t]
+                    * horizon.dt_hours(t)
                     for t in horizon.T
                 )
         terminal_penalty = self._terminal_soc_penalty_per_kwh(horizon, price_import)
