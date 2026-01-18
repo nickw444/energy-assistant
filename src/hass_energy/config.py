@@ -15,7 +15,12 @@ logger = logging.getLogger(__name__)
 def load_app_config(config_path: Path | None) -> AppConfig:
     if config_path is None:
         logger.info("No config path provided; using defaults")
-        config_path = Path("config.yaml")
+        devPath = Path("config.dev.yaml")
+        if(devPath.exists()):
+            logger.info("Using config.dev.yaml")
+            config_path = devPath
+        else:
+            config_path =  Path("config.yaml")
 
     if not config_path.exists():
         raise ValueError(f"Config file {config_path} not found")
