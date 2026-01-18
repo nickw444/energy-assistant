@@ -333,9 +333,11 @@ def ems_record_scenario(
                 dict[str, list[HomeAssistantHistoryStateDict]],
                 fixture["history"],
             )
+            fixture_service_calls = cast(dict[str, object], fixture["service_calls"])
             fixture_provider = FixtureHassDataProvider(
                 states=fixture_states,
                 history=fixture_history,
+                service_calls=fixture_service_calls,
             )
             fixture_resolver = ValueResolverImpl(hass_data_provider=fixture_provider)
             fixture_resolver.mark_for_hydration(app_config)
