@@ -203,7 +203,7 @@ class HomeAssistantAmberElectricForecastSource(
                 if end is None:
                     end = expected_end
                 else:
-                    # Amber intervals can be offset by a second; snap to duration end when drift is notable.
+                    # Amber intervals can be offset by a second; snap when drift is notable.
                     diff_seconds = abs((end - expected_end).total_seconds())
                     if diff_seconds >= _AMBER_INTERVAL_TOLERANCE_SECONDS:
                         end = expected_end
