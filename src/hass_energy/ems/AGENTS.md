@@ -104,6 +104,12 @@ model at the start of the horizon:
   - `discharge_cost_per_kwh` applied to discharge, `charge_cost_per_kwh` applied to charge.
   - Both default to 0.0; set `charge_cost_per_kwh: 0.0` to capture PV energy freely.
   - Efficiency losses are already in the SoC dynamics constraints.
+- Battery export penalty (optional):
+  - `export_penalty_per_kwh` applied to battery export flow (battery → grid).
+  - Configure per inverter via `plant.inverters[].battery.export_penalty_per_kwh`.
+- Battery timing tie-breaker:
+  - Tiny time-weighted throughput penalty to stabilize dispatch ordering across
+    equivalent-cost slots.
 - Terminal SoC shortfall penalty:
   - Applied when the terminal constraint is softened; default penalty uses the average
     import price (unless `ems.terminal_soc.penalty_per_kwh` is set) and scales with
