@@ -26,8 +26,8 @@ COLORS = {
     "batt_discharge": "rgba(0, 150, 136, 1.0)",
     "batt_discharge_fill": "rgba(0, 150, 136, 0.3)",
     "batt_soc": "rgba(76, 175, 80, 1.0)",
-    "ev_charge": "rgba(0, 150, 136, 1.0)",
-    "ev_charge_fill": "rgba(0, 150, 136, 0.3)",
+    "ev_charge": "rgba(255, 152, 0, 1.0)",
+    "ev_charge_fill": "rgba(255, 152, 0, 0.3)",
     "ev_soc": "rgba(139, 195, 74, 1.0)",
     "price_import": "rgba(63, 81, 181, 1.0)",
     "price_export": "rgba(233, 30, 99, 1.0)",
@@ -177,17 +177,21 @@ def _build_plan_figure(
         )
 
     if _has_any(total_ev_charge):
-        charge_neg = [-v for v in total_ev_charge]
         fig.add_trace(
             go.Scatter(
                 x=time_labels,
-                y=charge_neg,
-                name="EV Charge",
+                y=total_ev_charge,
+                name="EV Charge Rate",
                 mode="lines",
-                fill="tozeroy",
-                fillcolor=COLORS["ev_charge_fill"],
-                line={"color": COLORS["ev_charge"], "width": 2, "shape": "hv"},
-                hovertemplate="%{y:.2f} kW<extra>EV Charge</extra>" if include_hover else None,
+                line={
+                    "color": COLORS["ev_charge"],
+                    "width": 2,
+                    "shape": "hv",
+                    "dash": "dot",
+                },
+                hovertemplate=(
+                    "%{y:.2f} kW<extra>EV Charge Rate</extra>" if include_hover else None
+                ),
                 legendgroup=legend_group_power,
             ),
             secondary_y=False,
