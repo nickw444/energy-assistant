@@ -273,6 +273,12 @@ def _build_plan_figure(
             )
 
     total_cost = sum(float(step.economics.segment_cost) for step in timesteps)
+    total_import_kwh = sum(
+        float(step.grid.import_kw) * float(step.duration_s) / 3600.0 for step in timesteps
+    )
+    total_export_kwh = sum(
+        float(step.grid.export_kw) * float(step.duration_s) / 3600.0 for step in timesteps
+    )
 
     price_max = max(
         max(abs(p) for p in price_import) if price_import else 0,
@@ -298,7 +304,12 @@ def _build_plan_figure(
 
     fig.update_layout(
         title={
-            "text": f"EMS Plan | Cost: ${total_cost:.2f}",
+            "text": (
+                "EMS Plan | "
+                f"Cost: ${total_cost:.2f} | "
+                f"Grid Export: {total_export_kwh:.2f} kWh | "
+                f"Grid Import: {total_import_kwh:.2f} kWh"
+            ),
             "x": 0.5,
             "xanchor": "center",
             "font": {"size": 16},
