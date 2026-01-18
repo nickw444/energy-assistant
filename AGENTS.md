@@ -10,6 +10,7 @@
 - Systemd units should use an absolute path to `uv` in `ExecStart` when `uv` is installed under a user-local path (e.g., `/root/.local/bin/uv`), because systemd only searches a limited set of system paths.
 - For self-contained tasks when requested, create a git worktree under `.worktrees/<meaningful-name>`, copy `config.dev.yaml` into the worktree root, and run `uv sync` there before starting work.
 - GitHub uses squash merges; when cleaning up worktrees, rely on PR merged status or deleted remote branches rather than `git branch --merged`.
+- When updating PR descriptions via `gh`, prefer `gh pr edit --body-file <path>` to preserve markdown formatting.
 - Routes are split by domain under `hass_energy/api/routes/` (e.g., `plan`, `settings`). Settings endpoint surfaces runtime energy settings (read-only; user edits YAML).
 - MILP logic lives under `hass_energy/worker/milp/` using PuLP; planner/compiler are placeholders awaiting real constraints.
 - MILP v2 scaffolding lives under `src/hass_energy/milp_v2/` with a compile phase (config + `ValueResolver` -> `CompiledModel`) and an execute phase (solve -> `PlanResult`).
