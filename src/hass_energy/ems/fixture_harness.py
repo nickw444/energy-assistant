@@ -21,8 +21,21 @@ class EmsFixturePaths:
     hash_path: Path
 
 
-def resolve_ems_fixture_paths(base_dir: Path, name: str | None) -> EmsFixturePaths:
-    root_dir = base_dir / name if name else base_dir
+def _resolve_fixture_root(base_dir: Path, name: str | Path) -> Path:
+    candidate = Path(name)
+    if candidate.is_absolute():
+        return candidate
+
+    base_candidate = base_dir / candidate
+    if base_candidate.exists():
+        return base_candidate
+    if candidate.exists():
+        return candidate
+    return base_candidate
+
+
+def resolve_ems_fixture_paths(base_dir: Path, name: str | Path | None) -> EmsFixturePaths:
+    root_dir = base_dir if name is None else _resolve_fixture_root(base_dir, name)
     return EmsFixturePaths(
         root_dir=root_dir,
         fixture_path=root_dir / "ems_fixture.json",
