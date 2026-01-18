@@ -177,11 +177,10 @@ def _build_plan_figure(
         )
 
     if _has_any(total_ev_charge):
-        charge_neg = [-v for v in total_ev_charge]
         fig.add_trace(
             go.Scatter(
                 x=time_labels,
-                y=charge_neg,
+                y=total_ev_charge,
                 name="EV Charge",
                 mode="lines",
                 fill="tozeroy",
