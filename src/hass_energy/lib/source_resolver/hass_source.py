@@ -14,6 +14,8 @@ from hass_energy.lib.source_resolver.sources import EntitySource
 
 T = TypeVar("T")
 
+_AMBER_INTERVAL_TOLERANCE_SECONDS = 2.0
+
 
 def required_float(value: object) -> float:
     if value is None:
@@ -187,14 +189,27 @@ class HomeAssistantAmberElectricForecastSource(
         for item in forecasts:
             start = _parse_timestamp(item.get("start_time") or item.get("nem_date"))
             end = _parse_timestamp(item.get("end_time"))
+            
+            duration = item.get("duration")
+            has_duration = isinstance(duration, (int, float))
             if start is None:
                 continue
-            if end is None:
-                duration = item.get("duration")
-                if isinstance(duration, (int, float)):
-                    end = start + datetime.timedelta(minutes=float(duration))
+            if end is None and not has_duration:
+                continue
+
+            if has_duration:
+                # check for an intolderence issue
+                expected_end = start + datetime.timedelta(minutes=float(duration))
+                if end is None:
+                    end = expected_end
+                else:
+                    # Amber intervals can be offset by a second; snap to duration end when drift is notable.
+                    diff_seconds = abs((end - expected_end).total_seconds())
+                    if diff_seconds >= _AMBER_INTERVAL_TOLERANCE_SECONDS:
+                        end = expected_end
             if end is None:
                 continue
+
 
             value = _amber_price_value(
                 item,

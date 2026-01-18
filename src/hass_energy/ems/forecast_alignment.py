@@ -9,6 +9,9 @@ from typing import Protocol
 from hass_energy.ems.horizon import Horizon
 from hass_energy.lib.source_resolver.models import PowerForecastInterval, PriceForecastInterval
 
+# Amber forecasts sometimes offset interval boundaries by 1s; tolerate small gaps per hour.
+_ALIGNMENT_GAP_TOLERANCE_SECONDS = 2.0
+
 
 class ForecastInterval(Protocol):
     start: datetime.datetime
@@ -120,7 +123,7 @@ def _align_intervals[T: ForecastInterval](
                 continue
             raise ValueError("forecast series does not cover the full horizon")
         coverage_gap = slot_seconds - total_overlap
-        if coverage_gap > 1.0:
+        if coverage_gap > _ALIGNMENT_GAP_TOLERANCE_SECONDS:
             if first_slot_override is not None and slot.index == 0:
                 series.append(0.0)
                 continue
