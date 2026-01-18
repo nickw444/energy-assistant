@@ -167,14 +167,14 @@ def ems(ctx: click.Context) -> None:
     "--scenario",
     type=str,
     default=None,
-    help="Replay a recorded scenario from tests/fixtures/ems/<name>.",
+    help="Replay a recorded scenario by name or by path to the scenario directory.",
 )
 @click.option(
     "--scenario-dir",
     type=click.Path(path_type=Path, file_okay=False),
     default=Path("tests/fixtures/ems"),
     show_default=True,
-    help="Base directory containing scenario bundles.",
+    help="Base directory containing scenario bundles when using a name.",
 )
 @click.pass_context
 def ems_solve(
@@ -364,7 +364,7 @@ def ems_record_scenario(
     "--name",
     type=str,
     required=True,
-    help="Scenario name to refresh.",
+    help="Scenario name or path to the scenario directory.",
 )
 @click.option(
     "--scenario-dir",
