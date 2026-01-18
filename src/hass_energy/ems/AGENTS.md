@@ -144,16 +144,16 @@ Plotting (`src/hass_energy/plotting/plan.py`):
   `hass-energy ems record-scenario` (writes `ems_fixture.json`, `ems_config.yaml`,
   a summarized `ems_plan.json` baseline, `ems_plan.hash`, and `ems_plan.jpeg`
   under `tests/fixtures/ems/`; `--name` writes to a subdir).
-- Replay fixtures offline via `hass-energy ems solve --scenario <name>` to view
+- Replay fixtures offline via `hass-energy ems solve --scenario <name-or-path>` to view
   plots or output JSON without a live Home Assistant connection.
 - When making EMS changes, validate against a checked-in fixture by replaying it
   and comparing the generated plan summary to the stored `ems_plan.json` for the
   same scenario. This is the preferred offline sanity check before updating snapshots.
   Example workflow:
-  - `hass-energy ems solve --scenario <name> --output /tmp/ems_plan.actual.json`
+  - `hass-energy ems solve --scenario <name-or-path> --output /tmp/ems_plan.actual.json`
   - Use `/tmp/ems_plan.actual.json` for deep debugging; the checked-in
     `tests/fixtures/ems/<name>/ems_plan.json` is a summarized baseline for diffs.
-  - Refresh the summarized baseline with `hass-energy ems refresh-baseline --name <name>`.
+  - Refresh the summarized baseline with `hass-energy ems refresh-baseline --name <name-or-path>`.
   - For visual inspection, add `--plot` or `--plot-output <path>` to review the plan.
 - The `ems_plan.jpeg` image is checked in for PR review; it regenerates only when
   the plan hash changes. The hash file (`ems_plan.hash`) stores a SHA256 prefix
