@@ -256,7 +256,7 @@ class HomeAssistantHistoricalAverageForecastSource(
     """
 
     platform: Literal["historical_average"]
-    unit: str = Field(min_length=1)
+    unit: str | None = Field(default=None, min_length=1)
     interval_duration: int = Field(default=5, ge=1, le=60)
     forecast_horizon_hours: int = Field(default=24, ge=1)
     realtime_window_minutes: int | None = Field(default=None, ge=1)
@@ -267,9 +267,10 @@ class HomeAssistantHistoricalAverageForecastSource(
     def _validate_interval_duration(self) -> HomeAssistantHistoricalAverageForecastSource:
         if 60 % self.interval_duration != 0:
             raise ValueError("interval_duration must evenly divide 60 minutes")
-        normalized = self.unit.strip().lower()
-        if normalized not in {"w", "kw", "mw"}:
-            raise ValueError("unit must be one of: W, kW, MW")
+        if self.unit is not None:
+            normalized = self.unit.strip().lower()
+            if normalized not in {"w", "kw", "mw"}:
+                raise ValueError("unit must be one of: W, kW, MW")
         return self
 
     def mapper(
@@ -280,6 +281,15 @@ class HomeAssistantHistoricalAverageForecastSource(
         current_state = state.current_state
         entries: list[tuple[datetime.datetime, float]] = []
         unit = self.unit
+        if not unit:
+            attributes = current_state.get("attributes", {})
+            current_unit = attributes.get("unit_of_measurement")
+            if isinstance(current_unit, str) and current_unit.strip():
+                unit = current_unit
+        if not unit:
+            raise ValueError(
+                "unit is required when current state has no unit_of_measurement",
+            )
         for item in history:
             timestamp = _parse_timestamp(item.get("last_updated") or item.get("last_changed"))
             if timestamp is None:
