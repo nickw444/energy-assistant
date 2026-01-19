@@ -19,9 +19,12 @@ from hass_energy.models.config import EmsConfig
 from hass_energy.models.loads import ControlledEvLoad, LoadConfig, NonVariableLoad
 from hass_energy.models.plant import PlantConfig, TimeWindow
 
-_EV_RAMP_PENALTY_COST = 1e-4
 _EV_ANCHOR_PENALTY_COST = 0.05
 _EV_ANCHOR_ACTIVE_THRESHOLD_KW = 0.1
+# Built-in time preference for EV charging to finish earlier.
+_EV_EARLY_CHARGE_PENALTY_PER_KWH = 0.02
+# Soft hysteresis: penalize EV on/off switching to reduce chatter.
+_EV_SWITCH_PENALTY_COST = 0.02
 _NEGATIVE_EXPORT_PRICE_THRESHOLD = -1e-9
 
 logger = logging.getLogger(__name__)
@@ -87,8 +90,10 @@ class EvVars:
     P_ev_charge_kw: dict[int, pulp.LpVariable]
     # EV SoC variables at slot boundaries (indexed 0..N).
     E_ev_kwh: dict[int, pulp.LpVariable]
-    # EV charge ramp magnitude per timestep t (t>0 has ramp constraints).
-    Ev_charge_ramp_kw: dict[int, pulp.LpVariable]
+    # EV on/off switch-on indicator per timestep (0..1).
+    Ev_charge_switch_on: dict[int, pulp.LpVariable] | None
+    # EV on/off switch-off indicator per timestep (0..1).
+    Ev_charge_switch_off: dict[int, pulp.LpVariable] | None
     # EV anchor deviation variable for slot 0 vs realtime power.
     Ev_charge_anchor_kw: pulp.LpVariable
 
@@ -768,24 +773,48 @@ class MILPBuilder:
             # Consistent ordering bias avoids multiple equivalent curtailment choices.
             objective += pulp.lpSum(weight * series[t] * horizon.dt_hours(t) for t in horizon.T)
         # EV terminal SoC incentives (piecewise per-kWh rewards).
-        # Apply the same bias as export revenue so incentives compete fairly with export tariffs.
-        # e.g., an 8c incentive should tie with an 8c export tariff after both are biased.
+        # Apply the import bias so incentives compete fairly with import costs
+        # (avoids discouraging grid charging when self-consumption bias is enabled).
         for segments in loads.ev_incentive_segments.values():
             for segment_var, incentive in segments:
                 if abs(float(incentive)) <= 1e-12:
                     continue
-                biased_incentive = float(incentive) * (1.0 - self_consumption_bias)
+                biased_incentive = float(incentive) * (1.0 + self_consumption_bias)
                 objective += -biased_incentive * segment_var
-        # EV ramp penalties (discourage large per-slot changes in charge power).
-        ramp_penalty = _EV_RAMP_PENALTY_COST
-        for load in self._loads:
-            if not isinstance(load, ControlledEvLoad):
-                continue
-            ev_vars = ev_by_id.get(load.id)
-            if ev_vars is None:
-                continue
-            ramp_series = ev_vars.Ev_charge_ramp_kw
-            objective += pulp.lpSum(ramp_penalty * ramp_series[t] for t in horizon.T if t > 0)
+        # Built-in time preference: penalize later EV charging to prefer finishing earlier.
+        if horizon.num_intervals > 0 and _EV_EARLY_CHARGE_PENALTY_PER_KWH > 0:
+            denom = max(1, horizon.num_intervals - 1)
+            for load in self._loads:
+                if not isinstance(load, ControlledEvLoad):
+                    continue
+                ev_vars = ev_by_id.get(load.id)
+                if ev_vars is None:
+                    continue
+                series = ev_vars.P_ev_charge_kw
+                for t in horizon.T:
+                    time_weight = t / denom
+                    objective += (
+                        _EV_EARLY_CHARGE_PENALTY_PER_KWH
+                        * time_weight
+                        * series[t]
+                        * horizon.dt_hours(t)
+                    )
+        # Soft hysteresis: penalize EV on/off switching.
+        if _EV_SWITCH_PENALTY_COST > 0:
+            for load in self._loads:
+                if not isinstance(load, ControlledEvLoad):
+                    continue
+                ev_vars = ev_by_id.get(load.id)
+                if ev_vars is None:
+                    continue
+                switch_on = ev_vars.Ev_charge_switch_on
+                switch_off = ev_vars.Ev_charge_switch_off
+                if switch_on is None or switch_off is None:
+                    continue
+                objective += pulp.lpSum(
+                    _EV_SWITCH_PENALTY_COST * (switch_on[t] + switch_off[t])
+                    for t in horizon.T
+                )
         # EV soft anchor to realtime power for slot 0.
         anchor_penalty = _EV_ANCHOR_PENALTY_COST
         if horizon.num_intervals > 0:
@@ -946,18 +975,9 @@ class MILPBuilder:
                 upBound=1,
                 cat="Binary",
             )
-        ramp_vars = pulp.LpVariable.dicts(
-            f"Ev_{ev_id}_ramp_kw",
-            T,
-            lowBound=0,
-        )
         anchor_var = pulp.LpVariable(
             f"Ev_{ev_id}_anchor_kw",
             lowBound=0,
-        )
-        problem += (
-            ramp_vars[0] == 0,
-            f"ev_charge_ramp_init_{ev_id}",
         )
         problem += (
             anchor_var >= P_ev_charge[0] - realtime_power,
@@ -968,6 +988,29 @@ class MILPBuilder:
             f"ev_anchor_down_{ev_id}",
         )
 
+        switch_on = None
+        switch_off = None
+        if charge_on is not None:
+            switch_on = pulp.LpVariable.dicts(
+                f"Ev_{ev_id}_switch_on",
+                T,
+                lowBound=0,
+                upBound=1,
+            )
+            switch_off = pulp.LpVariable.dicts(
+                f"Ev_{ev_id}_switch_off",
+                T,
+                lowBound=0,
+                upBound=1,
+            )
+            problem += (
+                switch_on[0] == 0,
+                f"ev_switch_on_init_{ev_id}",
+            )
+            problem += (
+                switch_off[0] == 0,
+                f"ev_switch_off_init_{ev_id}",
+            )
         for t in T:
             connected_allow = connected_allow_by_slot[t]
             # Enforce connection gating.
@@ -988,15 +1031,15 @@ class MILPBuilder:
                     P_ev_charge[t] <= load.max_power_kw * charge_on[t],
                     f"ev_charge_max_{ev_id}_t{t}",
                 )
-            if t > 0:
-                problem += (
-                    ramp_vars[t] >= P_ev_charge[t] - P_ev_charge[t - 1],
-                    f"ev_charge_ramp_up_{ev_id}_t{t}",
-                )
-                problem += (
-                    ramp_vars[t] >= P_ev_charge[t - 1] - P_ev_charge[t],
-                    f"ev_charge_ramp_down_{ev_id}_t{t}",
-                )
+                if t > 0 and switch_on is not None and switch_off is not None:
+                    problem += (
+                        switch_on[t] >= charge_on[t] - charge_on[t - 1],
+                        f"ev_charge_switch_on_{ev_id}_t{t}",
+                    )
+                    problem += (
+                        switch_off[t] >= charge_on[t - 1] - charge_on[t],
+                        f"ev_charge_switch_off_{ev_id}_t{t}",
+                    )
             # SoC dynamics (charge-only).
             problem += (
                 E_ev_kwh[t + 1] == E_ev_kwh[t] + P_ev_charge[t] * horizon.dt_hours(t),
@@ -1018,8 +1061,9 @@ class MILPBuilder:
             connected=connected,
             P_ev_charge_kw=P_ev_charge,
             E_ev_kwh=E_ev_kwh,
-            Ev_charge_ramp_kw=ramp_vars,
             Ev_charge_anchor_kw=anchor_var,
+            Ev_charge_switch_on=switch_on,
+            Ev_charge_switch_off=switch_off,
         )
         return ev_vars, segments
 

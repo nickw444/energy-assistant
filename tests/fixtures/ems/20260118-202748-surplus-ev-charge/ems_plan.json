@@ -2,14 +2,14 @@
   "buckets": [
     {
       "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 1.107,
+      "battery_discharge_kwh": 7.599,
       "curtailment_minutes": 0.0,
       "end": "2026-01-18T21:25:00+11:00",
-      "ev_charge_kwh": 0.0,
+      "ev_charge_kwh": 6.493,
       "grid_export_kwh": 0.0,
       "grid_import_kwh": 0.0,
       "grid_net_kwh": 0.0,
-      "load_kwh": 1.109,
+      "load_kwh": 7.601,
       "pv_kwh": 0.002,
       "start": "2026-01-18T20:25:00+11:00"
     },
@@ -222,54 +222,54 @@
       "start": "2026-01-19T12:25:00+11:00"
     },
     {
-      "battery_charge_kwh": 1.944,
+      "battery_charge_kwh": 3.162,
       "battery_discharge_kwh": 0.0,
       "curtailment_minutes": 60.0,
       "end": "2026-01-19T14:25:00+11:00",
-      "ev_charge_kwh": 1.218,
+      "ev_charge_kwh": 0.0,
       "grid_export_kwh": 0.0,
       "grid_import_kwh": 0.0,
       "grid_net_kwh": 0.0,
-      "load_kwh": 1.895,
+      "load_kwh": 0.677,
       "pv_kwh": 3.839,
       "start": "2026-01-19T13:25:00+11:00"
     },
     {
-      "battery_charge_kwh": 0.239,
+      "battery_charge_kwh": 3.171,
       "battery_discharge_kwh": 0.0,
       "curtailment_minutes": 35.0,
       "end": "2026-01-19T15:25:00+11:00",
-      "ev_charge_kwh": 2.931,
+      "ev_charge_kwh": 0.0,
       "grid_export_kwh": 0.0,
       "grid_import_kwh": 0.0,
       "grid_net_kwh": 0.0,
-      "load_kwh": 3.513,
+      "load_kwh": 0.582,
       "pv_kwh": 3.752,
       "start": "2026-01-19T14:25:00+11:00"
     },
     {
-      "battery_charge_kwh": 0.063,
+      "battery_charge_kwh": 2.885,
       "battery_discharge_kwh": 0.0,
       "curtailment_minutes": 0.0,
       "end": "2026-01-19T16:25:00+11:00",
-      "ev_charge_kwh": 2.822,
+      "ev_charge_kwh": 0.0,
       "grid_export_kwh": 0.0,
       "grid_import_kwh": 0.0,
       "grid_net_kwh": 0.0,
-      "load_kwh": 3.373,
+      "load_kwh": 0.551,
       "pv_kwh": 3.436,
       "start": "2026-01-19T15:25:00+11:00"
     },
     {
-      "battery_charge_kwh": 1.87,
+      "battery_charge_kwh": 2.092,
       "battery_discharge_kwh": 0.0,
       "curtailment_minutes": 0.0,
       "end": "2026-01-19T17:25:00+11:00",
-      "ev_charge_kwh": 0.222,
+      "ev_charge_kwh": 0.0,
       "grid_export_kwh": 0.0,
       "grid_import_kwh": 0.0,
       "grid_net_kwh": 0.0,
-      "load_kwh": 0.886,
+      "load_kwh": 0.664,
       "pv_kwh": 2.756,
       "start": "2026-01-19T16:25:00+11:00"
     },
@@ -432,29 +432,29 @@
   ],
   "evs": {
     "tessie": {
-      "charge_kwh": 7.194,
+      "charge_kwh": 6.493,
       "connected_minutes": 1955.0,
-      "soc_kwh_end": 48.534,
-      "soc_kwh_max": 48.534,
+      "soc_kwh_end": 47.833,
+      "soc_kwh_max": 47.833,
       "soc_kwh_min": 41.34,
-      "soc_pct_end": 62.223,
-      "soc_pct_max": 62.223,
+      "soc_pct_end": 61.324,
+      "soc_pct_max": 61.324,
       "soc_pct_min": 53.0
     }
   },
   "inverters": {
     "primary": {
-      "ac_net_kwh": 30.484,
-      "battery_charge_kwh": 16.135,
-      "battery_discharge_kwh": 14.561,
+      "ac_net_kwh": 29.783,
+      "battery_charge_kwh": 23.329,
+      "battery_discharge_kwh": 21.053,
       "curtailment_minutes": 300.0,
       "pv_kwh": 32.06,
       "soc_kwh_end": 27.91,
       "soc_kwh_max": 36.056,
-      "soc_kwh_min": 20.728,
+      "soc_kwh_min": 13.894,
       "soc_pct_end": 66.612,
       "soc_pct_max": 86.052,
-      "soc_pct_min": 49.47
+      "soc_pct_min": 33.159
     }
   },
   "meta": {
@@ -463,7 +463,7 @@
     "generated_at": "2026-01-18T09:27:53.349940+00:00",
     "horizon_end": "2026-01-20T05:00:00+11:00",
     "horizon_start": "2026-01-18T20:25:00+11:00",
-    "objective_value": -3.901,
+    "objective_value": -5.8,
     "status": "Optimal",
     "timestep_minutes": {
       "avg": 22.733,
@@ -485,9 +485,9 @@
     "import_min": 0.06
   },
   "totals": {
-    "battery_charge_kwh": 16.135,
-    "battery_discharge_kwh": 14.561,
-    "ev_charge_kwh": 7.194,
+    "battery_charge_kwh": 23.329,
+    "battery_discharge_kwh": 21.053,
+    "ev_charge_kwh": 6.493,
     "grid_export_kw_max": 0.0,
     "grid_export_kwh": 0.0,
     "grid_import_kw_max": 0.0,
@@ -497,7 +497,7 @@
     "grid_net_kw_min": 0.0,
     "grid_net_kwh": 0.0,
     "load_base_kwh": 23.29,
-    "load_total_kwh": 30.484,
+    "load_total_kwh": 29.783,
     "pv_kwh": 32.06,
     "segment_cost_total": 0.0,
     "total_cost": 0.0
