@@ -78,18 +78,21 @@ Energy management system that pulls Home Assistant data, plans using MILP (stub 
 6) Inspect load forecast hydration: `uv run hass-energy --config config.yaml hydrate-load-forecast`.
 
 ### Docker
-Build and run a containerized EMS instance:
+Build and run a containerized EMS instance, build with:
 ```bash
 docker build -t hass-energy .
+```
+
+Run with
+```bash
 docker run --rm -p 6070:6070 \
   -v "$(pwd)/config.yaml:/config/config.yaml:ro" \
   -v "$(pwd)/data:/data" \
   hass-energy
 ```
-
-Or with Compose:
+or docker-compose
 ```bash
-docker compose up --build
+docker compose up -d
 ```
 
 Notes:
