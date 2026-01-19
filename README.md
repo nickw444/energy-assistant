@@ -17,7 +17,7 @@ Energy management system that pulls Home Assistant data, plans using MILP (stub 
    ```yaml
    server:
      host: 0.0.0.0
-     port: 8000
+     port: 6070
      data_dir: ./data
    homeassistant:
      base_url: ""
@@ -76,6 +76,25 @@ Energy management system that pulls Home Assistant data, plans using MILP (stub 
 4) Run the API + worker (always on): `uv run hass-energy --config config.yaml`.
 5) Run the MILP v2 CLI (wired but not implemented yet): `uv run hass-energy milp --config config.yaml`.
 6) Inspect load forecast hydration: `uv run hass-energy --config config.yaml hydrate-load-forecast`.
+
+### Docker
+Build and run a containerized EMS instance:
+```bash
+docker build -t hass-energy .
+docker run --rm -p 6070:6070 \
+  -v "$(pwd)/config.yaml:/config/config.yaml:ro" \
+  -v "$(pwd)/data:/data" \
+  hass-energy
+```
+
+Or with Compose:
+```bash
+docker compose up --build
+```
+
+Notes:
+- Ensure `server.host` is `0.0.0.0` in `config.yaml` so the API binds inside the container.
+- `data_dir` should point to `/data` so plans are persisted on the host volume.
 
 ### API surface (initial)
 - `GET /health` – readiness probe.
