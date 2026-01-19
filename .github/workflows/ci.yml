@@ -48,3 +48,37 @@ jobs:
         run: uv sync --dev --frozen
       - name: Tests
         run: uv run pytest
+  refresh-fixture-images:
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'github-actions[bot]'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install uv
+        run: python -m pip install uv
+      - name: Sync dependencies
+        run: uv sync --dev --frozen
+      - name: Refresh EMS fixture images
+        run: uv run python scripts/refresh_ems_fixture_images.py
+      - name: Commit and push updates
+        run: |
+          if git diff --quiet; then
+            echo "No fixture updates to push."
+            exit 0
+          fi
+          git add tests/fixtures/ems
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: refresh EMS fixture images"
+          git push origin HEAD:${{ github.head_ref }}
