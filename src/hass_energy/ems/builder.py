@@ -22,7 +22,6 @@ from hass_energy.models.plant import PlantConfig, TimeWindow
 _EV_RAMP_PENALTY_COST = 1e-4
 _EV_ANCHOR_PENALTY_COST = 0.05
 _EV_ANCHOR_ACTIVE_THRESHOLD_KW = 0.1
-_NEGATIVE_EXPORT_PRICE_THRESHOLD = -1e-9
 _TERMINAL_SOC_REFERENCE_MINUTES = 1440.0
 
 logger = logging.getLogger(__name__)
@@ -371,15 +370,6 @@ class MILPBuilder:
                             grid.P_export[t] <= self._plant.grid.max_export_kw * (1 - curtail[t]),
                             f"inverter_export_block_{inv_id}_t{t}",
                         )
-                        if float(price_export[t]) < _NEGATIVE_EXPORT_PRICE_THRESHOLD:
-                            # Negative export prices always activate load-following curtailment.
-                            # We want PV to drop to match load and prevent any export,
-                            # even when PV is already below load (which keeps curtail off).
-                            problem += (
-                                curtail[t] == 1,
-                                f"inverter_curtail_neg_export_{inv_id}_t{t}",
-                            )
-
             battery = inverter.battery
             if battery is None:
                 for t in T:
