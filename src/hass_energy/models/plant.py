@@ -62,6 +62,9 @@ class BatteryConfig(BaseModel):
     storage_efficiency_pct: float = Field(gt=0, le=100)
     charge_cost_per_kwh: float = Field(default=0.0, ge=0)
     discharge_cost_per_kwh: float = Field(default=0.0, ge=0)
+    # Reward for battery discharge that serves on-site loads (excludes export).
+    # Use when you want battery self-consumption to beat low import prices.
+    self_consumption_reward_per_kwh: float = Field(default=0.0, ge=0)
     # Discourages low-value battery -> grid export without penalizing PV export.
     # Use when you want self-consumption to win over small arbitrage spreads but still
     # allow export at sufficiently high prices.

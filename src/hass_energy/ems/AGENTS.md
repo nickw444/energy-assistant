@@ -107,6 +107,9 @@ model at the start of the horizon:
 - Battery export penalty (optional):
   - `export_penalty_per_kwh` applied to battery export flow (battery → grid).
   - Configure per inverter via `plant.inverters[].battery.export_penalty_per_kwh`.
+- Battery self-consumption reward (optional):
+  - `self_consumption_reward_per_kwh` applied to battery discharge serving load.
+  - Configure per inverter via `plant.inverters[].battery.self_consumption_reward_per_kwh`.
 - Battery timing tie-breaker:
   - Tiny time-weighted throughput penalty to stabilize dispatch ordering across
     equivalent-cost slots.

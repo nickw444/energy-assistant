@@ -72,6 +72,8 @@ class InverterBuild:
     inverters: dict[str, InverterVars]
     # Battery export flow per inverter id (kW per timestep).
     battery_export_kw: dict[str, dict[int, pulp.LpVariable]]
+    # Battery discharge serving load per inverter id (kW per timestep).
+    battery_load_kw: dict[str, dict[int, pulp.LpVariable]]
     # PV export flow per inverter id (kW per timestep).
     pv_export_kw: dict[str, dict[int, pulp.LpVariable]]
 
@@ -607,6 +609,7 @@ class MILPBuilder:
         return InverterBuild(
             inverters=inverters,
             battery_export_kw=batt_export_by_inv,
+            battery_load_kw=batt_load_by_inv,
             pv_export_kw=pv_export_by_inv,
         )
 
@@ -726,6 +729,14 @@ class MILPBuilder:
             if export_penalty > 0 and batt_export_series is not None:
                 objective += pulp.lpSum(
                     export_penalty * batt_export_series[t] * horizon.dt_hours(t)
+                    for t in horizon.T
+                )
+            self_consumption_reward = battery.self_consumption_reward_per_kwh
+            batt_load_series = inverters.battery_load_kw.get(inverter.id)
+            # Reward battery discharge that serves on-site load (excludes export).
+            if self_consumption_reward > 0 and batt_load_series is not None:
+                objective += pulp.lpSum(
+                    -self_consumption_reward * batt_load_series[t] * horizon.dt_hours(t)
                     for t in horizon.T
                 )
             pv_export_series = inverters.pv_export_kw.get(inverter.id)
