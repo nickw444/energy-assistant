@@ -1,0 +1,8 @@
+services:
+  hass-energy:
+    image: hass-energy
+    ports:
+      - "6070:6070"
+    volumes:
+      - ./config.yaml:/config/config.yaml:ro
+      - ./data:/data

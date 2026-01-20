@@ -59,7 +59,7 @@ class EmsConfig(BaseModel):
 
 class ServerConfig(BaseModel):
     host: str = "0.0.0.0"
-    port: int = 8000
+    port: int = 6070
     data_dir: Path = Field(default_factory=lambda: Path.cwd() / "data")
 
     model_config = ConfigDict(extra="forbid")
