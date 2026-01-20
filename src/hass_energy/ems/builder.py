@@ -23,6 +23,7 @@ _EV_RAMP_PENALTY_COST = 1e-4
 _EV_ANCHOR_PENALTY_COST = 0.05
 _EV_ANCHOR_ACTIVE_THRESHOLD_KW = 0.1
 _NEGATIVE_EXPORT_PRICE_THRESHOLD = -1e-9
+_TERMINAL_SOC_REFERENCE_MINUTES = 1440.0
 
 logger = logging.getLogger(__name__)
 
@@ -472,7 +473,7 @@ class MILPBuilder:
                 f"batt_soc_initial_{inv_id}",
             )
             terminal_shortfall_kwh: pulp.LpVariable | None = None
-            if self._should_soften_terminal_soc(horizon):
+            if self._ems_config.terminal_soc.mode == "adaptive":
                 terminal_target_kwh = self._terminal_soc_target_kwh(
                     horizon,
                     initial_soc_kwh=initial_soc_kwh,
@@ -802,16 +803,26 @@ class MILPBuilder:
                 objective += anchor_penalty * anchor_var * horizon.dt_hours(0)
         problem += objective
 
-    def _should_soften_terminal_soc(self, horizon: Horizon) -> bool:
+    def _terminal_soc_return_ratio(self, horizon: Horizon) -> float:
+        """Return the adaptive terminal SoC scaling ratio.
+
+        Uses the fixed `_TERMINAL_SOC_REFERENCE_MINUTES` window (24h) as the
+        reference horizon. The ratio is `min(horizon, reference) /
+        max(horizon, reference)` so that 24h keeps full strength (ratio=1) while
+        both shorter and longer horizons relax toward reserve.
+        """
         cfg = self._ems_config.terminal_soc
-        if cfg.mode == "hard":
-            return False
-        if cfg.mode == "soft":
-            return True
-        short_horizon_minutes = cfg.short_horizon_minutes
-        if short_horizon_minutes is None:
-            return False
-        return _horizon_duration_minutes(horizon) < short_horizon_minutes
+        if cfg.mode != "adaptive":
+            return 1.0
+        horizon_minutes = _horizon_duration_minutes(horizon)
+        if horizon_minutes <= 0:
+            return 1.0
+        reference_minutes = _TERMINAL_SOC_REFERENCE_MINUTES
+        if reference_minutes <= 0:
+            return 1.0
+        shorter = min(horizon_minutes, reference_minutes)
+        longer = max(horizon_minutes, reference_minutes)
+        return shorter / longer
 
     def _terminal_soc_target_kwh(
         self,
@@ -820,13 +831,7 @@ class MILPBuilder:
         initial_soc_kwh: float,
         reserve_kwh: float,
     ) -> float:
-        short_horizon_minutes = self._ems_config.terminal_soc.short_horizon_minutes
-        if short_horizon_minutes is None:
-            return initial_soc_kwh
-        horizon_minutes = _horizon_duration_minutes(horizon)
-        if short_horizon_minutes <= 0:
-            return initial_soc_kwh
-        ratio = min(1.0, horizon_minutes / short_horizon_minutes)
+        ratio = self._terminal_soc_return_ratio(horizon)
         floor_kwh = min(initial_soc_kwh, reserve_kwh)
         return floor_kwh + ratio * (initial_soc_kwh - floor_kwh)
 
@@ -837,14 +842,12 @@ class MILPBuilder:
     ) -> float:
         cfg = self._ems_config.terminal_soc
         penalty = cfg.penalty_per_kwh
-        if penalty is None:
+        if penalty is None or penalty == "median":
+            penalty = _median_price(price_import)
+        elif penalty == "mean":
             penalty = _average_price(price_import)
         penalty = max(0.0, float(penalty))
-        short_horizon_minutes = cfg.short_horizon_minutes
-        if short_horizon_minutes is not None:
-            horizon_minutes = _horizon_duration_minutes(horizon)
-            if horizon_minutes < short_horizon_minutes:
-                penalty *= horizon_minutes / short_horizon_minutes
+        penalty *= self._terminal_soc_return_ratio(horizon)
         return penalty
 
     def _build_loads(
@@ -1152,3 +1155,13 @@ def _average_price(values: list[float]) -> float:
     if not values:
         return 0.0
     return sum(values) / len(values)
+
+
+def _median_price(values: list[float]) -> float:
+    if not values:
+        return 0.0
+    sorted_values = sorted(values)
+    mid = len(sorted_values) // 2
+    if len(sorted_values) % 2 == 1:
+        return sorted_values[mid]
+    return (sorted_values[mid - 1] + sorted_values[mid]) / 2.0
