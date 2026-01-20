@@ -12,10 +12,19 @@ from hass_energy.models.config import AppConfig
 logger = logging.getLogger(__name__)
 
 
+_DEFAULT_CONFIG = Path("config.yaml")
+_DEV_CONFIG_FALLBACK = Path("config.dev.yaml")
+
+
 def load_app_config(config_path: Path | None) -> AppConfig:
     if config_path is None:
         logger.info("No config path provided; using defaults")
-        config_path = Path("config.yaml")
+        if _DEFAULT_CONFIG.exists():
+            config_path = _DEFAULT_CONFIG
+        elif _DEV_CONFIG_FALLBACK.exists():
+            config_path = _DEV_CONFIG_FALLBACK
+        else:
+            config_path = _DEFAULT_CONFIG
 
     if not config_path.exists():
         raise ValueError(f"Config file {config_path} not found")
