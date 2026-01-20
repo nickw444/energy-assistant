@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import html
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime, tzinfo
 from pathlib import Path
 from typing import Any
@@ -31,7 +33,15 @@ COLORS = {
     "ev_soc": "rgba(139, 195, 74, 1.0)",
     "price_import": "rgba(63, 81, 181, 1.0)",
     "price_export": "rgba(233, 30, 99, 1.0)",
+    "curtailment_fill": "rgba(255, 193, 7, 0.12)",
 }
+
+
+@dataclass(frozen=True, slots=True)
+class ScenarioPlot:
+    name: str
+    plan: EmsPlanOutput | None = None
+    error: str | None = None
 
 
 def _build_plan_figure(
@@ -76,6 +86,7 @@ def _build_plan_figure(
 
     price_import = [float(step.economics.price_import) for step in timesteps]
     price_export = [float(step.economics.price_export) for step in timesteps]
+    curtailment_flags = [_is_meaningful_curtailment(step) for step in timesteps]
 
     has_soc = any(_has_any(series) for series in batt_soc_pct.values()) or any(
         _has_any(series) for series in ev_soc_pct.values()
@@ -301,6 +312,23 @@ def _build_plan_figure(
     )
     power_max = max(power_max * 1.1, 1.0)
 
+    curtailment_shapes = [
+        {
+            "type": "rect",
+            "xref": "x",
+            "yref": "paper",
+            "x0": times[index],
+            "x1": times[index + 1],
+            "y0": 0,
+            "y1": 1,
+            "fillcolor": COLORS["curtailment_fill"],
+            "line": {"width": 0},
+            "layer": "below",
+        }
+        for index, active in enumerate(curtailment_flags)
+        if active
+    ]
+
     fig.update_layout(
         title={
             "text": (
@@ -374,27 +402,13 @@ def _build_plan_figure(
         plot_bgcolor="white",
         paper_bgcolor="white",
         margin={"l": 60, "r": 130, "t": 50, "b": 100},
+        shapes=curtailment_shapes,
     )
 
     return fig, total_cost
 
 
-def plot_plan_html(
-    plan: EmsPlanOutput,
-    *,
-    output: Path | None = None,
-) -> str | None:
-    """Generate an interactive HTML plot of the energy plan.
-
-    Args:
-        plan: The plan output to plot.
-        output: If provided, write HTML to this path. Otherwise return HTML string.
-
-    Returns:
-        HTML string if output is None, otherwise None (writes to file).
-    """
-    fig, _ = _build_plan_figure(plan, include_hover=True)
-
+def _apply_interactive_overrides(fig: Any) -> None:
     fig.update_traces(hoverlabel={"namelength": -1})
 
     fig.update_xaxes(
@@ -413,21 +427,32 @@ def plot_plan_html(
         },
     )
 
-    legend_hover_script = """
-    (function() {
-        var gd = document.querySelector('.plotly-graph-div');
-        if (!gd || !gd._fullData) {
-            setTimeout(arguments.callee, 100);
-            return;
-        }
-        var legend = gd.querySelector('.legend');
-        if (!legend) {
-            setTimeout(arguments.callee, 100);
+
+def _legend_hover_script() -> str:
+    return """
+(function() {
+    function ensureStyle() {
+        if (document.getElementById('legend-hover-style')) {
             return;
         }
         var style = document.createElement('style');
+        style.id = 'legend-hover-style';
         style.textContent = '.trace.faded { opacity: 0.15 !important; }';
         document.head.appendChild(style);
+    }
+
+    function attachLegendHover(gd) {
+        if (!gd || gd.__legendHoverAttached) {
+            return true;
+        }
+        if (!gd._fullData) {
+            return false;
+        }
+        var legend = gd.querySelector('.legend');
+        if (!legend) {
+            return false;
+        }
+        gd.__legendHoverAttached = true;
 
         var legendGroups = legend.querySelectorAll('.traces');
         legendGroups.forEach(function(group) {
@@ -456,10 +481,53 @@ def plot_plan_html(
                 });
             });
         });
+        return true;
+    }
+
+    function init() {
+        ensureStyle();
+        var graphs = document.querySelectorAll('.plotly-graph-div');
+        if (!graphs.length) {
+            return true;
+        }
+        var allReady = true;
+        graphs.forEach(function(gd) {
+            if (!attachLegendHover(gd)) {
+                allReady = false;
+            }
+        });
+        return allReady;
+    }
+
+    (function retry() {
+        var ready = init();
+        if (!ready) {
+            setTimeout(retry, 100);
+        }
     })();
+})();
+"""
+
+
+def plot_plan_html(
+    plan: EmsPlanOutput,
+    *,
+    output: Path | None = None,
+) -> str | None:
+    """Generate an interactive HTML plot of the energy plan.
+
+    Args:
+        plan: The plan output to plot.
+        output: If provided, write HTML to this path. Otherwise return HTML string.
+
+    Returns:
+        HTML string if output is None, otherwise None (writes to file).
     """
+    fig, _ = _build_plan_figure(plan, include_hover=True)
+    _apply_interactive_overrides(fig)
+
     html_content: str = fig.to_html(
-        full_html=True, include_plotlyjs=True, post_script=legend_hover_script
+        full_html=True, include_plotlyjs=True, post_script=_legend_hover_script()
     )
 
     fullscreen_css = """<style>
@@ -468,6 +536,161 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 </style>
 </head>"""
     html_content = html_content.replace("</head>", fullscreen_css)
+
+    if output is not None:
+        output.write_text(html_content)
+        return None
+    return html_content
+
+
+def plot_scenarios_html(
+    scenarios: Sequence[ScenarioPlot],
+    *,
+    output: Path | None = None,
+    title: str = "EMS Scenario Report",
+    subtitle: str | None = None,
+    height: int = 700,
+) -> str | None:
+    if not scenarios:
+        raise ValueError("No scenarios provided.")
+
+    try:
+        from plotly.offline import get_plotlyjs  # pyright: ignore[reportUnknownVariableType]
+    except ImportError as exc:
+        raise ImportError("plotly is required for plotting: uv add plotly") from exc
+    plotly_js = get_plotlyjs()
+
+    sections: list[str] = []
+    for scenario in scenarios:
+        name = html.escape(scenario.name)
+        if scenario.plan is None:
+            error_text = html.escape(scenario.error or "Unknown error.")
+            sections.append(
+                "\n".join(
+                    [
+                        '<section class="scenario scenario-error">',
+                        f"<h2>{name}</h2>",
+                        "<pre>",
+                        error_text,
+                        "</pre>",
+                        "</section>",
+                    ]
+                )
+            )
+            continue
+
+        fig, _ = _build_plan_figure(scenario.plan, include_hover=True)
+        _apply_interactive_overrides(fig)
+        fig.update_layout(height=height)
+        fig_html = fig.to_html(full_html=False, include_plotlyjs=False)
+        sections.append(
+            "\n".join(
+                [
+                    '<section class="scenario">',
+                    f"<h2>{name}</h2>",
+                    fig_html,
+                    "</section>",
+                ]
+            )
+        )
+
+    subtitle_html = f"<p>{html.escape(subtitle)}</p>" if subtitle else ""
+    html_content = "\n".join(
+        [
+            "<!doctype html>",
+            '<html lang="en">',
+            "<head>",
+            '<meta charset="utf-8"/>',
+            '<meta name="viewport" content="width=device-width, initial-scale=1"/>',
+            f"<title>{html.escape(title)}</title>",
+            "<style>",
+            ":root {",
+            "  color-scheme: light;",
+            "  --bg: #f4f2ff;",
+            "  --bg-alt: #fdf7f0;",
+            "  --card: #ffffff;",
+            "  --ink: #1f2933;",
+            "  --muted: #52606d;",
+            "  --accent: #2563eb;",
+            "  --error: #ef4444;",
+            "}",
+            "* { box-sizing: border-box; }",
+            "body {",
+            "  margin: 0;",
+            "  font-family: \"Sora\", \"Avenir Next\", \"Trebuchet MS\", sans-serif;",
+            "  color: var(--ink);",
+            "  background: radial-gradient(circle at top, var(--bg), var(--bg-alt));",
+            "}",
+            "header {",
+            "  padding: 32px 40px 12px;",
+            "}",
+            "header h1 {",
+            "  margin: 0 0 6px;",
+            "  font-size: 28px;",
+            "  letter-spacing: 0.02em;",
+            "}",
+            "header p {",
+            "  margin: 0;",
+            "  color: var(--muted);",
+            "  font-size: 14px;",
+            "}",
+            "main {",
+            "  padding: 0 40px 48px;",
+            "  display: flex;",
+            "  flex-direction: column;",
+            "  gap: 28px;",
+            "}",
+            ".scenario {",
+            "  background: var(--card);",
+            "  border-radius: 18px;",
+            "  padding: 16px 18px 8px;",
+            "  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);",
+            "}",
+            ".scenario h2 {",
+            "  margin: 0 0 10px;",
+            "  font-size: 18px;",
+            "  letter-spacing: 0.02em;",
+            "  text-transform: uppercase;",
+            "  color: var(--accent);",
+            "}",
+            ".scenario-error {",
+            "  border-left: 6px solid var(--error);",
+            "}",
+            ".scenario-error pre {",
+            "  margin: 0;",
+            "  padding: 12px;",
+            "  border-radius: 12px;",
+            "  background: #0f172a;",
+            "  color: #f8fafc;",
+            "  font-size: 12px;",
+            "  overflow-x: auto;",
+            "  white-space: pre-wrap;",
+            "}",
+            "@media (max-width: 860px) {",
+            "  header { padding: 24px 20px 8px; }",
+            "  main { padding: 0 20px 32px; }",
+            "  .scenario { padding: 12px; }",
+            "}",
+            "</style>",
+            "<script type=\"text/javascript\">",
+            plotly_js,
+            "</script>",
+            "</head>",
+            "<body>",
+            "<header>",
+            f"<h1>{html.escape(title)}</h1>",
+            subtitle_html,
+            "</header>",
+            "<main>",
+            *sections,
+            "</main>",
+            "<script type=\"text/javascript\">",
+            _legend_hover_script(),
+            "</script>",
+            "</body>",
+            "</html>",
+        ]
+    )
 
     if output is not None:
         output.write_text(html_content)
@@ -548,3 +771,18 @@ def _aggregate_series(series_dict: dict[str, list[float]]) -> list[float]:
 
 def _has_any(values: list[float]) -> bool:
     return any(abs(value) > 1e-9 for value in values)
+
+
+def _is_meaningful_curtailment(step: TimestepPlan) -> bool:
+    has_curtailment = any(
+        inv.curtailment
+        for inv in step.inverters.values()
+        if inv.curtailment is not None
+    )
+    if not has_curtailment:
+        return False
+
+    total_pv = sum(float(inv.pv_kw or 0.0) for inv in step.inverters.values())
+    total_load = float(step.loads.total_kw)
+    total_batt_charge = sum(float(inv.battery_charge_kw or 0.0) for inv in step.inverters.values())
+    return abs(total_pv - total_load) <= 1e-3 and abs(total_batt_charge) <= 1e-3
