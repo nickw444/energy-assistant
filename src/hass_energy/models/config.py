@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from hass_energy.lib.home_assistant import HomeAssistantConfig
 from hass_energy.models.loads import LoadConfig
@@ -11,18 +11,26 @@ from hass_energy.models.plant import PlantConfig
 
 
 class TerminalSocConfig(BaseModel):
-    # Hard enforces end SoC >= start SoC; soft allows slack; adaptive softens only
-    # when the horizon is shorter than short_horizon_minutes.
-    mode: Literal["hard", "soft", "adaptive"] = "adaptive"
-    # Threshold that defines a short horizon for adaptive softening. When the
-    # horizon is shorter than this, the terminal target is relaxed toward reserve
-    # and the shortfall penalty is scaled by the horizon ratio.
-    short_horizon_minutes: int | None = Field(default=1440, ge=1, le=525600)
-    # Penalty applied per kWh of terminal SoC shortfall when softened. Defaults
-    # to the average import price if unset.
-    penalty_per_kwh: float | None = Field(default=None, ge=0)
+    # Hard enforces end SoC >= start SoC; adaptive relaxes the target toward the
+    # reserve SoC using a fixed 24h reference horizon.
+    mode: Literal["hard", "adaptive"] = "adaptive"
+    # Penalty applied per kWh of terminal SoC shortfall when adaptive slack is
+    # used. Defaults to the median import price; set to "mean" for the average or
+    # "median" for the P50 import price.
+    penalty_per_kwh: float | Literal["mean", "median"] | None = Field(default="median")
 
     model_config = ConfigDict(extra="forbid")
+
+    @field_validator("penalty_per_kwh")
+    @classmethod
+    def _validate_penalty_per_kwh(
+        cls, value: float | Literal["mean", "median"] | None
+    ) -> float | Literal["mean", "median"] | None:
+        if value is None or value in {"mean", "median"}:
+            return value
+        if float(value) < 0:
+            raise ValueError("penalty_per_kwh must be >= 0")
+        return value
 
 
 class EmsConfig(BaseModel):

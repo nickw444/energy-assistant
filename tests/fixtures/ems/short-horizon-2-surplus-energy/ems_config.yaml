@@ -14,7 +14,6 @@ ems:
   high_res_horizon_minutes: 120
   terminal_soc:
     mode: adaptive
-    short_horizon_minutes: 1440
     penalty_per_kwh: 0.21
 
 plant:
