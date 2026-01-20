@@ -58,6 +58,7 @@ Energy management system that pulls Home Assistant data, plans using MILP (stub 
          entity: sensor.load_power_15m
          history_days: 3
          interval_duration: 60
+         # Optional when the current state has unit_of_measurement set.
          unit: W
          # Optional: repeat the daily profile for longer horizons.
          # forecast_horizon_hours: 48
