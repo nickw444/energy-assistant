@@ -24,6 +24,7 @@
 - `hass_energy/worker/milp/ha_dump.py` emits a simple EV stub when `ev_connected` is true (defaults for capacity, target SOC, max power, value-per-kWh, min power, and switch penalty).
 - Tests should mirror the `src/hass_energy` package structure under `tests/` (e.g., `tests/hass_energy/ems/`).
 - EMS fixture snapshots use summarized `tests/fixtures/ems/**/ems_plan.json` baselines (single source of truth). Refresh with `hass-energy ems refresh-baseline --name <name-or-path>` and use `--force-image` when the plan hash is unchanged but you still need to regenerate plot images (e.g., plotting-only tweaks).
+- Use `hass-energy ems scenario-report` to render a single HTML page of every fixture plot.
 - Planner now consumes a resolved payload (no source models). Resolved schemas live in `src/hass_energy/models/resolved.py`; resolution scaffolding/registry is under `src/hass_energy/lib/resolution/` for two-pass fetch→transform in the future.
 - This is unreleased software; schema changes can be breaking without backward-compatibility shims.
 - When config schemas change in backward-incompatible ways, update any captured scenario configs under `tests/fixtures/ems/**/ems_config.yaml` to keep fixture tests passing.

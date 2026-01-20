@@ -146,6 +146,8 @@ Plotting (`src/hass_energy/plotting/plan.py`):
   under `tests/fixtures/ems/`; `--name` writes to a subdir).
 - Replay fixtures offline via `hass-energy ems solve --scenario <name-or-path>` to view
   plots or output JSON without a live Home Assistant connection.
+- Build a multi-scenario visual report with `hass-energy ems scenario-report` to render
+  every fixture into a single HTML page.
 - When making EMS changes, validate against a checked-in fixture by replaying it
   and comparing the generated plan summary to the stored `ems_plan.json` for the
   same scenario. This is the preferred offline sanity check before updating snapshots.
