@@ -82,7 +82,8 @@ The EMS consumes `AppConfig` from `src/hass_energy/models/config.py`:
   - `timestep_minutes` (default slot size)
   - `high_res_timestep_minutes`, `high_res_horizon_minutes` (optional; run a higher-resolution window before switching to the default timestep)
   - `min_horizon_minutes` (minimum forecast horizon; solver uses the shortest forecast length)
-  - `timezone` (optional)
+  - `terminal_soc` (terminal SoC mode + penalty configuration)
+  - `objective` (export + PV curtailment penalties)
 - `plant`: `PlantConfig`
   - `grid`: `GridConfig`
   - `load`: `PlantLoadConfig`
@@ -307,7 +308,10 @@ Per inverter battery:
   - `E[t+1] = E[t] + (P_charge * eta - P_discharge / eta) * dt`
   - `eta = storage_efficiency_pct / 100`.
 - Terminal constraint:
-  - `E[end] >= E[start]` (non-decreasing across horizon).
+  - If `ems.terminal_soc.mode == "hard"`: `E[end] >= E[start]`.
+  - If `ems.terminal_soc.mode == "adaptive"`: `E[end] + shortfall >= target`, where
+    `target = reserve + ratio * (initial - reserve)` and
+    `ratio = min(horizon, 24h) / max(horizon, 24h)`.
 
 ### 7.6 EV constraints
 
@@ -363,17 +367,24 @@ The objective is a sum of:
    - Tiny negative weight on `(P_import + P_export) / (t+1)` to bias flow earlier.
 4. **Battery wear cost**:
    - `charge_cost_per_kwh * charge + discharge_cost_per_kwh * discharge`.
-5. **Battery export penalty** (optional):
-   - `export_penalty_per_kwh * battery_export` on battery-to-grid flow.
-6. **Battery timing tie-breaker**:
+5. **Export penalty** (optional):
+   - `ems.objective.export_penalty_per_kwh * grid_export`.
+6. **PV curtailment penalty** (optional):
+   - `ems.objective.pv_curtailment_penalty_per_kwh * pv_curtailment`.
+7. **Battery timing tie-breaker**:
    - Tiny time-weighted throughput penalty to stabilize dispatch ordering.
-7. **Curtailment tie-breaker**:
+8. **Terminal SoC shortfall penalty** (adaptive only):
+   - `penalty_per_kwh * shortfall`, scaled by the same
+     `min(horizon, 24h) / max(horizon, 24h)` ratio.
+   - Default penalty uses the median import price; set `"mean"` for the average or a
+     fixed numeric value to override.
+9. **Curtailment tie-breaker**:
    - Small weighted bias on `Curtail_inv` to stabilize equivalent solutions.
-8. **EV incentive rewards**:
+10. **EV incentive rewards**:
    - Subtract incentive per kWh on terminal SoC segments.
-9. **EV ramp penalties**:
+11. **EV ramp penalties**:
    - Penalize `Ev_charge_ramp_kw[t]` for `t > 0`.
-10. **EV anchor penalty**:
+12. **EV anchor penalty**:
    - Penalize `Ev_charge_anchor_kw` at slot 0.
 
 ---

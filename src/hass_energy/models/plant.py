@@ -43,10 +43,6 @@ class PlantLoadConfig(BaseModel):
     realtime_load_power: HomeAssistantPowerKwEntitySource
     forecast: HomeAssistantHistoricalAverageForecastSource
 
-    # Self-consumption bias: add a premium to import prices and discount to
-    # export revenue to favor serving loads from local generation/storage.
-    self_consumption_bias_pct: float = Field(default=0.0, ge=0, le=100)
-
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
@@ -62,10 +58,6 @@ class BatteryConfig(BaseModel):
     storage_efficiency_pct: float = Field(gt=0, le=100)
     charge_cost_per_kwh: float = Field(default=0.0, ge=0)
     discharge_cost_per_kwh: float = Field(default=0.0, ge=0)
-    # Discourages low-value battery -> grid export without penalizing PV export.
-    # Use when you want self-consumption to win over small arbitrage spreads but still
-    # allow export at sufficiently high prices.
-    export_penalty_per_kwh: float = Field(default=0.0, ge=0)
     min_soc_pct: float = Field(ge=0, le=100)
     max_soc_pct: float = Field(ge=0, le=100)
     reserve_soc_pct: float = Field(ge=0, le=100)

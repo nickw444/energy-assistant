@@ -13,9 +13,11 @@ ems:
   high_res_timestep_minutes: 5
   high_res_horizon_minutes: 120
   terminal_soc:
-    mode: soft
-    short_horizon_minutes: 1440
+    mode: adaptive
     penalty_per_kwh: 0.21
+  objective:
+    export_penalty_per_kwh: 0.1
+    pv_curtailment_penalty_per_kwh: 0.101
 plant:
   grid:
     max_import_kw: 13.0
@@ -55,7 +57,6 @@ plant:
       interval_duration: 5
       forecast_horizon_hours: 48
       realtime_window_minutes: 180
-    self_consumption_bias_pct: 20.0
   inverters:
   - id: primary
     name: Primary
@@ -77,7 +78,6 @@ plant:
       storage_efficiency_pct: 95.0
       charge_cost_per_kwh: 0.0
       discharge_cost_per_kwh: 0.01
-      export_penalty_per_kwh: 0.1
       min_soc_pct: 11.0
       max_soc_pct: 100.0
       reserve_soc_pct: 30.0

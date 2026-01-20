@@ -23,6 +23,7 @@ _EV_RAMP_PENALTY_COST = 1e-4
 _EV_ANCHOR_PENALTY_COST = 0.05
 _EV_ANCHOR_ACTIVE_THRESHOLD_KW = 0.1
 _NEGATIVE_EXPORT_PRICE_THRESHOLD = -1e-9
+_TERMINAL_SOC_REFERENCE_MINUTES = 1440.0
 
 logger = logging.getLogger(__name__)
 
@@ -69,10 +70,8 @@ class InverterVars:
 class InverterBuild:
     # Inverter vars keyed by inverter id from config.
     inverters: dict[str, InverterVars]
-    # Battery export flow per inverter id (kW per timestep).
-    battery_export_kw: dict[str, dict[int, pulp.LpVariable]]
-    # PV export flow per inverter id (kW per timestep).
-    pv_export_kw: dict[str, dict[int, pulp.LpVariable]]
+    # PV availability per inverter id (kW per timestep).
+    pv_available_kw: dict[str, list[float]]
 
 
 @dataclass(slots=True)
@@ -291,12 +290,7 @@ class MILPBuilder:
         T = horizon.T
         price_export = grid.price_export
         inverters: dict[str, InverterVars] = {}
-        # Per-inverter flow splits used to assemble system load/import/export balances.
-        pv_load_by_inv: dict[str, dict[int, pulp.LpVariable]] = {}
-        pv_export_by_inv: dict[str, dict[int, pulp.LpVariable]] = {}
-        batt_load_by_inv: dict[str, dict[int, pulp.LpVariable]] = {}
-        batt_export_by_inv: dict[str, dict[int, pulp.LpVariable]] = {}
-        grid_charge_by_inv: dict[str, dict[int, pulp.LpVariable]] = {}
+        pv_available_by_inv: dict[str, list[float]] = {}
         for inverter in self._plant.inverters:
             inv_name = inverter.name
             inv_id = inverter.id
@@ -328,6 +322,7 @@ class MILPBuilder:
                 max(0.0, min(float(value), inverter.peak_power_kw))
                 for value in pv_available_kw_series
             ]
+            pv_available_by_inv[inv_id] = pv_available_kw_series
 
             curtailment = inverter.curtailment
             curtail_vars: dict[int, pulp.LpVariable] | None = None
@@ -386,16 +381,6 @@ class MILPBuilder:
                         # Net AC flow equals PV output when no battery is present.
                         inv_ac_net_kw[t] == pv_kw[t],
                         f"inverter_ac_net_{inv_id}_t{t}",
-                    )
-                pv_load = pulp.LpVariable.dicts(f"P_pv_{inv_id}_load_kw", T, lowBound=0)
-                pv_export = pulp.LpVariable.dicts(f"P_pv_{inv_id}_export_kw", T, lowBound=0)
-                # No battery: split PV into load + export only.
-                pv_load_by_inv[inv_id] = pv_load
-                pv_export_by_inv[inv_id] = pv_export
-                for t in T:
-                    problem += (
-                        pv_load[t] + pv_export[t] == pv_kw[t],
-                        f"pv_split_{inv_id}_t{t}",
                     )
                 inverters[inv_id] = InverterVars(
                     name=inv_name,
@@ -472,7 +457,7 @@ class MILPBuilder:
                 f"batt_soc_initial_{inv_id}",
             )
             terminal_shortfall_kwh: pulp.LpVariable | None = None
-            if self._should_soften_terminal_soc(horizon):
+            if self._ems_config.terminal_soc.mode == "adaptive":
                 terminal_target_kwh = self._terminal_soc_target_kwh(
                     horizon,
                     initial_soc_kwh=initial_soc_kwh,
@@ -533,38 +518,6 @@ class MILPBuilder:
                     f"batt_soc_step_{inv_id}_t{t}",
                 )
 
-            # Flow-split variables keep PV export unpenalized while allowing
-            # battery export penalties.
-            pv_load = pulp.LpVariable.dicts(f"P_pv_{inv_id}_load_kw", T, lowBound=0)
-            pv_export = pulp.LpVariable.dicts(f"P_pv_{inv_id}_export_kw", T, lowBound=0)
-            pv_charge = pulp.LpVariable.dicts(f"P_pv_{inv_id}_charge_kw", T, lowBound=0)
-            batt_load = pulp.LpVariable.dicts(f"P_batt_{inv_id}_load_kw", T, lowBound=0)
-            batt_export = pulp.LpVariable.dicts(f"P_batt_{inv_id}_export_kw", T, lowBound=0)
-            grid_charge = pulp.LpVariable.dicts(f"P_grid_{inv_id}_charge_kw", T, lowBound=0)
-            # Battery present: split PV + battery discharge into load vs export, and charge source.
-            pv_load_by_inv[inv_id] = pv_load
-            pv_export_by_inv[inv_id] = pv_export
-            batt_load_by_inv[inv_id] = batt_load
-            batt_export_by_inv[inv_id] = batt_export
-            grid_charge_by_inv[inv_id] = grid_charge
-
-            for t in T:
-                # PV allocation: PV serves load, export, or battery charging.
-                problem += (
-                    pv_load[t] + pv_export[t] + pv_charge[t] == pv_kw[t],
-                    f"pv_split_{inv_id}_t{t}",
-                )
-                # Battery discharge allocation: discharge serves load or export.
-                problem += (
-                    batt_load[t] + batt_export[t] == P_batt_discharge[t],
-                    f"batt_split_{inv_id}_t{t}",
-                )
-                # Battery charge source: charge comes from PV or grid.
-                problem += (
-                    P_batt_charge[t] == pv_charge[t] + grid_charge[t],
-                    f"batt_charge_source_{inv_id}_t{t}",
-                )
-
             inverters[inv_id] = InverterVars(
                 name=inv_name,
                 battery_capacity_kwh=battery_capacity_kwh,
@@ -577,36 +530,9 @@ class MILPBuilder:
                 Curtail_inv=curtail_vars,
             )
 
-        # Portion of grid import serving load (separate from battery charging).
-        grid_load = pulp.LpVariable.dicts("P_grid_load_kw", T, lowBound=0)
-        for t in T:
-            base_load = float(loads.base_load_kw[t]) if t < len(loads.base_load_kw) else 0.0
-            extra_load = loads.load_contribs.get(t, 0.0)
-            pv_load_total = pulp.lpSum(series[t] for series in pv_load_by_inv.values())
-            batt_load_total = pulp.lpSum(series[t] for series in batt_load_by_inv.values())
-            pv_export_total = pulp.lpSum(series[t] for series in pv_export_by_inv.values())
-            batt_export_total = pulp.lpSum(series[t] for series in batt_export_by_inv.values())
-            grid_charge_total = pulp.lpSum(series[t] for series in grid_charge_by_inv.values())
-            # System split: all load met by grid, PV, or battery.
-            problem += (
-                grid_load[t] + pv_load_total + batt_load_total == base_load + extra_load,
-                f"load_split_t{t}",
-            )
-            # Grid import splits between serving load and charging the battery.
-            problem += (
-                grid.P_import[t] == grid_load[t] + grid_charge_total,
-                f"grid_import_split_t{t}",
-            )
-            # Grid export splits between PV export and battery export.
-            problem += (
-                grid.P_export[t] == pv_export_total + batt_export_total,
-                f"grid_export_split_t{t}",
-            )
-
         return InverterBuild(
             inverters=inverters,
-            battery_export_kw=batt_export_by_inv,
-            pv_export_kw=pv_export_by_inv,
+            pv_available_kw=pv_available_by_inv,
         )
 
     def _build_ac_balance(
@@ -646,25 +572,25 @@ class MILPBuilder:
         inverter_by_id = inverters.inverters
         ev_by_id = loads.evs
 
-        # Self-consumption bias: add premium to import, discount export.
-        self_consumption_bias = self._plant.load.self_consumption_bias_pct / 100.0
+        obj_cfg = self._ems_config.objective
+        export_penalty = obj_cfg.export_penalty_per_kwh
+        pv_curtailment_penalty = obj_cfg.pv_curtailment_penalty_per_kwh
 
         # Price-aware objective: minimize net cost (import cost minus export revenue).
         # When export price is exactly zero, add a tiny bonus to prefer exporting over curtailment.
-        # Self-consumption bias makes grid interaction slightly less attractive than local use.
         export_bonus = 1e-4
-        # Effective export price series used consistently for revenue and penalties.
         export_price_eff = [
             (
                 export_bonus
                 if abs(float(price_export[t])) <= 1e-9
-                else float(price_export[t]) * (1.0 - self_consumption_bias)
+                else float(price_export[t])
             )
+            - export_penalty
             for t in horizon.T
         ]
         objective: pulp.LpAffineExpression = pulp.lpSum(
             (
-                P_import[t] * float(price_import[t]) * (1.0 + self_consumption_bias)
+                P_import[t] * float(price_import[t])
                 - P_export[t] * export_price_eff[t]
             )
             * horizon.dt_hours(t)
@@ -718,33 +644,17 @@ class MILPBuilder:
                 * horizon.dt_hours(t)
                 for t in horizon.T
             )
-            export_penalty = battery.export_penalty_per_kwh
-            batt_export_series = inverters.battery_export_kw.get(inverter.id)
-            # Battery export penalty discourages low-value battery -> grid export
-            # while leaving PV export untouched.
-            if export_penalty > 0 and batt_export_series is not None:
+        if pv_curtailment_penalty > 0:
+            for inverter in self._plant.inverters:
+                inv_vars = inverter_by_id.get(inverter.id)
+                if inv_vars is None or inv_vars.P_pv_kw is None:
+                    continue
+                pv_available = inverters.pv_available_kw.get(inverter.id)
+                if pv_available is None:
+                    continue
                 objective += pulp.lpSum(
-                    export_penalty * batt_export_series[t] * horizon.dt_hours(t)
-                    for t in horizon.T
-                )
-            pv_export_series = inverters.pv_export_kw.get(inverter.id)
-            if pv_export_series is not None:
-                # PV export penalty targets the PV-export + battery-discharge-to-load pattern
-                # where PV is sent to the grid while the battery covers household load. Without
-                # this term, serving load with PV is "free" but has no explicit reward, while
-                # exporting PV earns revenue. If export=0.06 and bias=20%, export value=0.048/kWh
-                # beats a 0.01/kWh battery discharge cost, so the model prefers exporting PV and
-                # discharging the battery to serve load.
-                pv_export_penalty_eps = 1e-4
-                objective += pulp.lpSum(
-                    max(
-                        0.0,
-                        min(
-                            export_price_eff[t],
-                            export_price_eff[t] - discharge_cost + pv_export_penalty_eps,
-                        ),
-                    )
-                    * pv_export_series[t]
+                    pv_curtailment_penalty
+                    * (pv_available[t] - inv_vars.P_pv_kw[t])
                     * horizon.dt_hours(t)
                     for t in horizon.T
                 )
@@ -768,14 +678,11 @@ class MILPBuilder:
             # Consistent ordering bias avoids multiple equivalent curtailment choices.
             objective += pulp.lpSum(weight * series[t] * horizon.dt_hours(t) for t in horizon.T)
         # EV terminal SoC incentives (piecewise per-kWh rewards).
-        # Apply the same bias as export revenue so incentives compete fairly with export tariffs.
-        # e.g., an 8c incentive should tie with an 8c export tariff after both are biased.
         for segments in loads.ev_incentive_segments.values():
             for segment_var, incentive in segments:
                 if abs(float(incentive)) <= 1e-12:
                     continue
-                biased_incentive = float(incentive) * (1.0 - self_consumption_bias)
-                objective += -biased_incentive * segment_var
+                objective += -float(incentive) * segment_var
         # EV ramp penalties (discourage large per-slot changes in charge power).
         ramp_penalty = _EV_RAMP_PENALTY_COST
         for load in self._loads:
@@ -802,16 +709,26 @@ class MILPBuilder:
                 objective += anchor_penalty * anchor_var * horizon.dt_hours(0)
         problem += objective
 
-    def _should_soften_terminal_soc(self, horizon: Horizon) -> bool:
+    def _terminal_soc_return_ratio(self, horizon: Horizon) -> float:
+        """Return the adaptive terminal SoC scaling ratio.
+
+        Uses the fixed `_TERMINAL_SOC_REFERENCE_MINUTES` window (24h) as the
+        reference horizon. The ratio is `min(horizon, reference) /
+        max(horizon, reference)` so that 24h keeps full strength (ratio=1) while
+        both shorter and longer horizons relax toward reserve.
+        """
         cfg = self._ems_config.terminal_soc
-        if cfg.mode == "hard":
-            return False
-        if cfg.mode == "soft":
-            return True
-        short_horizon_minutes = cfg.short_horizon_minutes
-        if short_horizon_minutes is None:
-            return False
-        return _horizon_duration_minutes(horizon) < short_horizon_minutes
+        if cfg.mode != "adaptive":
+            return 1.0
+        horizon_minutes = _horizon_duration_minutes(horizon)
+        if horizon_minutes <= 0:
+            return 1.0
+        reference_minutes = _TERMINAL_SOC_REFERENCE_MINUTES
+        if reference_minutes <= 0:
+            return 1.0
+        shorter = min(horizon_minutes, reference_minutes)
+        longer = max(horizon_minutes, reference_minutes)
+        return shorter / longer
 
     def _terminal_soc_target_kwh(
         self,
@@ -820,13 +737,7 @@ class MILPBuilder:
         initial_soc_kwh: float,
         reserve_kwh: float,
     ) -> float:
-        short_horizon_minutes = self._ems_config.terminal_soc.short_horizon_minutes
-        if short_horizon_minutes is None:
-            return initial_soc_kwh
-        horizon_minutes = _horizon_duration_minutes(horizon)
-        if short_horizon_minutes <= 0:
-            return initial_soc_kwh
-        ratio = min(1.0, horizon_minutes / short_horizon_minutes)
+        ratio = self._terminal_soc_return_ratio(horizon)
         floor_kwh = min(initial_soc_kwh, reserve_kwh)
         return floor_kwh + ratio * (initial_soc_kwh - floor_kwh)
 
@@ -837,14 +748,12 @@ class MILPBuilder:
     ) -> float:
         cfg = self._ems_config.terminal_soc
         penalty = cfg.penalty_per_kwh
-        if penalty is None:
+        if penalty is None or penalty == "median":
+            penalty = _median_price(price_import)
+        elif penalty == "mean":
             penalty = _average_price(price_import)
         penalty = max(0.0, float(penalty))
-        short_horizon_minutes = cfg.short_horizon_minutes
-        if short_horizon_minutes is not None:
-            horizon_minutes = _horizon_duration_minutes(horizon)
-            if horizon_minutes < short_horizon_minutes:
-                penalty *= horizon_minutes / short_horizon_minutes
+        penalty *= self._terminal_soc_return_ratio(horizon)
         return penalty
 
     def _build_loads(
@@ -1152,3 +1061,13 @@ def _average_price(values: list[float]) -> float:
     if not values:
         return 0.0
     return sum(values) / len(values)
+
+
+def _median_price(values: list[float]) -> float:
+    if not values:
+        return 0.0
+    sorted_values = sorted(values)
+    mid = len(sorted_values) // 2
+    if len(sorted_values) % 2 == 1:
+        return sorted_values[mid]
+    return (sorted_values[mid - 1] + sorted_values[mid]) / 2.0
