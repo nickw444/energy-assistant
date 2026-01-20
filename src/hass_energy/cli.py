@@ -367,8 +367,9 @@ def ems_record_scenario(
 @click.option(
     "--name",
     type=str,
-    required=True,
-    help="Scenario name or path to the scenario directory.",
+    required=False,
+    default=None,
+    help="Scenario name or path to the scenario directory (omit to refresh every fixture).",
 )
 @click.option(
     "--scenario-dir",
@@ -392,50 +393,44 @@ def ems_record_scenario(
 @click.pass_context
 def ems_refresh_baseline(
     ctx: click.Context,
-    name: str,
+    name: str | None,
     scenario_dir: Path,
     solver_msg: bool,
     force_image: bool,
 ) -> None:
     """Recompute the summarized baseline from a recorded fixture."""
     _configure_logging(str(ctx.obj.get("log_level", "INFO")))
-    paths = resolve_ems_fixture_paths(scenario_dir, name)
-    if not paths.fixture_path.exists() or not paths.config_path.exists():
-        raise click.ClickException(
-            "Fixture/config not found. "
-            f"Expected {paths.fixture_path} and {paths.config_path}."
-        )
-
-    try:
-        app_config = load_app_config(paths.config_path)
-        provider, captured_at = FixtureHassDataProvider.from_path(paths.fixture_path)
-        now = datetime.fromisoformat(captured_at) if captured_at else None
-
-        resolver = ValueResolverImpl(hass_data_provider=provider)
-        resolver.mark_for_hydration(app_config)
-        resolver.hydrate_all()
-
-        with freeze_hass_source_time(now):
-            plan = EmsMilpPlanner(app_config, resolver=resolver).generate_ems_plan(
-                now=now,
-                solver_msg=solver_msg,
+    if name:
+        paths = resolve_ems_fixture_paths(scenario_dir, name)
+        if not paths.fixture_path.exists() or not paths.config_path.exists():
+            raise click.ClickException(
+                "Fixture/config not found. "
+                f"Expected {paths.fixture_path} and {paths.config_path}."
             )
-        plan_payload = summarize_plan(plan)
-        paths.plan_path.write_text(json.dumps(plan_payload, indent=2, sort_keys=True))
-        click.echo(f"Wrote EMS baseline summary to {paths.plan_path}")
+        try:
+            _refresh_baseline_bundle(paths, solver_msg=solver_msg, force_image=force_image)
+        except Exception as exc:
+            raise click.ClickException(traceback.format_exc()) from exc
+        return
 
-        new_hash = compute_plan_hash(plan_payload)
-        old_hash = paths.hash_path.read_text().strip() if paths.hash_path.exists() else None
-        if new_hash != old_hash or force_image:
-            write_plan_image(plan, paths.plot_path)
-            click.echo(f"Wrote plan image to {paths.plot_path}")
+    scenarios = _discover_fixture_scenarios(scenario_dir)
+    if not scenarios:
+        raise click.ClickException(f"No EMS fixture scenarios found under {scenario_dir}.")
 
-            paths.hash_path.write_text(new_hash + "\n")
-            click.echo(f"Wrote plan hash to {paths.hash_path}")
-        else:
-            click.echo("Plan unchanged, skipping image regeneration.")
-    except Exception as exc:
-        raise click.ClickException(traceback.format_exc()) from exc
+    failures: list[tuple[str, str]] = []
+    for scenario in scenarios:
+        paths = resolve_ems_fixture_paths(scenario_dir, scenario)
+        click.echo(f"Refreshing EMS baseline for {paths.root_dir}")
+        try:
+            _refresh_baseline_bundle(paths, solver_msg=solver_msg, force_image=force_image)
+        except Exception as exc:
+            failures.append((scenario, _format_exception_message(exc)))
+
+    if failures:
+        failure_lines = "\n".join(f"- {scenario}: {message}" for scenario, message in failures)
+        raise click.ClickException(
+            "Failed to refresh one or more EMS baselines:\n" + failure_lines
+        )
 
 
 def _is_fixture_bundle(paths: EmsFixturePaths) -> bool:
@@ -444,6 +439,54 @@ def _is_fixture_bundle(paths: EmsFixturePaths) -> bool:
     if not paths.config_path.exists():
         return False
     return True
+
+
+def _refresh_baseline_bundle(
+    paths: EmsFixturePaths,
+    *,
+    solver_msg: bool,
+    force_image: bool,
+) -> None:
+    if not paths.fixture_path.exists() or not paths.config_path.exists():
+        raise click.ClickException(
+            "Fixture/config not found. "
+            f"Expected {paths.fixture_path} and {paths.config_path}."
+        )
+
+    app_config = load_app_config(paths.config_path)
+    provider, captured_at = FixtureHassDataProvider.from_path(paths.fixture_path)
+    now = datetime.fromisoformat(captured_at) if captured_at else None
+
+    resolver = ValueResolverImpl(hass_data_provider=provider)
+    resolver.mark_for_hydration(app_config)
+    resolver.hydrate_all()
+
+    with freeze_hass_source_time(now):
+        plan = EmsMilpPlanner(app_config, resolver=resolver).generate_ems_plan(
+            now=now,
+            solver_msg=solver_msg,
+        )
+    plan_payload = summarize_plan(plan)
+    paths.plan_path.write_text(json.dumps(plan_payload, indent=2, sort_keys=True))
+    click.echo(f"Wrote EMS baseline summary to {paths.plan_path}")
+
+    new_hash = compute_plan_hash(plan_payload)
+    old_hash = paths.hash_path.read_text().strip() if paths.hash_path.exists() else None
+    if new_hash != old_hash or force_image:
+        write_plan_image(plan, paths.plot_path)
+        click.echo(f"Wrote plan image to {paths.plot_path}")
+
+        paths.hash_path.write_text(new_hash + "\n")
+        click.echo(f"Wrote plan hash to {paths.hash_path}")
+    else:
+        click.echo("Plan unchanged, skipping image regeneration.")
+
+
+def _format_exception_message(exc: Exception) -> str:
+    message = str(exc).strip()
+    if message:
+        return message.splitlines()[0]
+    return type(exc).__name__
 
 
 def _discover_fixture_scenarios(base_dir: Path) -> list[str]:

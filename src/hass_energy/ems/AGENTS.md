@@ -155,7 +155,7 @@ Plotting (`src/hass_energy/plotting/plan.py`):
   - `hass-energy ems solve --scenario <name-or-path> --output /tmp/ems_plan.actual.json`
   - Use `/tmp/ems_plan.actual.json` for deep debugging; the checked-in
     `tests/fixtures/ems/<name>/ems_plan.json` is a summarized baseline for diffs.
-  - Refresh the summarized baseline with `hass-energy ems refresh-baseline --name <name-or-path>`.
+- Refresh the summarized baseline with `hass-energy ems refresh-baseline` (omit `--name` to refresh every recorded fixture or supply `<name-or-path>` to target a specific scenario).
   - For visual inspection, add `--plot` or `--plot-output <path>` to review the plan.
 - The `ems_plan.jpeg` image is checked in for PR review; it regenerates only when
   the plan hash changes. The hash file (`ems_plan.hash`) stores a SHA256 prefix
