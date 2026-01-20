@@ -2,19 +2,19 @@ server:
   host: 127.0.0.1
   port: 6070
   data_dir: ./data
-
 homeassistant:
-  base_url: "http://example.invalid"
-  token: "fixture-token"
+  base_url: http://example.invalid
+  token: fixture-token
   verify_tls: true
-
+  timeout_seconds: 30.0
 ems:
-  timestep_minutes: 5
-  min_horizon_minutes: 720 # 12 hours minimum; solver uses the shortest forecast length.
-
+  timestep_minutes: 30
+  min_horizon_minutes: 720
+  high_res_timestep_minutes: 5
+  high_res_horizon_minutes: 120
   terminal_soc:
     mode: adaptive
-    penalty_per_kwh: 0.21
+    penalty_per_kwh: median
 
 plant:
   grid:
@@ -23,137 +23,101 @@ plant:
     realtime_grid_power:
       type: home_assistant
       entity: sensor.hass_energy_grid_power_smoothed_1m
-    
     realtime_price_import:
       type: home_assistant
-      entity: sensor.amber_general_price
+      entity: sensor.amber_general_price_non_estimate
     realtime_price_export:
       type: home_assistant
-      entity: sensor.amber_feed_in_price
-
+      entity: sensor.amber_feed_in_price_non_estimate
     price_import_forecast:
       type: home_assistant
-      platform: amberelectric
       entity: sensor.amber_general_forecast
+      platform: amberelectric
       price_forecast_mode: spot
     price_export_forecast:
       type: home_assistant
-      platform: amberelectric
       entity: sensor.amber_feed_in_forecast
+      platform: amberelectric
       price_forecast_mode: spot
-    
     import_forbidden_periods:
-      - start: "14:55"
-        end: "21:05"
-
+    - start: '14:55'
+      end: '21:05'
   load:
-    # Note: Load power entity should exclude loads that are controlled by the 
-    # EMS (e.g. EV chargers, smart appliances), listed below under "loads".
     realtime_load_power:
       type: home_assistant
-      entity: sensor.hass_energy_load_power_smoothed_1m
-    
+      entity: sensor.hass_energy_load_power_uncontrolled_smoothed_1m
     forecast:
       type: home_assistant
-
-    self_consumption_bias_pct: 20.0
-      platform: historical_average
-      entity: sensor.hass_energy_load_power_smoothed_15m
+      entity: sensor.hass_energy_load_power_uncontrolled_smoothed_15m
       history_days: 3
-      interval_duration: 5
+      platform: historical_average
       unit: W
-
+      interval_duration: 5
+      forecast_horizon_hours: 48
+      realtime_window_minutes: 180
+    self_consumption_bias_pct: 0.0
   inverters:
-    # DC coupled PV + Battery inverter example.
-    - id: primary
-      name: Primary
-      peak_power_kw: 10.0
-      curtailment: load-aware
-      # curtailment: binary
-      pv:
-        realtime_power:
-          type: home_assistant
-          entity: sensor.hass_energy_pv_power_smoothed_1m
-
-        forecast:
-          type: home_assistant
-          platform: solcast
-          entities:
-            - sensor.solcast_pv_forecast_forecast_today
-            - sensor.solcast_pv_forecast_forecast_tomorrow
-            - sensor.solcast_pv_forecast_forecast_day_3
-          # type: solcast_api
-          # In the future the user could provide parameters to allow us to request
-          # forecasts from an external service. 
-          # For now, users will retrieve forecasts from Home Assistant.
-      battery:
-        capacity_kwh: 41.9
-        storage_efficiency_pct: 96.0 # Charge/discharge storage efficiency
-        charge_cost_per_kwh: 0.0
-        discharge_cost_per_kwh: 0.01 # Wear cost per kWh charged or discharged
-        export_penalty_per_kwh: 0.1
-        min_soc_pct: 11.0
-        max_soc_pct: 100.0
-
-        # Specify a level of reserve to ensure some energy is always left in the battery
-        # for grid outages or other emergencies.
-        reserve_soc_pct: 30.0
-
-        # Optional, if different from inverter parameters. e.g. DC-coupled batteries could charge 
-        # from PV at a higher rate than the inverter peak power.
-        max_charge_kw: 10.5
-        max_discharge_kw: 10.0
-
-        state_of_charge_pct:
-          type: home_assistant
-          entity: sensor.inverter_battery_soc
-        realtime_power:
-          type: home_assistant
-          entity: sensor.hass_energy_battery_power_smoothed_1m
-    
-    # AC coupled PV inverter example.
-    # - name: Sungrow
-    #   peak_power_kw: 5.0
-    #   curtailment: binary
-    #   pv:
-    #     forecast:
-    #       type: home_assistant
-    #       platform: solcast
-    #       entities:
-    #         - sensor.solcast_pv_forecast_forecast_today
-    #         - sensor.solcast_pv_forecast_forecast_tomorrow
-    #         - sensor.solcast_pv_forecast_forecast_day_3
-
+  - id: primary
+    name: Primary
+    peak_power_kw: 10.0
+    curtailment: load-aware
+    pv:
+      realtime_power:
+        type: home_assistant
+        entity: sensor.hass_energy_pv_power_smoothed_1m
+      forecast:
+        type: home_assistant
+        entities:
+        - sensor.solcast_pv_forecast_forecast_today
+        - sensor.solcast_pv_forecast_forecast_tomorrow
+        - sensor.solcast_pv_forecast_forecast_day_3
+        platform: solcast
+    battery:
+      capacity_kwh: 41.9
+      storage_efficiency_pct: 95.0
+      charge_cost_per_kwh: 0.02
+      discharge_cost_per_kwh: 0.02
+      export_penalty_per_kwh: 0.06
+      min_soc_pct: 11.0
+      max_soc_pct: 100.0
+      reserve_soc_pct: 30.0
+      max_charge_kw: 11.0
+      max_discharge_kw: 10.0
+      state_of_charge_pct:
+        type: home_assistant
+        entity: sensor.inverter_battery_soc
+      realtime_power:
+        type: home_assistant
+        entity: sensor.hass_energy_battery_power_smoothed_1m
 loads:
-  - id: tessie
-    name: "Tessie"
-    load_type: "controlled_ev"
-    min_power_kw: 0.0
-    max_power_kw: 7.4
-    energy_kwh: 78.0
-    connected:
-      type: home_assistant
-      entity: binary_sensor.tesla_wall_connector_vehicle_connected
-    realtime_power:
-      type: home_assistant
-      entity: sensor.tessie_charger_power
-    state_of_charge_pct:
-      type: home_assistant
-      entity: sensor.tessie_battery
-    
-    
-    soc_incentives:
-      - target_soc_pct: 40.0
-        incentive: 0.08
-      - target_soc_pct: 60.0
-        incentive: 0.06
-      - target_soc_pct: 80.0
-        incentive: 0.04
-      - target_soc_pct: 90.0
-        incentive: 0.00 # << No monetary incentive to charge to 90%, but should satisfy self-use goals.
-    # Note: should implement a penalty for switching on/off too frequently - prefer long sessions.
-    # Note: should implement a way for user to specify desired departure time to ensure vehicle is charged 
-    #       to specified SoC by then in the most optimal/cost effective way.
-
-  # - name: "HWS"
-  #   load_type: "nonvariable_load"
+- id: tessie
+  name: Tessie
+  load_type: controlled_ev
+  min_power_kw: 2.4
+  max_power_kw: 7.4
+  energy_kwh: 78.0
+  connected:
+    type: home_assistant
+    entity: binary_sensor.hass_energy_tessie_connected_at_home
+  can_connect:
+    type: home_assistant
+    entity: binary_sensor.hass_energy_tessie_can_connect
+  allowed_connect_times:
+  - start: 08:00
+    end: '21:00'
+  connect_grace_minutes: 60
+  realtime_power:
+    type: home_assistant
+    entity: sensor.tesla_wall_connector_power
+  state_of_charge_pct:
+    type: home_assistant
+    entity: sensor.tessie_battery
+  soc_incentives:
+  - target_soc_pct: 40.0
+    incentive: 0.12
+  - target_soc_pct: 60.0
+    incentive: 0.08
+  - target_soc_pct: 80.0
+    incentive: 0.02
+  - target_soc_pct: 100.0
+    incentive: -0.01
