@@ -48,9 +48,9 @@ def _common_options[**P, R](func: Callable[P, R]) -> Callable[P, R]:
     func = click.option(
         "--config",
         type=click.Path(path_type=Path, dir_okay=False),
-        default=Path("config.yaml"),
-        show_default=True,
-        help="Path to YAML config.",
+        default=None,
+        show_default=False,
+        help="Path to YAML config (defaults to config.yaml, then config.dev.yaml).",
     )(func)
     func = click.option(
         "--log-level",
@@ -65,7 +65,7 @@ def _common_options[**P, R](func: Callable[P, R]) -> Callable[P, R]:
 @click.group(context_settings={"help_option_names": ["-h", "--help"]}, invoke_without_command=True)
 @_common_options
 @click.pass_context
-def cli(ctx: click.Context, config: Path, log_level: str) -> int | None:
+def cli(ctx: click.Context, config: Path | None, log_level: str) -> int | None:
     if ctx.invoked_subcommand:
         ctx.ensure_object(dict)
         ctx.obj["config"] = config
@@ -188,7 +188,7 @@ def ems_solve(
     scenario_dir: Path,
 ) -> None:
     _configure_logging(str(ctx.obj.get("log_level", "INFO")))
-    config_path = Path(ctx.obj.get("config", Path("config.yaml")))
+    config_path = ctx.obj.get("config")
     use_fixture = scenario is not None
     paths: EmsFixturePaths | None = None
     if use_fixture:
@@ -303,8 +303,7 @@ def ems_record_scenario(
 ) -> None:
     """Record fixture data + config for offline EMS replay."""
     _configure_logging(str(ctx.obj.get("log_level", "INFO")))
-    config_path = Path(ctx.obj.get("config", Path("config.yaml")))
-    app_config = load_app_config(config_path)
+    app_config = load_app_config(ctx.obj.get("config"))
 
     paths = resolve_ems_fixture_paths(output_dir, name)
     paths.root_dir.mkdir(parents=True, exist_ok=True)
@@ -446,8 +445,7 @@ def ems_refresh_baseline(
 def hydrate_load_forecast(ctx: click.Context, limit: int) -> None:
     """Hydrate config and resolve the load forecast source for inspection."""
     _configure_logging(str(ctx.obj.get("log_level", "INFO")))
-    config_path = Path(ctx.obj.get("config", Path("config.yaml")))
-    app_config = load_app_config(config_path)
+    app_config = load_app_config(ctx.obj.get("config"))
 
     load_forecast = app_config.plant.load.forecast
 
