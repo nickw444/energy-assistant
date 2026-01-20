@@ -289,7 +289,6 @@ class MILPBuilder:
         forecasts: ResolvedForecasts,
     ) -> InverterBuild:
         T = horizon.T
-        price_export = grid.price_export
         inverters: dict[str, InverterVars] = {}
         # Per-inverter flow splits used to assemble system load/import/export balances.
         pv_load_by_inv: dict[str, dict[int, pulp.LpVariable]] = {}
