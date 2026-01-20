@@ -38,7 +38,12 @@ from hass_energy.lib.source_resolver.fixtures import (
 from hass_energy.lib.source_resolver.hass_provider import HassDataProviderImpl
 from hass_energy.lib.source_resolver.resolver import ValueResolverImpl
 from hass_energy.models.config import AppConfig
-from hass_energy.plotting import plot_plan_html, write_plan_image
+from hass_energy.plotting import (
+    ScenarioPlot,
+    plot_plan_html,
+    plot_scenarios_html,
+    write_plan_image,
+)
 from hass_energy.worker import Worker
 
 LOG_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
@@ -431,6 +436,109 @@ def ems_refresh_baseline(
             click.echo("Plan unchanged, skipping image regeneration.")
     except Exception as exc:
         raise click.ClickException(traceback.format_exc()) from exc
+
+
+def _is_fixture_bundle(paths: EmsFixturePaths) -> bool:
+    if not paths.fixture_path.exists():
+        return False
+    if not paths.config_path.exists():
+        return False
+    return True
+
+
+def _discover_fixture_scenarios(base_dir: Path) -> list[str]:
+    if not base_dir.exists():
+        return []
+    scenarios: list[str] = []
+    for child in base_dir.iterdir():
+        if not child.is_dir():
+            continue
+        paths = resolve_ems_fixture_paths(base_dir, child.name)
+        if _is_fixture_bundle(paths):
+            scenarios.append(child.name)
+    return sorted(scenarios)
+
+
+@ems.command("scenario-report")
+@click.option(
+    "--output",
+    type=click.Path(path_type=Path, dir_okay=False),
+    default=Path("ems_scenarios.html"),
+    show_default=True,
+    help="Write the multi-scenario HTML report to this path.",
+)
+@click.option(
+    "--scenario-dir",
+    type=click.Path(path_type=Path, file_okay=False),
+    default=Path("tests/fixtures/ems"),
+    show_default=True,
+    help="Base directory containing scenario bundles.",
+)
+@click.option(
+    "--solver-msg/--no-solver-msg",
+    default=False,
+    show_default=True,
+    help="Enable solver output (CBC).",
+)
+@click.pass_context
+def ems_scenario_report(
+    ctx: click.Context,
+    output: Path,
+    scenario_dir: Path,
+    solver_msg: bool,
+) -> None:
+    """Render a single HTML page with plots for every recorded scenario."""
+    _configure_logging(str(ctx.obj.get("log_level", "INFO")))
+
+    scenarios = _discover_fixture_scenarios(scenario_dir)
+    if not scenarios:
+        raise click.ClickException(f"No EMS fixture scenarios found under {scenario_dir}.")
+
+    output_path = output
+    if output_path.suffix != ".html":
+        output_path = output_path.with_suffix(".html")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    results: list[ScenarioPlot] = []
+    failures: list[str] = []
+    for scenario in scenarios:
+        paths = resolve_ems_fixture_paths(scenario_dir, scenario)
+        if not _is_fixture_bundle(paths):
+            continue
+        try:
+            app_config = load_app_config(paths.config_path)
+            provider, captured_at = FixtureHassDataProvider.from_path(paths.fixture_path)
+            now = datetime.fromisoformat(captured_at) if captured_at else None
+
+            resolver = ValueResolverImpl(hass_data_provider=provider)
+            resolver.mark_for_hydration(app_config)
+            resolver.hydrate_all()
+
+            with freeze_hass_source_time(now):
+                plan = EmsMilpPlanner(app_config, resolver=resolver).generate_ems_plan(
+                    now=now,
+                    solver_msg=solver_msg,
+                )
+            results.append(ScenarioPlot(name=scenario, plan=plan))
+        except Exception:
+            results.append(ScenarioPlot(name=scenario, error=traceback.format_exc()))
+            failures.append(scenario)
+
+    generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
+    subtitle_parts = [
+        f"Generated {generated_at}",
+        f"Scenarios: {len(results)}",
+    ]
+    if failures:
+        subtitle_parts.append(f"Failures: {len(failures)}")
+    subtitle = " | ".join(subtitle_parts)
+
+    plot_scenarios_html(results, output=output_path, subtitle=subtitle)
+    click.echo(f"Wrote scenario report to {output_path}")
+    if failures:
+        click.echo(
+            "Scenarios with errors: " + ", ".join(failures) + " (see report for details)."
+        )
 
 
 @cli.command("hydrate-load-forecast")
