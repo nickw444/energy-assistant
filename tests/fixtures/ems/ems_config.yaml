@@ -14,9 +14,11 @@ ems:
 
   terminal_soc:
     mode: adaptive
-    short_horizon_minutes: 1440
     penalty_per_kwh: 0.21
 
+  objective:
+    export_penalty_per_kwh: 0.1
+    pv_curtailment_penalty_per_kwh: 0.101
 plant:
   grid:
     max_import_kw: 13.0
@@ -57,7 +59,6 @@ plant:
     forecast:
       type: home_assistant
 
-    self_consumption_bias_pct: 20.0
       platform: historical_average
       entity: sensor.hass_energy_load_power_smoothed_15m
       history_days: 3
@@ -92,7 +93,6 @@ plant:
         storage_efficiency_pct: 96.0 # Charge/discharge storage efficiency
         charge_cost_per_kwh: 0.0
         discharge_cost_per_kwh: 0.01 # Wear cost per kWh charged or discharged
-        export_penalty_per_kwh: 0.1
         min_soc_pct: 11.0
         max_soc_pct: 100.0
 

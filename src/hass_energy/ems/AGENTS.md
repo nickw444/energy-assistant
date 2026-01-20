@@ -87,36 +87,37 @@ model at the start of the horizon:
   - SoC bounds from `min_soc_pct` and `max_soc_pct`.
   - Grid export is blocked when SoC is below `reserve_soc_pct` (self-consumption can still discharge to `min_soc_pct`).
   - SoC update uses `storage_efficiency_pct`.
-  - Terminal SoC constraint: hard by default; when `ems.terminal_soc.mode` is `soft` or
-    `adaptive` (and the horizon is shorter than `terminal_soc.short_horizon_minutes`),
-    the target SoC is relaxed toward the reserve level and enforced with a slack
-    variable plus per-kWh penalty.
+  - Terminal SoC constraint: hard only when `ems.terminal_soc.mode` is `hard`. For
+    `adaptive`, the terminal target is enforced with a slack variable plus per-kWh
+    penalty and scales with horizon length around a fixed 24h reference (shorter or
+    longer horizons relax toward reserve).
 - AC balance (system):
   - `P_grid_import + sum(P_inv_ac_net_kw) - P_grid_export == load + controllable_loads`.
 
 ### Objective (current terms)
 - Energy cost:
   - `import_cost - export_revenue` (with a tiny export bonus when price = 0).
-  - Self-consumption bias (`plant.load.self_consumption_bias_pct`) adds a premium to import prices and discount to export revenue, favoring local consumption.
 - Forbidden import violations:
   - Large penalty on `P_grid_import_violation_kw`.
 - Battery wear:
   - `discharge_cost_per_kwh` applied to discharge, `charge_cost_per_kwh` applied to charge.
   - Both default to 0.0; set `charge_cost_per_kwh: 0.0` to capture PV energy freely.
   - Efficiency losses are already in the SoC dynamics constraints.
-- Battery export penalty (optional):
-  - `export_penalty_per_kwh` applied to battery export flow (battery → grid).
-  - Configure per inverter via `plant.inverters[].battery.export_penalty_per_kwh`.
+- Export penalty (optional):
+  - `ems.objective.export_penalty_per_kwh` applied to total grid export.
+- PV curtailment penalty (optional):
+  - Penalizes curtailed PV energy to prefer export over spill.
+  - Configure via `ems.objective.pv_curtailment_penalty_per_kwh`.
 - Battery timing tie-breaker:
   - Tiny time-weighted throughput penalty to stabilize dispatch ordering across
     equivalent-cost slots.
 - Terminal SoC shortfall penalty:
-  - Applied when the terminal constraint is softened; default penalty uses the average
-    import price (unless `ems.terminal_soc.penalty_per_kwh` is set) and scales with
-    the horizon ratio vs `terminal_soc.short_horizon_minutes`.
+  - Applied in `adaptive` mode; default penalty uses the median import price (unless
+    `ems.terminal_soc.penalty_per_kwh` is set; use `"mean"` for average or `"median"`
+    for P50) and scales by `min(horizon_minutes, 24h) / max(horizon_minutes, 24h)`.
 - EV SoC incentives:
   - Piecewise per-kWh rewards for reaching terminal SoC targets.
-  - Incentives are scaled by `(1 - self_consumption_bias)` so they compete fairly with export tariffs (an 8c incentive ties with an 8c export tariff).
+  - Incentives are applied directly and compete against export prices (after any export penalty).
 - Early-flow tie-breaker:
   - Small time-decay bonus on total grid flow `(P_import + P_export)` favoring earlier slots.
 
