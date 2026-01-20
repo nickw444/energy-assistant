@@ -774,7 +774,7 @@ def test_realtime_pv_allows_missing_first_forecast_slot() -> None:
     assert plan.timesteps[1].inverters["inv"].pv_kw == pytest.approx(1.0)  # type: ignore[reportUnknownMemberType]
 
 
-def test_load_aware_curtailment_active_with_negative_price_without_export() -> None:
+def test_load_aware_curtailment_not_forced_by_negative_price_without_export() -> None:
     now = datetime(2025, 12, 27, 9, 2, tzinfo=UTC)
     inverter = InverterConfig(
         id="curtail",
@@ -817,7 +817,7 @@ def test_load_aware_curtailment_active_with_negative_price_without_export() -> N
 
     plan = EmsMilpPlanner(config, resolver=resolver).generate_ems_plan(now=now)
     step = plan.timesteps[0]
-    assert step.inverters["curtail"].curtailment is True
+    assert step.inverters["curtail"].curtailment is False
     assert abs(step.grid.export_kw) < 1e-6
     assert abs(step.grid.import_kw - 0.1) < 1e-6
 
