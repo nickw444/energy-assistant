@@ -140,29 +140,33 @@ Plotting (`src/hass_energy/plotting/plan.py`):
 ### Testing guidance
 - EMS tests live under `tests/hass_energy/ems/`.
 - Treat the EMS solver as a black box; test inputs/outputs rather than private helpers.
-- Use recorded Home Assistant fixtures for complex scenarios. Record via
-  `hass-energy ems record-scenario` (writes `ems_fixture.json`, `ems_config.yaml`,
-  a summarized `ems_plan.json` baseline, `ems_plan.hash`, and `ems_plan.jpeg`
-  under `tests/fixtures/ems/`; `--name` writes to a subdir).
-- Replay fixtures offline via `hass-energy ems solve --scenario <name-or-path>` to view
-  plots or output JSON without a live Home Assistant connection.
+- Fixtures use a hierarchical structure: `tests/fixtures/ems/<fixture>/<scenario>/`
+  - `<fixture>/ems_config.yaml` — shared config for all scenarios in that fixture
+  - `<fixture>/<scenario>/ems_fixture.json` — captured realtime data
+  - `<fixture>/<scenario>/ems_plan.json` — summarized baseline
+  - `<fixture>/<scenario>/ems_plan.hash` — hash for change detection
+  - `<fixture>/<scenario>/ems_plan.jpeg` — plot image
+- Record new scenarios via `hass-energy ems record-scenario --fixture <fixture> --name <scenario>`.
+  The config is only written if it doesn't already exist (shared across scenarios).
+- Replay fixtures offline via `hass-energy ems solve --fixture <fixture> --scenario <scenario>`
+  to view plots or output JSON without a live Home Assistant connection.
 - Build a multi-scenario visual report with `hass-energy ems scenario-report` to render
-  every fixture into a single HTML page.
+  every fixture into a single HTML page. Use `--fixture <fixture>` to filter to one fixture.
 - When making EMS changes, validate against a checked-in fixture by replaying it
   and comparing the generated plan summary to the stored `ems_plan.json` for the
   same scenario. This is the preferred offline sanity check before updating snapshots.
   Example workflow:
-  - `hass-energy ems solve --scenario <name-or-path> --output /tmp/ems_plan.actual.json`
-  - Use `/tmp/ems_plan.actual.json` for deep debugging; the checked-in
-    `tests/fixtures/ems/<name>/ems_plan.json` is a summarized baseline for diffs.
-- Refresh the summarized baseline with `hass-energy ems refresh-baseline` (omit `--name` to refresh every recorded fixture or supply `<name-or-path>` to target a specific scenario).
-  - For visual inspection, add `--plot` or `--plot-output <path>` to review the plan.
+  - `hass-energy ems solve --fixture nwhass --scenario short-horizon --output /tmp/ems_plan.actual.json`
+  - Use `/tmp/ems_plan.actual.json` for deep debugging; the checked-in baseline is summarized for diffs.
+- Refresh baselines with `hass-energy ems refresh-baseline`:
+  - Omit `--fixture` and `--scenario` to refresh all fixtures and scenarios.
+  - Use `--fixture <fixture>` to refresh all scenarios in one fixture.
+  - Use `--fixture <fixture> --scenario <scenario>` for a specific scenario.
 - The `ems_plan.jpeg` image is checked in for PR review; it regenerates only when
   the plan hash changes. The hash file (`ems_plan.hash`) stores a SHA256 prefix
   of the plan summary (excluding `generated_at`) for stable change detection.
 - Fixture baseline tests compare the generated plan summary against the stored
-  `ems_plan.json` for each bundle. Set `EMS_SCENARIO=<name>` to target a named
-  fixture subdirectory.
+  `ems_plan.json` for each bundle. Set `EMS_SCENARIO=<fixture>/<scenario>` to target a specific scenario.
 
 ### Known gaps / future work
 - Controlled EV load modeling is now supported (charge-only with SoC incentives).
