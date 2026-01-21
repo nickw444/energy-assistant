@@ -121,7 +121,7 @@ model at the start of the horizon:
   - Small time-decay bonus on total grid flow `(P_import + P_export)` favoring earlier slots.
 - Curtailment energy cost:
   - Penalizes wasted PV power (difference between available and used).
-  - Configurable per inverter via `plant.inverters[].curtailment_cost_per_kwh` (default 0.03).
+  - Configurable per inverter via `plant.inverters[].curtailment_cost_per_kwh` (default 0.0).
   - Should exceed battery `charge_cost_per_kwh` so charging is preferred over curtailing.
 
 ### Outputs & plotting

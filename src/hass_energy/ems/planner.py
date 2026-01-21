@@ -26,22 +26,6 @@ from hass_energy.models.config import AppConfig
 
 logger = logging.getLogger(__name__)
 
-_CURTAIL_POWER_THRESHOLD_KW = 0.01
-
-
-def _derive_curtailment(
-    curtail_power: dict[int, pulp.LpVariable] | None,
-    t: int,
-) -> bool | None:
-    """Derive curtailment status from continuous power variable."""
-    if curtail_power is None:
-        return None
-    val = curtail_power.get(t)
-    if val is None:
-        return None
-    v = pulp.value(val)
-    return v > _CURTAIL_POWER_THRESHOLD_KW if v is not None else None
-
 
 class EmsMilpPlanner:
     def __init__(self, app_config: AppConfig, *, resolver: ValueResolver) -> None:
@@ -293,3 +277,20 @@ def _format_schedule(
     if high_res_interval is None or high_res_horizon is None:
         return f"{timestep_minutes}m/rest"
     return f"{high_res_interval}m/{high_res_horizon}m, {timestep_minutes}m/rest"
+
+
+_CURTAIL_POWER_THRESHOLD_KW = 0.01
+
+
+def _derive_curtailment(
+    curtail_power: dict[int, pulp.LpVariable] | None,
+    t: int,
+) -> bool | None:
+    """Derive curtailment status from continuous power variable."""
+    if curtail_power is None:
+        return None
+    val = curtail_power.get(t)
+    if val is None:
+        return None
+    v = pulp.value(val)
+    return v > _CURTAIL_POWER_THRESHOLD_KW if v is not None else None
