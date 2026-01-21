@@ -13,7 +13,7 @@ ems:
   high_res_timestep_minutes: 5
   high_res_horizon_minutes: 120
   terminal_soc:
-    mode: none
+    mode: adaptive
     penalty_per_kwh: median
 plant:
   grid:
