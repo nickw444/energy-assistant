@@ -774,12 +774,12 @@ def _has_any(values: list[float]) -> bool:
 
 
 def _is_meaningful_curtailment(step: TimestepPlan) -> bool:
-    has_curtailment = any(
-        inv.curtailment
+    total_curtailment = sum(
+        float(inv.curtailment_kw or 0.0)
         for inv in step.inverters.values()
-        if inv.curtailment is not None
+        if inv.curtailment_kw is not None
     )
-    if not has_curtailment:
+    if total_curtailment <= 1e-3:
         return False
 
     total_pv = sum(float(inv.pv_kw or 0.0) for inv in step.inverters.values())

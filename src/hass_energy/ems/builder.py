@@ -22,7 +22,7 @@ from hass_energy.models.plant import PlantConfig, TimeWindow
 _EV_RAMP_PENALTY_COST = 1e-4
 _EV_ANCHOR_PENALTY_COST = 0.05
 _EV_ANCHOR_ACTIVE_THRESHOLD_KW = 0.1
-_NEGATIVE_EXPORT_PRICE_THRESHOLD = -1e-9
+
 _TERMINAL_SOC_REFERENCE_MINUTES = 1440.0
 
 logger = logging.getLogger(__name__)
@@ -62,8 +62,11 @@ class InverterVars:
     E_batt_kwh: dict[int, pulp.LpVariable] | None
     # Terminal SoC shortfall slack (kWh) when softening the terminal constraint.
     E_batt_terminal_shortfall_kwh: pulp.LpVariable | None
-    # Curtailment binary variables per timestep t (None if curtailment disabled).
-    Curtail_inv: dict[int, pulp.LpVariable] | None
+    # Curtailment power variables per timestep t (None if curtailment disabled).
+    # For load-aware mode: continuous kW; for binary mode: 0/1 * available.
+    P_pv_curtail_kw: dict[int, pulp.LpVariable] | None
+    # Available PV series for computing curtailment (None if curtailment disabled).
+    pv_available_kw: list[float] | None
 
 
 @dataclass(slots=True)
@@ -272,6 +275,15 @@ class MILPBuilder:
             first_slot_override=realtime_export,
         )
 
+        # Block export at negative prices: when export price < 0, paying to export is
+        # never beneficial. Hard constraint P_export[t] == 0 prevents any negative-price export.
+        for t in T:
+            if price_export[t] < 0:
+                problem += (
+                    P_export[t] == 0,
+                    f"grid_export_blocked_negative_price_t{t}",
+                )
+
         return GridBuild(
             P_import=P_import,
             P_export=P_export,
@@ -290,7 +302,6 @@ class MILPBuilder:
         forecasts: ResolvedForecasts,
     ) -> InverterBuild:
         T = horizon.T
-        price_export = grid.price_export
         inverters: dict[str, InverterVars] = {}
         # Per-inverter flow splits used to assemble system load/import/export balances.
         pv_load_by_inv: dict[str, dict[int, pulp.LpVariable]] = {}
@@ -298,6 +309,10 @@ class MILPBuilder:
         batt_load_by_inv: dict[str, dict[int, pulp.LpVariable]] = {}
         batt_export_by_inv: dict[str, dict[int, pulp.LpVariable]] = {}
         grid_charge_by_inv: dict[str, dict[int, pulp.LpVariable]] = {}
+        # Curtailment-active binaries for load-aware curtailment (charge-before-curtail).
+        curtail_active_by_inv: dict[str, dict[int, pulp.LpVariable]] = {}
+        # PV-charge variables for charge-before-curtail constraints.
+        pv_charge_by_inv: dict[str, dict[int, pulp.LpVariable]] = {}
         for inverter in self._plant.inverters:
             inv_name = inverter.name
             inv_id = inverter.id
@@ -331,54 +346,68 @@ class MILPBuilder:
             ]
 
             curtailment = inverter.curtailment
-            curtail_vars: dict[int, pulp.LpVariable] | None = None
+            pv_curtail_vars: dict[int, pulp.LpVariable] | None = None
+            pv_available_for_output: list[float] | None = None
             if curtailment is None:
                 for t in T:
                     problem += (
-                        # No curtailment: inverter AC output must equal available PV.
                         pv_kw[t] == pv_available_kw_series[t],
                         f"inverter_pv_total_{inv_id}_t{t}",
                     )
-            else:
-                curtail = pulp.LpVariable.dicts(
+            elif curtailment == "binary":
+                curtail_binary = pulp.LpVariable.dicts(
                     f"Curtail_inv_{inv_id}",
                     T,
                     lowBound=0,
                     upBound=1,
                     cat="Binary",
                 )
-                curtail_vars = curtail
+                pv_curtail = pulp.LpVariable.dicts(
+                    f"P_pv_{inv_id}_curtail_kw",
+                    T,
+                    lowBound=0,
+                )
+                pv_curtail_vars = pv_curtail
+                pv_available_for_output = pv_available_kw_series
                 for t in T:
-                    if curtailment == "binary":
-                        problem += (
-                            # Binary curtailment: either full PV or fully off.
-                            pv_kw[t] == pv_available_kw_series[t] * (1 - curtail[t]),
-                            f"inverter_pv_binary_{inv_id}_t{t}",
-                        )
-                    else:
-                        problem += (
-                            # Load-aware: output cannot exceed available PV.
-                            pv_kw[t] <= pv_available_kw_series[t],
-                            f"inverter_pv_max_{inv_id}_t{t}",
-                        )
-                        problem += (
-                            # Load-aware: curtail flag reduces minimum output (allows export block).
-                            pv_kw[t] >= pv_available_kw_series[t] * (1 - curtail[t]),
-                            f"inverter_pv_min_{inv_id}_t{t}",
-                        )
-                        problem += (
-                            # Load-aware: when curtailing, block grid export.
-                            grid.P_export[t] <= self._plant.grid.max_export_kw * (1 - curtail[t]),
-                            f"inverter_export_block_{inv_id}_t{t}",
-                        )
-                        if float(price_export[t]) < _NEGATIVE_EXPORT_PRICE_THRESHOLD:
-                            # Negative export prices always activate load-following curtailment.
-                            # We want PV to drop to match load and prevent any export,
-                            # even when PV is already below load (which keeps curtail off).
-                            problem += (
-                                curtail[t] == 1,
-                                f"inverter_curtail_neg_export_{inv_id}_t{t}",
-                            )
+                    problem += (
+                        pv_kw[t] == pv_available_kw_series[t] * (1 - curtail_binary[t]),
+                        f"inverter_pv_binary_{inv_id}_t{t}",
+                    )
+                    problem += (
+                        pv_curtail[t] == pv_available_kw_series[t] * curtail_binary[t],
+                        f"inverter_pv_curtail_binary_{inv_id}_t{t}",
+                    )
+            else:
+                pv_curtail = pulp.LpVariable.dicts(
+                    f"P_pv_{inv_id}_curtail_kw",
+                    T,
+                    lowBound=0,
+                )
+                pv_curtail_vars = pv_curtail
+                pv_available_for_output = pv_available_kw_series
+                # Binary to track whether curtailment is active in each slot.
+                # This enables constraints that force charging before curtailing.
+                curtail_active = pulp.LpVariable.dicts(
+                    f"Curtail_active_{inv_id}",
+                    T,
+                    lowBound=0,
+                    upBound=1,
+                    cat="Binary",
+                )
+                curtail_active_by_inv[inv_id] = curtail_active
+                for t in T:
+                    problem += (
+                        pv_kw[t] + pv_curtail[t] == pv_available_kw_series[t],
+                        f"inverter_pv_conservation_{inv_id}_t{t}",
+                    )
+                    # Link binary to curtailment: curtail > 0 => curtail_active = 1
+                    # Use pv_available as big-M (tight bound).
+                    pv_avail_t = pv_available_kw_series[t]
+                    problem += (
+                        pv_curtail[t] <= pv_avail_t * curtail_active[t],
+                        f"curtail_active_link_{inv_id}_t{t}",
+                    )
 
             battery = inverter.battery
             if battery is None:
@@ -407,7 +436,8 @@ class MILPBuilder:
                     P_batt_discharge_kw=None,
                     E_batt_kwh=None,
                     E_batt_terminal_shortfall_kwh=None,
-                    Curtail_inv=curtail_vars,
+                    P_pv_curtail_kw=pv_curtail_vars,
+                    pv_available_kw=pv_available_for_output,
                 )
                 continue
 
@@ -548,6 +578,7 @@ class MILPBuilder:
             batt_load_by_inv[inv_id] = batt_load
             batt_export_by_inv[inv_id] = batt_export
             grid_charge_by_inv[inv_id] = grid_charge
+            pv_charge_by_inv[inv_id] = pv_charge
 
             for t in T:
                 # PV allocation: PV serves load, export, or battery charging.
@@ -566,6 +597,27 @@ class MILPBuilder:
                     f"batt_charge_source_{inv_id}_t{t}",
                 )
 
+            # Charge-before-curtail constraints: if curtailment is active, PV charging
+            # must be at its maximum feasible rate (rate-limited or SOC-limited).
+            curtail_active = curtail_active_by_inv.get(inv_id)
+            if curtail_active is not None and pv_available_for_output is not None:
+                for t in T:
+                    pv_avail_t = pv_available_for_output[t]
+                    # Feasible charge rate is min(charge_limit, pv_available).
+                    # SOC headroom is handled implicitly by E_batt bounds and dynamics.
+                    max_pv_charge_t = min(charge_limit, pv_avail_t)
+                    # If curtail_active[t]=1: pv_charge[t] >= max_pv_charge_t
+                    # Formulated as: max_pv_charge_t - pv_charge[t] <= M * (1 - curtail_active[t])
+                    problem += (
+                        max_pv_charge_t - pv_charge[t] <= charge_limit * (1 - curtail_active[t]),
+                        f"charge_before_curtail_{inv_id}_t{t}",
+                    )
+                    # Also block grid charging while curtailing PV (no importing while wasting PV).
+                    problem += (
+                        grid_charge[t] <= charge_limit * (1 - curtail_active[t]),
+                        f"no_grid_charge_while_curtail_{inv_id}_t{t}",
+                    )
+
             inverters[inv_id] = InverterVars(
                 name=inv_name,
                 battery_capacity_kwh=battery_capacity_kwh,
@@ -575,7 +627,8 @@ class MILPBuilder:
                 P_batt_discharge_kw=P_batt_discharge,
                 E_batt_kwh=E_batt_kwh,
                 E_batt_terminal_shortfall_kwh=terminal_shortfall_kwh,
-                Curtail_inv=curtail_vars,
+                P_pv_curtail_kw=pv_curtail_vars,
+                pv_available_kw=pv_available_for_output,
             )
 
         # Portion of grid import serving load (separate from battery charging).
@@ -757,17 +810,20 @@ class MILPBuilder:
                     continue
                 objective += terminal_penalty * inv_vars.E_batt_terminal_shortfall_kwh
 
-        # Tiny tie-breaker to keep binary curtailment decisions stable across inverters.
-        w_curtail_tie = 1e-6
-        total = len(self._plant.inverters)
-        for idx, inverter in enumerate(self._plant.inverters):
-            inv_vars = inverter_by_id.get(inverter.id)
-            if inv_vars is None or inv_vars.Curtail_inv is None:
+        # Curtailment penalty: tiny tie-breaker to prefer using PV over wasting it.
+        # Must be smaller than any realistic negative export price magnitude so that
+        # curtailing is naturally preferred over paying to export at negative prices.
+        # The terminal SoC constraint provides the incentive to charge the battery
+        # (shortfall penalty > charge cost), so charging is preferred over curtailing
+        # when battery has capacity and the terminal constraint isn't yet satisfied.
+        w_curtail = 1e-6
+        for inv_vars in inverter_by_id.values():
+            curtail_series = inv_vars.P_pv_curtail_kw
+            if curtail_series is None:
                 continue
-            series = inv_vars.Curtail_inv
-            weight = w_curtail_tie * (total - idx)
-            # Consistent ordering bias avoids multiple equivalent curtailment choices.
-            objective += pulp.lpSum(weight * series[t] * horizon.dt_hours(t) for t in horizon.T)
+            objective += pulp.lpSum(
+                w_curtail * curtail_series[t] * horizon.dt_hours(t) for t in horizon.T
+            )
         # EV terminal SoC incentives (piecewise per-kWh rewards).
         # Apply the same bias as export revenue so incentives compete fairly with export tariffs.
         # e.g., an 8c incentive should tie with an 8c export tariff after both are biased.

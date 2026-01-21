@@ -33,7 +33,7 @@
 - EMS plan `EconomicsTimestepPlan` costs are grid import/export only and exclude other objective terms (EV incentives, penalties, curtailment tie-breaks, violation penalties, battery wear).
 - EMS objective favors self-consumption via `self_consumption_bias_pct` (adds premium to import, discounts export). Battery wear cost (`charge_cost_per_kwh`, `discharge_cost_per_kwh`) allows separate cost per kWh for charge and discharge.
 - `EmsPlanOutput` now includes `objective_value` with the solver objective (may be negative/None).
-- Load-aware curtailment is forced on whenever export price is negative, enabling PV to follow load and blocking export for those slots.
+- Negative export prices trigger a hard constraint (`P_export[t] == 0`) to prevent paying to export; load-aware curtailment uses constraint-based "charge-before-curtail" logic to ensure PV charges the battery at max rate before any curtailment occurs.
 - EMS horizons can use `EmsConfig.timestep_minutes` plus `high_res_timestep_minutes` / `high_res_horizon_minutes` to run a higher-resolution window before switching to the default timestep; boundaries snap to the next interval boundary for aligned coarse slots and alignment uses time-weighted averages for variable slot sizes.
 - Historical-average load forecasts can repeat daily averages beyond 24h via `forecast_horizon_hours` (default 24).
 - `ConfigMapper` (`src/hass_energy/lib/resolver/__init__.py`) offers a recursive walk utility that calls a visitor for side effects and allows halting recursion by returning `False`.

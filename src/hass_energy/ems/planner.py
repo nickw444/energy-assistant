@@ -177,7 +177,8 @@ def _extract_plan(model: MILPModel, horizon: Horizon) -> tuple[EmsPlanStatus, li
             charge_series = inv.P_batt_charge_kw
             discharge_series = inv.P_batt_discharge_kw
             soc_series = inv.E_batt_kwh
-            curtail_series = inv.Curtail_inv
+            curtail_series = inv.P_pv_curtail_kw
+            pv_available_series = inv.pv_available_kw
             battery_soc_kwh = _value(soc_series.get(t)) if soc_series is not None else None
             battery_soc_pct = None
             if battery_soc_kwh is not None and inv.battery_capacity_kwh:
@@ -185,6 +186,9 @@ def _extract_plan(model: MILPModel, horizon: Horizon) -> tuple[EmsPlanStatus, li
             inverter_plans[key] = InverterTimestepPlan(
                 name=str(inv.name),
                 pv_kw=_value(pv_series.get(t)) if pv_series is not None else None,
+                pv_available_kw=(
+                    pv_available_series[t] if pv_available_series is not None else None
+                ),
                 ac_net_kw=_value(ac_net_series.get(t)),
                 battery_charge_kw=(
                     _value(charge_series.get(t)) if charge_series is not None else None
@@ -194,8 +198,8 @@ def _extract_plan(model: MILPModel, horizon: Horizon) -> tuple[EmsPlanStatus, li
                 ),
                 battery_soc_kwh=battery_soc_kwh,
                 battery_soc_pct=battery_soc_pct,
-                curtailment=(
-                    _value(curtail_series.get(t)) > 0.5 if curtail_series is not None else None
+                curtailment_kw=(
+                    _value(curtail_series.get(t)) if curtail_series is not None else None
                 ),
             )
 
