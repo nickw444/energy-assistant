@@ -26,12 +26,17 @@ from hass_energy.lib.source_resolver.resolver import ValueResolverImpl
 FIXTURE_BASE = Path("tests/fixtures/ems")
 
 
-def _scenario_from_env() -> str | None:
+def _scenario_from_env() -> tuple[str, str] | None:
     raw = os.getenv("EMS_SCENARIO")
     if raw is None:
         return None
-    name = raw.strip()
-    return name or None
+    value = raw.strip()
+    if not value:
+        return None
+    parts = value.split("/", 1)
+    if len(parts) != 2 or not parts[0] or not parts[1]:
+        return None
+    return (parts[0], parts[1])
 
 
 def _is_complete_bundle(paths: EmsFixturePaths) -> bool:
@@ -42,7 +47,7 @@ def _is_complete_bundle(paths: EmsFixturePaths) -> bool:
     )
 
 
-def _discover_fixture_scenarios() -> list[str]:
+def _discover_fixture_scenarios() -> list[tuple[str, str]]:
     """Find all fixture bundles with a baseline plan."""
     if not FIXTURE_BASE.exists():
         return []
@@ -50,20 +55,30 @@ def _discover_fixture_scenarios() -> list[str]:
     if scenario_env:
         return [scenario_env]
 
-    scenarios: list[str] = []
-    for child in FIXTURE_BASE.iterdir():
-        if not child.is_dir():
+    scenarios: list[tuple[str, str]] = []
+    for fixture_dir in FIXTURE_BASE.iterdir():
+        if not fixture_dir.is_dir():
             continue
-        paths = resolve_ems_fixture_paths(FIXTURE_BASE, child.name)
-        if _is_complete_bundle(paths):
-            scenarios.append(child.name)
+        config_path = fixture_dir / "ems_config.yaml"
+        if not config_path.exists():
+            continue
+        for scenario_dir in fixture_dir.iterdir():
+            if not scenario_dir.is_dir():
+                continue
+            paths = resolve_ems_fixture_paths(FIXTURE_BASE, fixture_dir.name, scenario_dir.name)
+            if _is_complete_bundle(paths):
+                scenarios.append((fixture_dir.name, scenario_dir.name))
     return sorted(scenarios)
 
 
-@pytest.mark.parametrize("scenario", _discover_fixture_scenarios())
-def test_fixture_baseline_up_to_date(scenario: str) -> None:
+@pytest.mark.parametrize(
+    ("fixture", "scenario"),
+    _discover_fixture_scenarios(),
+    ids=[f"{f}/{s}" for f, s in _discover_fixture_scenarios()],
+)
+def test_fixture_baseline_up_to_date(fixture: str, scenario: str) -> None:
     """Re-solve each fixture and assert it matches the stored ems_plan.json."""
-    paths = resolve_ems_fixture_paths(FIXTURE_BASE, scenario)
+    paths = resolve_ems_fixture_paths(FIXTURE_BASE, fixture, scenario)
     if not _is_complete_bundle(paths):
         pytest.skip("EMS fixture scenario not recorded.")
 
@@ -80,51 +95,56 @@ def test_fixture_baseline_up_to_date(scenario: str) -> None:
     actual = summarize_plan(plan)
     expected = json.loads(paths.plan_path.read_text())
 
-    record_hint = f"hass-energy ems refresh-baseline --name {scenario}"
+    record_hint = f"hass-energy ems refresh-baseline --fixture {fixture} --scenario {scenario}"
     assert actual == expected, (
-        f"Fixture {scenario!r} ems_plan.json is out of date. "
+        f"Fixture {fixture}/{scenario!r} ems_plan.json is out of date. "
         "Re-record with: " + record_hint
     )
 
 
-@pytest.mark.parametrize("scenario", _discover_fixture_scenarios())
-def test_fixture_plot_up_to_date(scenario: str) -> None:
+@pytest.mark.parametrize(
+    ("fixture", "scenario"),
+    _discover_fixture_scenarios(),
+    ids=[f"{f}/{s}" for f, s in _discover_fixture_scenarios()],
+)
+def test_fixture_plot_up_to_date(fixture: str, scenario: str) -> None:
     """Assert the stored ems_plan.jpeg matches the current plan hash."""
-    paths = resolve_ems_fixture_paths(FIXTURE_BASE, scenario)
+    paths = resolve_ems_fixture_paths(FIXTURE_BASE, fixture, scenario)
     if not _is_complete_bundle(paths):
         pytest.skip("EMS fixture scenario not recorded.")
 
+    record_hint = f"hass-energy ems refresh-baseline --fixture {fixture} --scenario {scenario}"
+
     if paths.hash_path.exists() and not paths.plot_path.exists():
         pytest.fail(
-            f"Fixture {scenario!r} has ems_plan.hash without ems_plan.jpeg. "
-            f"Re-record with: hass-energy ems refresh-baseline --name {scenario}"
+            f"Fixture {fixture}/{scenario!r} has ems_plan.hash without ems_plan.jpeg. "
+            f"Re-record with: {record_hint}"
         )
 
     if paths.plot_path.exists() and not paths.hash_path.exists():
         pytest.fail(
-            f"Fixture {scenario!r} has ems_plan.jpeg without ems_plan.hash. "
-            f"Re-record with: hass-energy ems refresh-baseline --name {scenario}"
+            f"Fixture {fixture}/{scenario!r} has ems_plan.jpeg without ems_plan.hash. "
+            f"Re-record with: {record_hint}"
         )
 
     if not paths.hash_path.exists():
         pytest.fail(
-            f"Fixture {scenario!r} missing ems_plan.hash. "
-            f"Re-record with: hass-energy ems refresh-baseline --name {scenario}"
+            f"Fixture {fixture}/{scenario!r} missing ems_plan.hash. "
+            f"Re-record with: {record_hint}"
         )
 
     if not paths.plot_path.exists():
         pytest.fail(
-            f"Fixture {scenario!r} missing ems_plan.jpeg. "
-            f"Re-record with: hass-energy ems refresh-baseline --name {scenario}"
+            f"Fixture {fixture}/{scenario!r} missing ems_plan.jpeg. "
+            f"Re-record with: {record_hint}"
         )
 
     stored_hash = paths.hash_path.read_text().strip()
     expected = json.loads(paths.plan_path.read_text())
     actual_hash = compute_plan_hash(expected)
 
-    record_hint = f"hass-energy ems refresh-baseline --name {scenario}"
     assert stored_hash == actual_hash, (
-        f"Fixture {scenario!r} ems_plan.jpeg is out of date "
+        f"Fixture {fixture}/{scenario!r} ems_plan.jpeg is out of date "
         f"(hash mismatch: stored={stored_hash}, expected={actual_hash}). "
         "Re-record with: " + record_hint
     )

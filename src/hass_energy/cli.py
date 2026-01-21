@@ -49,6 +49,37 @@ from hass_energy.worker import Worker
 LOG_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
 
+def _parse_fixture_scenario(
+    fixture: str | None, scenario: str | None
+) -> tuple[str | None, str | None]:
+    """Parse fixture/scenario, allowing combined 'fixture/scenario' format or full path."""
+    if fixture is None:
+        return None, scenario
+    if "/" not in fixture:
+        return fixture, scenario
+    if scenario is not None:
+        return fixture, scenario
+
+    path = Path(fixture.rstrip("/"))
+    parts = path.parts
+
+    ems_indices = [i for i, p in enumerate(parts) if p == "ems"]
+    if ems_indices:
+        ems_idx = ems_indices[-1]
+        after_ems = parts[ems_idx + 1 :]
+        if len(after_ems) == 1:
+            return after_ems[0], None
+        if len(after_ems) >= 2:
+            return after_ems[0], after_ems[1]
+
+    if len(parts) == 2:
+        return parts[0], parts[1] if parts[1] else None
+    if len(parts) == 1:
+        return parts[0], None
+
+    return fixture, scenario
+
+
 def _common_options[**P, R](func: Callable[P, R]) -> Callable[P, R]:
     func = click.option(
         "--config",
@@ -169,17 +200,23 @@ def ems(ctx: click.Context) -> None:
     help="Enable solver output (CBC).",
 )
 @click.option(
+    "--fixture",
+    type=str,
+    default=None,
+    help="Replay a recorded fixture by name (supports 'fixture/scenario' format).",
+)
+@click.option(
     "--scenario",
     type=str,
     default=None,
-    help="Replay a recorded scenario by name or by path to the scenario directory.",
+    help="Scenario name within the fixture (optional).",
 )
 @click.option(
     "--scenario-dir",
     type=click.Path(path_type=Path, file_okay=False),
     default=Path("tests/fixtures/ems"),
     show_default=True,
-    help="Base directory containing scenario bundles when using a name.",
+    help="Base directory containing fixture bundles.",
 )
 @click.pass_context
 def ems_solve(
@@ -189,15 +226,17 @@ def ems_solve(
     plot: bool,
     plot_output: Path | None,
     solver_msg: bool,
+    fixture: str | None,
     scenario: str | None,
     scenario_dir: Path,
 ) -> None:
     _configure_logging(str(ctx.obj.get("log_level", "INFO")))
     config_path = ctx.obj.get("config")
-    use_fixture = scenario is not None
+    fixture, scenario = _parse_fixture_scenario(fixture, scenario)
+    use_fixture = fixture is not None
     paths: EmsFixturePaths | None = None
     if use_fixture:
-        paths = resolve_ems_fixture_paths(scenario_dir, scenario)
+        paths = resolve_ems_fixture_paths(scenario_dir, fixture, scenario)
         if not paths.fixture_path.exists() or not paths.config_path.exists():
             raise click.ClickException(
                 "Fixture/config not found. "
@@ -274,10 +313,16 @@ def ems_solve(
     help="Directory to write fixture bundles.",
 )
 @click.option(
+    "--fixture",
+    type=str,
+    required=True,
+    help="Fixture name (supports 'fixture/scenario' format).",
+)
+@click.option(
     "--name",
     type=str,
     default=None,
-    help="Scenario name (creates a subdirectory under output-dir).",
+    help="Scenario name within the fixture (optional subdirectory).",
 )
 @click.option(
     "--write-plan/--no-write-plan",
@@ -301,6 +346,7 @@ def ems_solve(
 def ems_record_scenario(
     ctx: click.Context,
     output_dir: Path,
+    fixture: str,
     name: str | None,
     write_plan: bool,
     redact: bool,
@@ -310,8 +356,11 @@ def ems_record_scenario(
     _configure_logging(str(ctx.obj.get("log_level", "INFO")))
     app_config = load_app_config(ctx.obj.get("config"))
 
-    paths = resolve_ems_fixture_paths(output_dir, name)
-    paths.root_dir.mkdir(parents=True, exist_ok=True)
+    fixture_parsed, name = _parse_fixture_scenario(fixture, name)
+    if fixture_parsed is None:
+        raise click.ClickException("--fixture is required.")
+    paths = resolve_ems_fixture_paths(output_dir, fixture_parsed, name)
+    paths.scenario_dir.mkdir(parents=True, exist_ok=True)
 
     try:
         hass_client = HomeAssistantClient(config=app_config.homeassistant)
@@ -322,20 +371,23 @@ def ems_record_scenario(
         resolver.hydrate_all()
 
         captured_at = datetime.now().astimezone()
-        fixture = hass_data_provider.snapshot()
-        fixture["captured_at"] = captured_at.isoformat()
-        paths.fixture_path.write_text(json.dumps(fixture, indent=2, sort_keys=True))
+        fixture_data = hass_data_provider.snapshot()
+        fixture_data["captured_at"] = captured_at.isoformat()
+        paths.fixture_path.write_text(json.dumps(fixture_data, indent=2, sort_keys=True))
         click.echo(f"Wrote EMS fixture to {paths.fixture_path}")
 
-        config_payload = _serialize_fixture_config(app_config, redact=redact)
-        paths.config_path.write_text(yaml.safe_dump(config_payload, sort_keys=False))
-        click.echo(f"Wrote EMS config to {paths.config_path}")
+        if not paths.config_path.exists():
+            config_payload = _serialize_fixture_config(app_config, redact=redact)
+            paths.config_path.write_text(yaml.safe_dump(config_payload, sort_keys=False))
+            click.echo(f"Wrote EMS config to {paths.config_path}")
+        else:
+            click.echo(f"EMS config already exists at {paths.config_path}, skipping.")
 
         if write_plan:
-            fixture_states = cast(dict[str, HomeAssistantStateDict], fixture["states"])
+            fixture_states = cast(dict[str, HomeAssistantStateDict], fixture_data["states"])
             fixture_history = cast(
                 dict[str, list[HomeAssistantHistoryStateDict]],
-                fixture["history"],
+                fixture_data["history"],
             )
             fixture_provider = FixtureHassDataProvider(
                 states=fixture_states,
@@ -365,18 +417,25 @@ def ems_record_scenario(
 
 @ems.command("refresh-baseline")
 @click.option(
+    "--fixture",
+    type=str,
+    required=False,
+    default=None,
+    help="Fixture name (supports 'fixture/scenario' format; omit to refresh all).",
+)
+@click.option(
     "--name",
     type=str,
     required=False,
     default=None,
-    help="Scenario name or path to the scenario directory (omit to refresh every fixture).",
+    help="Scenario name within fixture (omit to refresh all scenarios in fixture).",
 )
 @click.option(
     "--scenario-dir",
     type=click.Path(path_type=Path, file_okay=False),
     default=Path("tests/fixtures/ems"),
     show_default=True,
-    help="Base directory containing scenario bundles.",
+    help="Base directory containing fixture bundles.",
 )
 @click.option(
     "--solver-msg/--no-solver-msg",
@@ -393,6 +452,7 @@ def ems_record_scenario(
 @click.pass_context
 def ems_refresh_baseline(
     ctx: click.Context,
+    fixture: str | None,
     name: str | None,
     scenario_dir: Path,
     solver_msg: bool,
@@ -400,8 +460,9 @@ def ems_refresh_baseline(
 ) -> None:
     """Recompute the summarized baseline from a recorded fixture."""
     _configure_logging(str(ctx.obj.get("log_level", "INFO")))
-    if name:
-        paths = resolve_ems_fixture_paths(scenario_dir, name)
+    fixture, name = _parse_fixture_scenario(fixture, name)
+    if fixture and name:
+        paths = resolve_ems_fixture_paths(scenario_dir, fixture, name)
         if not paths.fixture_path.exists() or not paths.config_path.exists():
             raise click.ClickException(
                 "Fixture/config not found. "
@@ -413,21 +474,23 @@ def ems_refresh_baseline(
             raise click.ClickException(traceback.format_exc()) from exc
         return
 
-    scenarios = _discover_fixture_scenarios(scenario_dir)
+    scenarios = _discover_fixture_scenarios(scenario_dir, fixture)
     if not scenarios:
         raise click.ClickException(f"No EMS fixture scenarios found under {scenario_dir}.")
 
-    failures: list[tuple[str, str]] = []
-    for scenario in scenarios:
-        paths = resolve_ems_fixture_paths(scenario_dir, scenario)
-        click.echo(f"Refreshing EMS baseline for {paths.root_dir}")
+    failures: list[tuple[tuple[str, str | None], str]] = []
+    for fixture_name, scenario_name in scenarios:
+        paths = resolve_ems_fixture_paths(scenario_dir, fixture_name, scenario_name)
+        click.echo(f"Refreshing EMS baseline for {paths.scenario_dir}")
         try:
             _refresh_baseline_bundle(paths, solver_msg=solver_msg, force_image=force_image)
         except Exception as exc:
-            failures.append((scenario, _format_exception_message(exc)))
+            failures.append(((fixture_name, scenario_name), _format_exception_message(exc)))
 
     if failures:
-        failure_lines = "\n".join(f"- {scenario}: {message}" for scenario, message in failures)
+        failure_lines = "\n".join(
+            f"- {f}/{s if s else ''}: {message}" for (f, s), message in failures
+        )
         raise click.ClickException(
             "Failed to refresh one or more EMS baselines:\n" + failure_lines
         )
@@ -489,17 +552,43 @@ def _format_exception_message(exc: Exception) -> str:
     return type(exc).__name__
 
 
-def _discover_fixture_scenarios(base_dir: Path) -> list[str]:
+def _discover_fixture_scenarios(
+    base_dir: Path, fixture: str | None = None
+) -> list[tuple[str, str | None]]:
     if not base_dir.exists():
         return []
-    scenarios: list[str] = []
-    for child in base_dir.iterdir():
-        if not child.is_dir():
-            continue
-        paths = resolve_ems_fixture_paths(base_dir, child.name)
+    results: list[tuple[str, str | None]] = []
+
+    if fixture is not None:
+        fixture_dir = base_dir / fixture
+        if not fixture_dir.is_dir():
+            return []
+        paths = resolve_ems_fixture_paths(base_dir, fixture, None)
         if _is_fixture_bundle(paths):
-            scenarios.append(child.name)
-    return sorted(scenarios)
+            results.append((fixture, None))
+        for child in fixture_dir.iterdir():
+            if not child.is_dir():
+                continue
+            scenario_paths = resolve_ems_fixture_paths(base_dir, fixture, child.name)
+            if _is_fixture_bundle(scenario_paths):
+                results.append((fixture, child.name))
+        return sorted(results, key=lambda x: (x[0], x[1] or ""))
+
+    for fixture_child in base_dir.iterdir():
+        if not fixture_child.is_dir():
+            continue
+        fixture_name = fixture_child.name
+        paths = resolve_ems_fixture_paths(base_dir, fixture_name, None)
+        if _is_fixture_bundle(paths):
+            results.append((fixture_name, None))
+        for scenario_child in fixture_child.iterdir():
+            if not scenario_child.is_dir():
+                continue
+            scenario_paths = resolve_ems_fixture_paths(base_dir, fixture_name, scenario_child.name)
+            if _is_fixture_bundle(scenario_paths):
+                results.append((fixture_name, scenario_child.name))
+
+    return sorted(results, key=lambda x: (x[0], x[1] or ""))
 
 
 @ems.command("scenario-report")
@@ -511,11 +600,17 @@ def _discover_fixture_scenarios(base_dir: Path) -> list[str]:
     help="Write the multi-scenario HTML report to this path.",
 )
 @click.option(
+    "--fixture",
+    type=str,
+    default=None,
+    help="Filter to a specific fixture (supports 'fixture/scenario' format).",
+)
+@click.option(
     "--scenario-dir",
     type=click.Path(path_type=Path, file_okay=False),
     default=Path("tests/fixtures/ems"),
     show_default=True,
-    help="Base directory containing scenario bundles.",
+    help="Base directory containing fixture bundles.",
 )
 @click.option(
     "--solver-msg/--no-solver-msg",
@@ -527,13 +622,18 @@ def _discover_fixture_scenarios(base_dir: Path) -> list[str]:
 def ems_scenario_report(
     ctx: click.Context,
     output: Path,
+    fixture: str | None,
     scenario_dir: Path,
     solver_msg: bool,
 ) -> None:
     """Render a single HTML page with plots for every recorded scenario."""
     _configure_logging(str(ctx.obj.get("log_level", "INFO")))
 
-    scenarios = _discover_fixture_scenarios(scenario_dir)
+    fixture_parsed, scenario_parsed = _parse_fixture_scenario(fixture, None)
+    if fixture_parsed and scenario_parsed:
+        scenarios: list[tuple[str, str | None]] = [(fixture_parsed, scenario_parsed)]
+    else:
+        scenarios = _discover_fixture_scenarios(scenario_dir, fixture_parsed)
     if not scenarios:
         raise click.ClickException(f"No EMS fixture scenarios found under {scenario_dir}.")
 
@@ -544,10 +644,11 @@ def ems_scenario_report(
 
     results: list[ScenarioPlot] = []
     failures: list[str] = []
-    for scenario in scenarios:
-        paths = resolve_ems_fixture_paths(scenario_dir, scenario)
+    for fixture_name, scenario_name in scenarios:
+        paths = resolve_ems_fixture_paths(scenario_dir, fixture_name, scenario_name)
         if not _is_fixture_bundle(paths):
             continue
+        label = f"{fixture_name}/{scenario_name}" if scenario_name else fixture_name
         try:
             app_config = load_app_config(paths.config_path)
             provider, captured_at = FixtureHassDataProvider.from_path(paths.fixture_path)
@@ -562,10 +663,10 @@ def ems_scenario_report(
                     now=now,
                     solver_msg=solver_msg,
                 )
-            results.append(ScenarioPlot(name=scenario, plan=plan))
+            results.append(ScenarioPlot(name=label, plan=plan))
         except Exception:
-            results.append(ScenarioPlot(name=scenario, error=traceback.format_exc()))
-            failures.append(scenario)
+            results.append(ScenarioPlot(name=label, error=traceback.format_exc()))
+            failures.append(label)
 
     generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
     subtitle_parts = [
