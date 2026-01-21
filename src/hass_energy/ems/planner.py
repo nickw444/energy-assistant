@@ -26,6 +26,22 @@ from hass_energy.models.config import AppConfig
 
 logger = logging.getLogger(__name__)
 
+_CURTAIL_POWER_THRESHOLD_KW = 0.01
+
+
+def _derive_curtailment(
+    curtail_power: dict[int, pulp.LpVariable] | None,
+    t: int,
+) -> bool | None:
+    """Derive curtailment status from continuous power variable."""
+    if curtail_power is None:
+        return None
+    val = curtail_power.get(t)
+    if val is None:
+        return None
+    v = pulp.value(val)
+    return v > _CURTAIL_POWER_THRESHOLD_KW if v is not None else None
+
 
 class EmsMilpPlanner:
     def __init__(self, app_config: AppConfig, *, resolver: ValueResolver) -> None:
@@ -177,14 +193,16 @@ def _extract_plan(model: MILPModel, horizon: Horizon) -> tuple[EmsPlanStatus, li
             charge_series = inv.P_batt_charge_kw
             discharge_series = inv.P_batt_discharge_kw
             soc_series = inv.E_batt_kwh
-            curtail_series = inv.Curtail_inv
+            curtail_power_series = inv.P_curtail_kw
             battery_soc_kwh = _value(soc_series.get(t)) if soc_series is not None else None
             battery_soc_pct = None
             if battery_soc_kwh is not None and inv.battery_capacity_kwh:
                 battery_soc_pct = (battery_soc_kwh / float(inv.battery_capacity_kwh)) * 100.0
+            curtail_kw_val = _value(curtail_power_series.get(t)) if curtail_power_series else None
             inverter_plans[key] = InverterTimestepPlan(
                 name=str(inv.name),
                 pv_kw=_value(pv_series.get(t)) if pv_series is not None else None,
+                pv_curtail_kw=curtail_kw_val,
                 ac_net_kw=_value(ac_net_series.get(t)),
                 battery_charge_kw=(
                     _value(charge_series.get(t)) if charge_series is not None else None
@@ -194,9 +212,7 @@ def _extract_plan(model: MILPModel, horizon: Horizon) -> tuple[EmsPlanStatus, li
                 ),
                 battery_soc_kwh=battery_soc_kwh,
                 battery_soc_pct=battery_soc_pct,
-                curtailment=(
-                    _value(curtail_series.get(t)) > 0.5 if curtail_series is not None else None
-                ),
+                curtailment=_derive_curtailment(curtail_power_series, t),
             )
 
         ev_plans: dict[str, EvTimestepPlan] = {}
