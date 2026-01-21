@@ -45,6 +45,7 @@ class GridTimestepPlan(BaseModel):
 class InverterTimestepPlan(BaseModel):
     name: str
     pv_kw: Rounded3Opt = None
+    pv_curtail_kw: Rounded3Opt = None
     ac_net_kw: Rounded3
     battery_charge_kw: Rounded3Opt = None
     battery_discharge_kw: Rounded3Opt = None

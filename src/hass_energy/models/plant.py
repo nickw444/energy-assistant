@@ -90,6 +90,9 @@ class InverterConfig(BaseModel):
     name: str = Field(min_length=1)
     peak_power_kw: float = Field(ge=0)
     curtailment: Literal["load-aware", "binary"] | None = None
+    # Cost per kWh of curtailed PV; should exceed battery charge_cost_per_kwh
+    # so the solver prefers charging over curtailing. Default 0.03 (3c/kWh).
+    curtailment_cost_per_kwh: float = Field(default=0.03, ge=0)
     pv: PvConfig
     battery: BatteryConfig | None = None
 
