@@ -23,11 +23,12 @@
 - `hass_energy/worker/milp/ha_dump.py` now emits a single-battery stub in realtime inputs when `battery_soc` is available (capacity/limits are currently constants).
 - `hass_energy/worker/milp/ha_dump.py` emits a simple EV stub when `ev_connected` is true (defaults for capacity, target SOC, max power, value-per-kWh, min power, and switch penalty).
 - Tests should mirror the `src/hass_energy` package structure under `tests/` (e.g., `tests/hass_energy/ems/`).
-- EMS fixture snapshots use summarized `tests/fixtures/ems/**/ems_plan.json` baselines (single source of truth). Refresh with `hass-energy ems refresh-baseline` to refresh every recorded scenario (or add `--name <name-or-path>` to target one) and use `--force-image` when the plan hash is unchanged but you still need to regenerate plot images (e.g., plotting-only tweaks).
-- Use `hass-energy ems scenario-report` to render a single HTML page of every fixture plot.
+- EMS fixtures use a hierarchical structure: `tests/fixtures/ems/<fixture>/<scenario>/`. The `<fixture>/ems_config.yaml` is shared across all scenarios in that fixture, enabling config tuning across multiple scenarios at once.
+- Record new scenarios with `hass-energy ems record-scenario --fixture <fixture> --name <scenario>`. Refresh baselines with `hass-energy ems refresh-baseline` (use `--fixture` and `--scenario` to target specific ones, or omit to refresh all). Use `--force-image` when the plan hash is unchanged but you still need to regenerate plot images (e.g., plotting-only tweaks).
+- Use `hass-energy ems scenario-report` to render a single HTML page of every fixture plot. Use `--fixture <fixture>` to filter to one fixture.
 - Planner now consumes a resolved payload (no source models). Resolved schemas live in `src/hass_energy/models/resolved.py`; resolution scaffolding/registry is under `src/hass_energy/lib/resolution/` for two-pass fetch→transform in the future.
 - This is unreleased software; schema changes can be breaking without backward-compatibility shims.
-- When config schemas change in backward-incompatible ways, update any captured scenario configs under `tests/fixtures/ems/**/ems_config.yaml` to keep fixture tests passing.
+- When config schemas change in backward-incompatible ways, the shared `tests/fixtures/ems/<fixture>/ems_config.yaml` must be updated to keep fixture tests passing.
 - EMS-specific guidance lives in `src/hass_energy/ems/AGENTS.md`.
 - EMS plan `EconomicsTimestepPlan` costs are grid import/export only and exclude other objective terms (EV incentives, penalties, curtailment tie-breaks, violation penalties, battery wear).
 - EMS objective favors self-consumption via `self_consumption_bias_pct` (adds premium to import, discounts export). Battery wear cost (`charge_cost_per_kwh`, `discharge_cost_per_kwh`) allows separate cost per kWh for charge and discharge.
