@@ -2,54 +2,50 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pytest import MonkeyPatch
-
 from hass_energy.ems.fixture_harness import resolve_ems_fixture_paths
 
 
-def test_resolve_ems_fixture_paths_name_uses_base_dir(tmp_path: Path) -> None:
+def test_resolve_ems_fixture_paths_fixture_only(tmp_path: Path) -> None:
     base_dir = tmp_path / "fixtures"
-    scenario_dir = base_dir / "scenario-a"
+    fixture_dir = base_dir / "my-fixture"
+    fixture_dir.mkdir(parents=True)
+
+    paths = resolve_ems_fixture_paths(base_dir, "my-fixture")
+
+    assert paths.fixture_dir == fixture_dir
+    assert paths.scenario_dir == fixture_dir
+    assert paths.fixture_path == fixture_dir / "ems_fixture.json"
+    assert paths.config_path == fixture_dir / "ems_config.yaml"
+    assert paths.plan_path == fixture_dir / "ems_plan.json"
+
+
+def test_resolve_ems_fixture_paths_fixture_with_scenario(tmp_path: Path) -> None:
+    base_dir = tmp_path / "fixtures"
+    fixture_dir = base_dir / "my-fixture"
+    scenario_dir = fixture_dir / "scenario-a"
     scenario_dir.mkdir(parents=True)
 
-    paths = resolve_ems_fixture_paths(base_dir, "scenario-a")
+    paths = resolve_ems_fixture_paths(base_dir, "my-fixture", "scenario-a")
 
-    assert paths.root_dir == scenario_dir
+    assert paths.fixture_dir == fixture_dir
+    assert paths.scenario_dir == scenario_dir
+    assert paths.fixture_path == scenario_dir / "ems_fixture.json"
+    assert paths.config_path == fixture_dir / "ems_config.yaml"
+    assert paths.plan_path == scenario_dir / "ems_plan.json"
 
 
-def test_resolve_ems_fixture_paths_absolute_path(tmp_path: Path) -> None:
+def test_resolve_ems_fixture_paths_config_at_fixture_level(tmp_path: Path) -> None:
     base_dir = tmp_path / "fixtures"
-    base_dir.mkdir(parents=True)
-    scenario_dir = tmp_path / "scenario-b"
-    scenario_dir.mkdir(parents=True)
+    fixture_dir = base_dir / "shared-config"
+    scenario_a = fixture_dir / "a"
+    scenario_b = fixture_dir / "b"
+    scenario_a.mkdir(parents=True)
+    scenario_b.mkdir(parents=True)
 
-    paths = resolve_ems_fixture_paths(base_dir, str(scenario_dir))
+    paths_a = resolve_ems_fixture_paths(base_dir, "shared-config", "a")
+    paths_b = resolve_ems_fixture_paths(base_dir, "shared-config", "b")
 
-    assert paths.root_dir == scenario_dir
-
-
-def test_resolve_ems_fixture_paths_relative_path(
-    tmp_path: Path,
-    monkeypatch: MonkeyPatch,
-) -> None:
-    base_dir = tmp_path / "fixtures"
-    base_dir.mkdir(parents=True)
-    scenario_dir = tmp_path / "scenario-c"
-    scenario_dir.mkdir(parents=True)
-
-    monkeypatch.chdir(tmp_path)
-    rel_path = Path("scenario-c")
-
-    paths = resolve_ems_fixture_paths(base_dir, str(rel_path))
-
-    assert paths.root_dir == rel_path
-    assert paths.root_dir.resolve() == scenario_dir.resolve()
-
-
-def test_resolve_ems_fixture_paths_nested_name_defaults_to_base_dir(tmp_path: Path) -> None:
-    base_dir = tmp_path / "fixtures"
-    base_dir.mkdir(parents=True)
-
-    paths = resolve_ems_fixture_paths(base_dir, "nested/scenario-d")
-
-    assert paths.root_dir == base_dir / "nested/scenario-d"
+    assert paths_a.config_path == paths_b.config_path
+    assert paths_a.config_path == fixture_dir / "ems_config.yaml"
+    assert paths_a.fixture_path == scenario_a / "ems_fixture.json"
+    assert paths_b.fixture_path == scenario_b / "ems_fixture.json"

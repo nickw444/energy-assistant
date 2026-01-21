@@ -13,7 +13,8 @@ from hass_energy.ems.models import EmsPlanOutput
 
 @dataclass(frozen=True, slots=True)
 class EmsFixturePaths:
-    root_dir: Path
+    fixture_dir: Path
+    scenario_dir: Path
     fixture_path: Path
     config_path: Path
     plan_path: Path
@@ -21,28 +22,19 @@ class EmsFixturePaths:
     hash_path: Path
 
 
-def _resolve_fixture_root(base_dir: Path, name: str | Path) -> Path:
-    candidate = Path(name)
-    if candidate.is_absolute():
-        return candidate
-
-    base_candidate = base_dir / candidate
-    if base_candidate.exists():
-        return base_candidate
-    if candidate.exists():
-        return candidate
-    return base_candidate
-
-
-def resolve_ems_fixture_paths(base_dir: Path, name: str | Path | None) -> EmsFixturePaths:
-    root_dir = base_dir if name is None else _resolve_fixture_root(base_dir, name)
+def resolve_ems_fixture_paths(
+    base_dir: Path, fixture: str, scenario: str | None = None
+) -> EmsFixturePaths:
+    fixture_dir = base_dir / fixture
+    scenario_dir = fixture_dir if scenario is None else fixture_dir / scenario
     return EmsFixturePaths(
-        root_dir=root_dir,
-        fixture_path=root_dir / "ems_fixture.json",
-        config_path=root_dir / "ems_config.yaml",
-        plan_path=root_dir / "ems_plan.json",
-        plot_path=root_dir / "ems_plan.jpeg",
-        hash_path=root_dir / "ems_plan.hash",
+        fixture_dir=fixture_dir,
+        scenario_dir=scenario_dir,
+        fixture_path=scenario_dir / "ems_fixture.json",
+        config_path=fixture_dir / "ems_config.yaml",
+        plan_path=scenario_dir / "ems_plan.json",
+        plot_path=scenario_dir / "ems_plan.jpeg",
+        hash_path=scenario_dir / "ems_plan.hash",
     )
 
 
