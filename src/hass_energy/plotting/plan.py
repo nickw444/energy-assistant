@@ -136,21 +136,20 @@ def _build_plan_figure(
             secondary_y=False,
         )
 
-    if _has_any(grid_net):
-        fig.add_trace(
-            go.Scatter(
-                x=time_labels,
-                y=grid_net,
-                name="Grid Net",
-                mode="lines",
-                fill="tozeroy",
-                fillcolor=COLORS["grid_net_fill"],
-                line={"color": COLORS["grid_net"], "width": 2, "shape": "hv"},
-                hovertemplate="%{y:.2f} kW<extra>Grid Net</extra>" if include_hover else None,
-                legendgroup=legend_group_power,
-            ),
-            secondary_y=False,
-        )
+    fig.add_trace(
+        go.Scatter(
+            x=time_labels,
+            y=grid_net,
+            name="Grid Net",
+            mode="lines",
+            fill="tozeroy",
+            fillcolor=COLORS["grid_net_fill"],
+            line={"color": COLORS["grid_net"], "width": 2, "shape": "hv"},
+            hovertemplate="%{y:.2f} kW<extra>Grid Net</extra>" if include_hover else None,
+            legendgroup=legend_group_power,
+        ),
+        secondary_y=False,
+    )
 
     if _has_any(total_batt_charge):
         charge_neg = [-v for v in total_batt_charge]
