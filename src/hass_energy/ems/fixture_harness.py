@@ -241,7 +241,7 @@ def _summarize_plan(plan: EmsPlanOutput, *, bucket_minutes: int) -> dict[str, An
                 stats["soc_pct_end"] = inverter.battery_soc_pct
             if inverter.battery_soc_kwh is not None:
                 stats["soc_kwh_end"] = inverter.battery_soc_kwh
-            if inverter.curtailment:
+            if inverter.curtailment_kw is not None and inverter.curtailment_kw > 1e-3:
                 stats["curtailment_minutes"] = (
                     stats.get("curtailment_minutes") or 0.0
                 ) + duration_minutes
@@ -329,7 +329,9 @@ def _summarize_plan(plan: EmsPlanOutput, *, bucket_minutes: int) -> dict[str, An
             (inv.battery_discharge_kw or 0.0) for inv in step.inverters.values()
         )
         step_ev_charge_kw = sum(ev.charge_kw for ev in step.loads.evs.values())
-        curtailment_active = any(inv.curtailment for inv in step.inverters.values())
+        curtailment_active = any(
+            (inv.curtailment_kw or 0.0) > 1e-3 for inv in step.inverters.values()
+        )
 
         cursor = step_start
         while cursor < step_end:

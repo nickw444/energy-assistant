@@ -41,7 +41,12 @@ time-stepped plan for plotting/inspection. The core code lives in:
 - Controlled EV loads can assume future connectivity using `connect_grace_minutes` plus optional `can_connect` and `allowed_connect_times` constraints.
 - Controlled EV loads apply a small internal ramp penalty to discourage large per-slot changes in charge power.
 - Controlled EV loads include a soft anchor penalty that keeps slot 0 close to realtime charge power; when realtime power is near zero (below 0.1 kW), the anchor penalty is skipped so charging can start immediately.
-- Load-aware curtailment is forced on whenever export price is negative so PV can follow load and export is blocked for those slots.
+- Load-aware curtailment uses constraint-based "charge-before-curtail" logic:
+  - A binary `Curtail_active[t]` tracks whether curtailment occurs in each slot.
+  - When curtailment is active, `pv_charge[t]` must be at its maximum feasible rate (rate-limited or SOC-limited).
+  - Grid charging is blocked while curtailing PV (no importing while wasting PV).
+  - A tiny penalty (1e-6/kWh) acts as a tie-breaker to prefer using PV over wasting it.
+- Negative export prices trigger a hard constraint (`P_export[t] == 0`) to prevent paying to export.
 
 ### MPC anchoring behavior
 Slot 0 is used as the MPC decision window, but some realtime inputs anchor the
@@ -52,7 +57,7 @@ model at the start of the horizon:
 - EV charge power has a **soft** slot-0 anchor (penalty on deviation from
   realtime power). When realtime power is near zero (< 0.1 kW), the anchor
   penalty is skipped so slot 0 can start charging without bias.
-- Load-aware curtailment is forced on when export prices go negative, making PV output flexible and blocking export in those slots.
+- When export prices are negative, export is blocked via hard constraint, and load-aware curtailment's charge-before-curtail logic ensures PV charges the battery at max rate before any curtailment occurs.
 - Battery/EV SoC initialize `E_*[0]` using realtime sensors, and EV
   connectivity gates charging. These are feasibility anchors across the horizon.
 - Realtime grid power is **not** used by the EMS builder.
@@ -63,8 +68,8 @@ model at the start of the horizon:
   - `P_grid_import_violation_kw[t]` for forbidden import periods
 - Inverters:
   - `P_pv_kw[inv][t]` (PV output after curtailment)
+  - `P_pv_curtail_kw[inv][t]` (PV curtailment, continuous)
   - `P_inv_ac_net_kw[inv][t]` (net AC flow per inverter)
-  - `Curtail_inv[inv][t]` when curtailment is enabled
 - Batteries (per inverter):
   - `P_batt_charge_kw[inv][t]`
   - `P_batt_discharge_kw[inv][t]`
@@ -77,8 +82,8 @@ model at the start of the horizon:
   - Import cap with violation slack during forbidden periods.
 - PV:
   - No curtailment: `P_pv_kw == forecast`.
-  - Binary curtailment: `P_pv_kw == forecast * (1 - Curtail_inv)`.
-  - Load-aware curtailment: `P_pv_kw` bounded by forecast with export blocked.
+  - Binary curtailment: `P_pv_kw == forecast * (1 - curtail_binary)`, `P_pv_curtail_kw == forecast * curtail_binary`.
+  - Load-aware curtailment: `P_pv_kw + P_pv_curtail_kw == forecast` (conservation); curtailment penalty in objective discourages wasting PV when battery capacity is available.
 - Inverter net AC:
   - `P_inv_ac_net_kw = P_pv_kw + P_batt_discharge - P_batt_charge`.
 - Battery:
@@ -117,13 +122,16 @@ model at the start of the horizon:
 - EV SoC incentives:
   - Piecewise per-kWh rewards for reaching terminal SoC targets.
   - Incentives are scaled by `(1 - self_consumption_bias)` so they compete fairly with export tariffs (an 8c incentive ties with an 8c export tariff).
+- PV curtailment penalty:
+  - Tiny tie-breaker (1e-6/kWh) to prefer using PV over wasting it.
+  - The "charge-before-curtail" constraint (not the penalty) ensures charging the battery is preferred over curtailing when battery has capacity.
 - Early-flow tie-breaker:
   - Small time-decay bonus on total grid flow `(P_import + P_export)` favoring earlier slots.
 
 ### Outputs & plotting
 `planner.py` emits per-slot:
 - `grid_import_kw`, `grid_export_kw`, `grid_kw`
-- `pv_kw`, `pv_inverters`, `curtail_inverters`
+- `pv_kw`, `pv_inverters`, `curtailment_kw`
 - `battery_charge_kw`, `battery_discharge_kw`, `battery_soc_kwh`
 - `ev_charge_kw`, `ev_soc_kwh`
 - `inverter_ac_net_kw`

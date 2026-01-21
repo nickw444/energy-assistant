@@ -488,7 +488,8 @@ def test_load_aware_curtailment_blocks_export() -> None:
 
     plan = EmsMilpPlanner(config, resolver=resolver).generate_ems_plan(now=now)
     step = plan.timesteps[0]
-    assert step.inverters["curtail"].curtailment is True
+    assert step.inverters["curtail"].curtailment_kw is not None
+    assert step.inverters["curtail"].curtailment_kw > 0.1
     assert abs(step.grid.export_kw) < 1e-6
     assert abs(step.grid.import_kw) < 1e-6
 
@@ -774,7 +775,8 @@ def test_realtime_pv_allows_missing_first_forecast_slot() -> None:
     assert plan.timesteps[1].inverters["inv"].pv_kw == pytest.approx(1.0)  # type: ignore[reportUnknownMemberType]
 
 
-def test_load_aware_curtailment_active_with_negative_price_without_export() -> None:
+def test_load_aware_curtailment_no_curtailment_when_pv_under_load() -> None:
+    """With load-aware curtailment, PV below load should not curtail - all PV serves load."""
     now = datetime(2025, 12, 27, 9, 2, tzinfo=UTC)
     inverter = InverterConfig(
         id="curtail",
@@ -817,7 +819,10 @@ def test_load_aware_curtailment_active_with_negative_price_without_export() -> N
 
     plan = EmsMilpPlanner(config, resolver=resolver).generate_ems_plan(now=now)
     step = plan.timesteps[0]
-    assert step.inverters["curtail"].curtailment is True
+    # No curtailment when PV < load - all PV serves load directly
+    assert step.inverters["curtail"].curtailment_kw is not None
+    assert step.inverters["curtail"].curtailment_kw < 0.01
+    assert step.inverters["curtail"].pv_kw == pytest.approx(0.4, abs=0.01)  # type: ignore[reportUnknownMemberType]
     assert abs(step.grid.export_kw) < 1e-6
     assert abs(step.grid.import_kw - 0.1) < 1e-6
 
@@ -865,6 +870,7 @@ def test_binary_curtailment_prefers_import_over_negative_export() -> None:
 
     plan = EmsMilpPlanner(config, resolver=resolver).generate_ems_plan(now=now)
     step = plan.timesteps[0]
-    assert step.inverters["curtail"].curtailment is True
+    assert step.inverters["curtail"].curtailment_kw is not None
+    assert step.inverters["curtail"].curtailment_kw > 0.1
     assert abs(step.grid.export_kw) < 1e-6
     assert abs(step.grid.import_kw - 0.5) < 1e-6
