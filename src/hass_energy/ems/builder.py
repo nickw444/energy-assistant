@@ -70,8 +70,14 @@ class InverterVars:
 class InverterBuild:
     # Inverter vars keyed by inverter id from config.
     inverters: dict[str, InverterVars]
+    # Battery discharge flow to load per inverter id (kW per timestep).
+    battery_load_kw: dict[str, dict[int, pulp.LpVariable]]
     # Battery export flow per inverter id (kW per timestep).
     battery_export_kw: dict[str, dict[int, pulp.LpVariable]]
+    # PV charge flow per inverter id (kW per timestep).
+    pv_charge_kw: dict[str, dict[int, pulp.LpVariable]]
+    # Grid charge flow per inverter id (kW per timestep).
+    grid_charge_kw: dict[str, dict[int, pulp.LpVariable]]
     # PV export flow per inverter id (kW per timestep).
     pv_export_kw: dict[str, dict[int, pulp.LpVariable]]
 
@@ -296,6 +302,7 @@ class MILPBuilder:
         # Per-inverter flow splits used to assemble system load/import/export balances.
         pv_load_by_inv: dict[str, dict[int, pulp.LpVariable]] = {}
         pv_export_by_inv: dict[str, dict[int, pulp.LpVariable]] = {}
+        pv_charge_by_inv: dict[str, dict[int, pulp.LpVariable]] = {}
         batt_load_by_inv: dict[str, dict[int, pulp.LpVariable]] = {}
         batt_export_by_inv: dict[str, dict[int, pulp.LpVariable]] = {}
         grid_charge_by_inv: dict[str, dict[int, pulp.LpVariable]] = {}
@@ -546,6 +553,7 @@ class MILPBuilder:
             # Battery present: split PV + battery discharge into load vs export, and charge source.
             pv_load_by_inv[inv_id] = pv_load
             pv_export_by_inv[inv_id] = pv_export
+            pv_charge_by_inv[inv_id] = pv_charge
             batt_load_by_inv[inv_id] = batt_load
             batt_export_by_inv[inv_id] = batt_export
             grid_charge_by_inv[inv_id] = grid_charge
@@ -607,7 +615,10 @@ class MILPBuilder:
 
         return InverterBuild(
             inverters=inverters,
+            battery_load_kw=batt_load_by_inv,
             battery_export_kw=batt_export_by_inv,
+            pv_charge_kw=pv_charge_by_inv,
+            grid_charge_kw=grid_charge_by_inv,
             pv_export_kw=pv_export_by_inv,
         )
 
@@ -684,7 +695,6 @@ class MILPBuilder:
             for t in horizon.T
         )
         # Battery wear costs applied separately to discharge and charge.
-        # Set charge_cost_per_kwh to 0 when you want PV charging to be free.
         # Efficiency losses are already modeled in the SoC dynamics
         # (E[t+1] = E[t] + charge * eta - discharge / eta).
         for inverter in self._plant.inverters:
@@ -698,16 +708,32 @@ class MILPBuilder:
             charge_series = inv_vars.P_batt_charge_kw
             if discharge_series is None or charge_series is None:
                 continue
-            discharge_cost = battery.discharge_cost_per_kwh
-            charge_cost = battery.charge_cost_per_kwh
-            if discharge_cost > 0:
+            discharge_grid_cost = battery.discharge_grid_cost_per_kwh
+            discharge_load_cost = battery.discharge_load_cost_per_kwh
+            charge_grid_cost = battery.charge_grid_cost_per_kwh
+            charge_pv_cost = battery.charge_pv_cost_per_kwh
+            batt_load_series = inverters.battery_load_kw.get(inverter.id)
+            batt_export_series = inverters.battery_export_kw.get(inverter.id)
+            grid_charge_series = inverters.grid_charge_kw.get(inverter.id)
+            pv_charge_series = inverters.pv_charge_kw.get(inverter.id)
+            if discharge_load_cost > 0 and batt_load_series is not None:
                 objective += pulp.lpSum(
-                    discharge_cost * discharge_series[t] * horizon.dt_hours(t)
+                    discharge_load_cost * batt_load_series[t] * horizon.dt_hours(t)
                     for t in horizon.T
                 )
-            if charge_cost > 0:
+            if discharge_grid_cost > 0 and batt_export_series is not None:
                 objective += pulp.lpSum(
-                    charge_cost * charge_series[t] * horizon.dt_hours(t)
+                    discharge_grid_cost * batt_export_series[t] * horizon.dt_hours(t)
+                    for t in horizon.T
+                )
+            if charge_grid_cost > 0 and grid_charge_series is not None:
+                objective += pulp.lpSum(
+                    charge_grid_cost * grid_charge_series[t] * horizon.dt_hours(t)
+                    for t in horizon.T
+                )
+            if charge_pv_cost > 0 and pv_charge_series is not None:
+                objective += pulp.lpSum(
+                    charge_pv_cost * pv_charge_series[t] * horizon.dt_hours(t)
                     for t in horizon.T
                 )
             # Tiny time-weighted throughput penalty to stabilize dispatch ordering
@@ -720,30 +746,21 @@ class MILPBuilder:
                 * horizon.dt_hours(t)
                 for t in horizon.T
             )
-            export_penalty = battery.export_penalty_per_kwh
-            batt_export_series = inverters.battery_export_kw.get(inverter.id)
-            # Battery export penalty discourages low-value battery -> grid export
-            # while leaving PV export untouched.
-            if export_penalty > 0 and batt_export_series is not None:
-                objective += pulp.lpSum(
-                    export_penalty * batt_export_series[t] * horizon.dt_hours(t)
-                    for t in horizon.T
-                )
             pv_export_series = inverters.pv_export_kw.get(inverter.id)
             if pv_export_series is not None:
                 # PV export penalty targets the PV-export + battery-discharge-to-load pattern
                 # where PV is sent to the grid while the battery covers household load. Without
                 # this term, serving load with PV is "free" but has no explicit reward, while
                 # exporting PV earns revenue. If export=0.06 and bias=20%, export value=0.048/kWh
-                # beats a 0.01/kWh battery discharge cost, so the model prefers exporting PV and
-                # discharging the battery to serve load.
+                # beats a 0.01/kWh battery discharge-to-load cost, so the model prefers exporting
+                # PV and discharging the battery to serve load.
                 pv_export_penalty_eps = 1e-4
                 objective += pulp.lpSum(
                     max(
                         0.0,
                         min(
                             export_price_eff[t],
-                            export_price_eff[t] - discharge_cost + pv_export_penalty_eps,
+                            export_price_eff[t] - discharge_load_cost + pv_export_penalty_eps,
                         ),
                     )
                     * pv_export_series[t]
@@ -759,7 +776,7 @@ class MILPBuilder:
                 objective += terminal_penalty * inv_vars.E_batt_terminal_shortfall_kwh
 
         # Curtailment energy cost: penalize wasted PV to prefer battery charging.
-        # This cost should exceed charge_cost_per_kwh so charging is preferred.
+        # This cost should exceed charge_pv_cost_per_kwh so charging is preferred.
         # Includes a tiny tie-breaker (indexed by inverter order) for stable decisions.
         w_curtail_tie = 1e-6
         total = len(self._plant.inverters)

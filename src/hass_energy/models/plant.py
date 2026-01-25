@@ -60,12 +60,11 @@ class PvConfig(BaseModel):
 class BatteryConfig(BaseModel):
     capacity_kwh: float = Field(ge=0)
     storage_efficiency_pct: float = Field(gt=0, le=100)
-    charge_cost_per_kwh: float = Field(default=0.0, ge=0)
-    discharge_cost_per_kwh: float = Field(default=0.0, ge=0)
-    # Discourages low-value battery -> grid export without penalizing PV export.
-    # Use when you want self-consumption to win over small arbitrage spreads but still
-    # allow export at sufficiently high prices.
-    export_penalty_per_kwh: float = Field(default=0.0, ge=0)
+    # Negative values are allowed to model incentives/rewards.
+    charge_grid_cost_per_kwh: float = Field(default=0.0)
+    charge_pv_cost_per_kwh: float = Field(default=0.0)
+    discharge_grid_cost_per_kwh: float = Field(default=0.0)
+    discharge_load_cost_per_kwh: float = Field(default=0.0)
     min_soc_pct: float = Field(ge=0, le=100)
     max_soc_pct: float = Field(ge=0, le=100)
     reserve_soc_pct: float = Field(ge=0, le=100)
@@ -90,8 +89,9 @@ class InverterConfig(BaseModel):
     name: str = Field(min_length=1)
     peak_power_kw: float = Field(ge=0)
     curtailment: Literal["load-aware", "binary"] | None = None
-    # Cost per kWh of curtailed PV; should exceed battery charge_cost_per_kwh
-    # so the solver prefers charging over curtailing. Default 0.03 (3c/kWh).
+    # Cost per kWh of curtailed PV; should exceed battery charge_pv_cost_per_kwh
+    # so the solver
+    # prefers charging over curtailing. Default 0.03 (3c/kWh).
     curtailment_cost_per_kwh: float = Field(default=0.0, ge=0)
     pv: PvConfig
     battery: BatteryConfig | None = None
