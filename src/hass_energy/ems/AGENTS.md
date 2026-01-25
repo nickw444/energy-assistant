@@ -19,6 +19,8 @@ time-stepped plan for plotting/inspection. The core code lives in:
 2. `build_horizon(...)` constructs time slots aligned to `EmsConfig.timestep_minutes`, sized to the shortest forecast horizon (bounded by `EmsConfig.min_horizon_minutes`). If `high_res_horizon_minutes` / `high_res_timestep_minutes` are set, slots run at higher resolution before switching back to the default timestep.
 3. `MILPBuilder.build(...)` builds the MILP using the resolved forecasts.
 4. `EmsMilpPlanner.generate_ems_plan(...)` solves the model (CBC) and extracts a plan.
+   - For fixture baselines/refreshes, pass `deterministic=True` to force single-thread
+     CBC with fixed seeds so CI outputs stay stable.
 5. `plot_plan(...)` visualizes series (net grid, PV, battery, prices, costs, SoC).
 
 ### Inputs & resolution

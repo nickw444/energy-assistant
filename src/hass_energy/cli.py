@@ -268,6 +268,7 @@ def ems_solve(
                 plan = EmsMilpPlanner(app_config, resolver=resolver).generate_ems_plan(
                     now=now,
                     solver_msg=solver_msg,
+                    deterministic=True,
                 )
         else:
             hass_client = HomeAssistantClient(config=app_config.homeassistant)
@@ -400,6 +401,7 @@ def ems_record_scenario(
                 plan = EmsMilpPlanner(app_config, resolver=fixture_resolver).generate_ems_plan(
                     now=captured_at,
                     solver_msg=solver_msg,
+                    deterministic=True,
                 )
             plan_payload = summarize_plan(plan)
             paths.plan_path.write_text(json.dumps(plan_payload, indent=2, sort_keys=True))
@@ -528,6 +530,7 @@ def _refresh_baseline_bundle(
         plan = EmsMilpPlanner(app_config, resolver=resolver).generate_ems_plan(
             now=now,
             solver_msg=solver_msg,
+            deterministic=True,
         )
     plan_payload = summarize_plan(plan)
     paths.plan_path.write_text(json.dumps(plan_payload, indent=2, sort_keys=True))
@@ -662,6 +665,7 @@ def ems_scenario_report(
                 plan = EmsMilpPlanner(app_config, resolver=resolver).generate_ems_plan(
                     now=now,
                     solver_msg=solver_msg,
+                    deterministic=True,
                 )
             results.append(ScenarioPlot(name=label, plan=plan))
         except Exception:
