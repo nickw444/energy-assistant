@@ -38,16 +38,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-      - name: Install uv
-        run: python -m pip install uv
-      - name: Sync dependencies
-        run: uv sync --dev --frozen
-      - name: Tests
-        run: uv run pytest
+      - name: Build fixtures image
+        run: docker build -f Dockerfile.fixtures -t hass-energy-fixtures:ci .
+      - name: Tests (docker)
+        run: |
+          docker run --rm \
+            -e UV_PROJECT_ENVIRONMENT=/opt/venv \
+            -e UV_CACHE_DIR=/repo/.cache/uv \
+            -v "$PWD:/repo" \
+            -w /repo \
+            hass-energy-fixtures:ci \
+            sh -lc "uv sync --dev --frozen && uv run pytest"
   refresh-fixture-images:
     runs-on: ubuntu-latest
     if: >-
@@ -61,16 +62,17 @@ jobs:
         with:
           ref: ${{ github.head_ref }}
           fetch-depth: 0
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-      - name: Install uv
-        run: python -m pip install uv
-      - name: Sync dependencies
-        run: uv sync --dev --frozen
-      - name: Refresh EMS fixture images
-        run: uv run python scripts/refresh_ems_fixture_images.py
+      - name: Build fixtures image
+        run: docker build -f Dockerfile.fixtures -t hass-energy-fixtures:ci .
+      - name: Refresh EMS fixture images (docker)
+        run: |
+          docker run --rm \
+            -e UV_PROJECT_ENVIRONMENT=/opt/venv \
+            -e UV_CACHE_DIR=/repo/.cache/uv \
+            -v "$PWD:/repo" \
+            -w /repo \
+            hass-energy-fixtures:ci \
+            sh -lc "uv sync --dev --frozen && uv run python scripts/refresh_ems_fixture_images.py"
       - name: Commit and push updates
         run: |
           if git diff --quiet; then

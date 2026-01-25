@@ -119,6 +119,7 @@ Notes:
 - Replay a recorded fixture: `uv run hass-energy ems solve --scenario <name-or-path>`
 - Refresh fixture baselines: `uv run hass-energy ems refresh-baseline [--name <name-or-path>]` (omit `--name` to refresh every recorded scenario)
 - Generate a single-page report of all fixtures: `uv run hass-energy ems scenario-report`
+- Dockerized fixture refresh (matches CI environment): `./tools/refresh_baseline.sh [--name <name-or-path>]`
 
 ### Roadmap placeholders
 - Swap stub planner with a real MILP model (e.g., Pyomo/OR-Tools) once constraints and devices are defined.

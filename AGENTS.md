@@ -24,7 +24,8 @@
 - `hass_energy/worker/milp/ha_dump.py` emits a simple EV stub when `ev_connected` is true (defaults for capacity, target SOC, max power, value-per-kWh, min power, and switch penalty).
 - Tests should mirror the `src/hass_energy` package structure under `tests/` (e.g., `tests/hass_energy/ems/`).
 - EMS fixtures use a hierarchical structure: `tests/fixtures/ems/<fixture>/<scenario>/`. The `<fixture>/ems_config.yaml` is shared across all scenarios in that fixture, enabling config tuning across multiple scenarios at once.
-- Record new scenarios with `hass-energy ems record-scenario --fixture <fixture> --name <scenario>`. Refresh baselines with `hass-energy ems refresh-baseline` (use `--fixture` and `--scenario` to target specific ones, or omit to refresh all). Use `--force-image` when the plan hash is unchanged but you still need to regenerate plot images (e.g., plotting-only tweaks).
+- Record new scenarios with `hass-energy ems record-scenario --fixture <fixture> --name <scenario>`. Refresh baselines with `hass-energy ems refresh-baseline` (use `--fixture` and `--name` to target specific ones, or omit to refresh all). Use `--force-image` when the plan hash is unchanged but you still need to regenerate plot images (e.g., plotting-only tweaks).
+- Use the dockerized fixture refresh helper (`tools/refresh_baseline.sh`) when you need a consistent Linux execution environment; CI runs fixture-related steps using `Dockerfile.fixtures` with pre-baked dev deps.
 - Use `hass-energy ems scenario-report` to render a single HTML page of every fixture plot. Use `--fixture <fixture>` to filter to one fixture.
 - Planner now consumes a resolved payload (no source models). Resolved schemas live in `src/hass_energy/models/resolved.py`; resolution scaffolding/registry is under `src/hass_energy/lib/resolution/` for two-pass fetch→transform in the future.
 - This is unreleased software; schema changes can be breaking without backward-compatibility shims.
