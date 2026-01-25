@@ -38,6 +38,7 @@ class EmsMilpPlanner:
         *,
         now: datetime | None = None,
         solver_msg: bool = False,
+        deterministic: bool = False,
     ) -> EmsPlanOutput:
         total_start = time.perf_counter()
         solve_time = now or datetime.now().astimezone()
@@ -92,7 +93,8 @@ class EmsMilpPlanner:
         build_seconds = time.perf_counter() - build_start
 
         solve_start = time.perf_counter()
-        model.problem.solve(pulp.PULP_CBC_CMD(msg=solver_msg))
+        solver = _build_solver(msg=solver_msg, deterministic=deterministic)
+        model.problem.solve(solver)
         solve_seconds = time.perf_counter() - solve_start
 
         objective_value = _objective_value(model)
@@ -267,6 +269,20 @@ def _objective_value(model: MILPModel) -> float | None:
     if v is None:
         return None
     return float(v)
+
+
+def _build_solver(*, msg: bool, deterministic: bool) -> pulp.PULP_CBC_CMD:
+    if not deterministic:
+        return pulp.PULP_CBC_CMD(msg=msg)
+    options = [
+        "randomSeed 1",
+        "randomCbcSeed 1",
+    ]
+    return pulp.PULP_CBC_CMD(
+        msg=msg,
+        threads=1,
+        options=options,
+    )
 
 
 def _format_schedule(

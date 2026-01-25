@@ -92,6 +92,7 @@ def test_fixture_baseline_up_to_date(fixture: str, scenario: str) -> None:
         resolver.hydrate_all()
         plan = EmsMilpPlanner(app_config, resolver=resolver).generate_ems_plan(
             now=now,
+            deterministic=True,
         )
 
     actual = summarize_plan(plan)
