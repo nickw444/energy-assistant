@@ -21,6 +21,8 @@ time-stepped plan for plotting/inspection. The core code lives in:
 4. `EmsMilpPlanner.generate_ems_plan(...)` solves the model (CBC) and extracts a plan.
    - For fixture baselines/refreshes, pass `deterministic=True` to force single-thread
      CBC with fixed seeds so CI outputs stay stable.
+   - Deterministic solves add a lexicographic tie-breaker pass that minimizes a
+     time-weighted activity objective while keeping the primary objective optimal.
 5. `plot_plan(...)` visualizes series (net grid, PV, battery, prices, costs, SoC).
 
 ### Inputs & resolution

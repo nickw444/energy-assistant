@@ -93,11 +93,13 @@ class EmsMilpPlanner:
         build_seconds = time.perf_counter() - build_start
 
         solve_start = time.perf_counter()
-        solver = _build_solver(msg=solver_msg, deterministic=deterministic)
-        model.problem.solve(solver)
+        objective_value = _solve_model(
+            model,
+            horizon,
+            solver_msg=solver_msg,
+            deterministic=deterministic,
+        )
         solve_seconds = time.perf_counter() - solve_start
-
-        objective_value = _objective_value(model)
         status, timesteps = _extract_plan(model, horizon)
         total_seconds = time.perf_counter() - total_start
         timings = EmsPlanTimings(
@@ -269,6 +271,89 @@ def _objective_value(model: MILPModel) -> float | None:
     if v is None:
         return None
     return float(v)
+
+
+def _solve_model(
+    model: MILPModel,
+    horizon: Horizon,
+    *,
+    solver_msg: bool,
+    deterministic: bool,
+) -> float | None:
+    solver = _build_solver(msg=solver_msg, deterministic=deterministic)
+    model.problem.solve(solver)
+
+    if not deterministic:
+        return _objective_value(model)
+
+    original_objective = model.problem.objective
+    if original_objective is None:
+        return _objective_value(model)
+    best_value = pulp.value(original_objective)
+    if best_value is None:
+        return _objective_value(model)
+
+    objective_eps = 1e-6
+    model.problem += original_objective <= float(best_value) + objective_eps, "objective_cap"
+
+    tie_objective = _build_tiebreaker(model, horizon)
+    _set_objective(model.problem, tie_objective)
+    model.problem.solve(solver)
+    _set_objective(model.problem, original_objective)
+
+    value = pulp.value(original_objective)
+    return float(value) if value is not None else None
+
+
+def _set_objective(problem: pulp.LpProblem, objective: pulp.LpAffineExpression) -> None:
+    set_objective = getattr(problem, "setObjective", None)
+    if callable(set_objective):
+        set_objective(objective)
+        return
+    problem.objective = objective
+
+
+def _build_tiebreaker(model: MILPModel, horizon: Horizon) -> pulp.LpAffineExpression:
+    grid = model.grid
+    inverters = model.inverters
+    loads = model.loads
+
+    expr: pulp.LpAffineExpression = pulp.LpAffineExpression()
+
+    for t in horizon.T:
+        weight = (t + 1) * horizon.dt_hours(t)
+        expr += weight * (grid.P_import[t] + grid.P_export[t] + grid.P_import_violation_kw[t])
+
+    for ev_id in sorted(loads.evs.keys()):
+        ev = loads.evs[ev_id]
+        for t in horizon.T:
+            weight = (t + 1) * horizon.dt_hours(t)
+            expr += weight * ev.P_ev_charge_kw[t]
+
+    for inv_id in sorted(inverters.inverters.keys()):
+        inv = inverters.inverters[inv_id]
+        for t in horizon.T:
+            weight = (t + 1) * horizon.dt_hours(t)
+            if inv.P_batt_charge_kw is not None:
+                expr += weight * inv.P_batt_charge_kw[t]
+            if inv.P_batt_discharge_kw is not None:
+                expr += weight * inv.P_batt_discharge_kw[t]
+            if inv.P_curtail_kw is not None:
+                expr += weight * inv.P_curtail_kw[t]
+
+    for inv_id in sorted(inverters.pv_export_kw.keys()):
+        series = inverters.pv_export_kw[inv_id]
+        for t in horizon.T:
+            weight = (t + 1) * horizon.dt_hours(t)
+            expr += weight * series[t]
+
+    for inv_id in sorted(inverters.battery_export_kw.keys()):
+        series = inverters.battery_export_kw[inv_id]
+        for t in horizon.T:
+            weight = (t + 1) * horizon.dt_hours(t)
+            expr += weight * series[t]
+
+    return expr
 
 
 def _build_solver(*, msg: bool, deterministic: bool) -> pulp.PULP_CBC_CMD:
