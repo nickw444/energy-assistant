@@ -74,4 +74,4 @@ def _parse_payload[T: BaseModel](model: type[T], payload: Any, label: str) -> T:
     try:
         return model.model_validate(payload)
     except ValidationError as exc:
-        raise ValueError(f"Invalid {label} response") from exc
+        raise ValueError(f"Invalid {label} response: {exc}") from exc
