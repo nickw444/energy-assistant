@@ -84,6 +84,9 @@ model at the start of the horizon:
 - Battery:
   - Charge/discharge limits (optional overrides).
   - Single binary charge/discharge mode selector.
+  - PV is prioritized to serve load by limiting battery discharge-to-load to the
+    PV deficit (`load - PV`), preventing PV-export + battery-to-load infeasible
+    patterns while still allowing PV export when there is surplus.
   - SoC bounds from `min_soc_pct` and `max_soc_pct`.
   - Grid export is blocked when SoC is below `reserve_soc_pct` (self-consumption can still discharge to `min_soc_pct`).
   - SoC update uses `storage_efficiency_pct`.

@@ -589,6 +589,8 @@ class MILPBuilder:
 
         # Portion of grid import serving load (separate from battery charging).
         grid_load = pulp.LpVariable.dicts("P_grid_load_kw", T, lowBound=0)
+        load_deficit_pos = pulp.LpVariable.dicts("P_load_deficit_pos_kw", T, lowBound=0)
+        load_deficit_neg = pulp.LpVariable.dicts("P_load_deficit_neg_kw", T, lowBound=0)
         for t in T:
             base_load = float(loads.base_load_kw[t]) if t < len(loads.base_load_kw) else 0.0
             extra_load = loads.load_contribs.get(t, 0.0)
@@ -597,9 +599,15 @@ class MILPBuilder:
             pv_export_total = pulp.lpSum(series[t] for series in pv_export_by_inv.values())
             batt_export_total = pulp.lpSum(series[t] for series in batt_export_by_inv.values())
             grid_charge_total = pulp.lpSum(series[t] for series in grid_charge_by_inv.values())
+            pv_kw_total = pulp.lpSum(
+                inv_vars.P_pv_kw[t]
+                for inv_vars in inverters.values()
+                if inv_vars.P_pv_kw is not None
+            )
+            load_total = base_load + extra_load
             # System split: all load met by grid, PV, or battery.
             problem += (
-                grid_load[t] + pv_load_total + batt_load_total == base_load + extra_load,
+                grid_load[t] + pv_load_total + batt_load_total == load_total,
                 f"load_split_t{t}",
             )
             # Grid import splits between serving load and charging the battery.
@@ -611,6 +619,17 @@ class MILPBuilder:
             problem += (
                 grid.P_export[t] == pv_export_total + batt_export_total,
                 f"grid_export_split_t{t}",
+            )
+            # Enforce PV-first load serving without binaries: prevents the physically
+            # infeasible pattern where PV is exported while the battery discharges to
+            # cover load. Battery-to-load is capped by the PV deficit (load - PV).
+            problem += (
+                load_total - pv_kw_total == load_deficit_pos[t] - load_deficit_neg[t],
+                f"load_deficit_balance_t{t}",
+            )
+            problem += (
+                batt_load_total <= load_deficit_pos[t],
+                f"batt_load_deficit_cap_t{t}",
             )
 
         return InverterBuild(
@@ -746,27 +765,6 @@ class MILPBuilder:
                 * horizon.dt_hours(t)
                 for t in horizon.T
             )
-            pv_export_series = inverters.pv_export_kw.get(inverter.id)
-            if pv_export_series is not None:
-                # PV export penalty targets the PV-export + battery-discharge-to-load pattern
-                # where PV is sent to the grid while the battery covers household load. Without
-                # this term, serving load with PV is "free" but has no explicit reward, while
-                # exporting PV earns revenue. If export=0.06 and bias=20%, export value=0.048/kWh
-                # beats a 0.01/kWh battery discharge-to-load cost, so the model prefers exporting
-                # PV and discharging the battery to serve load.
-                pv_export_penalty_eps = 1e-4
-                objective += pulp.lpSum(
-                    max(
-                        0.0,
-                        min(
-                            export_price_eff[t],
-                            export_price_eff[t] - discharge_load_cost + pv_export_penalty_eps,
-                        ),
-                    )
-                    * pv_export_series[t]
-                    * horizon.dt_hours(t)
-                    for t in horizon.T
-                )
         terminal_penalty = self._terminal_soc_penalty_per_kwh(horizon, price_import)
         if terminal_penalty > 0:
             for inverter in self._plant.inverters:

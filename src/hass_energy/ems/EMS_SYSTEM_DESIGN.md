@@ -304,6 +304,10 @@ Per inverter battery:
   - max bound uses `max_soc_pct`.
 - Export reserve:
   - Grid export is blocked unless SoC stays above `reserve_soc_pct` for the slot.
+- PV priority:
+  - Battery discharge to load is capped by the PV deficit (`load - PV`) using
+    a positive/negative split, preventing PV-export + battery-to-load infeasible
+    patterns while still allowing PV export when PV exceeds load.
 - SoC dynamics:
   - `E[t+1] = E[t] + (P_charge * eta - P_discharge / eta) * dt`
   - `eta = storage_efficiency_pct / 100`.
