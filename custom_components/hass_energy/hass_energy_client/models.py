@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-PlanRunStatus = Literal["queued", "running", "completed", "failed"]
+PlanRunStatus = Literal["queued", "running", "completed", "failed", "cancelled"]
 PlanStatus = Literal[
     "Optimal",
     "Infeasible",
@@ -49,6 +49,7 @@ class GridTimestepPlan(BaseModel):
 class InverterTimestepPlan(BaseModel):
     name: str
     pv_kw: float | None
+    pv_curtail_kw: float | None = None
     ac_net_kw: float
     battery_charge_kw: float | None
     battery_discharge_kw: float | None
@@ -132,9 +133,8 @@ class PlanAwaitResponse(BaseModel):
 
 
 class TerminalSocConfig(BaseModel):
-    mode: Literal["hard", "soft", "adaptive"] = "adaptive"
-    short_horizon_minutes: int | None = 1440
-    penalty_per_kwh: float | None = None
+    mode: Literal["hard", "adaptive"] = "adaptive"
+    penalty_per_kwh: float | Literal["mean", "median"] | None = None
 
     model_config = ConfigDict(extra="forbid")
 
