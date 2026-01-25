@@ -275,8 +275,8 @@ def _build_solver(*, msg: bool, deterministic: bool) -> pulp.PULP_CBC_CMD:
     if not deterministic:
         return pulp.PULP_CBC_CMD(msg=msg)
     options = [
-        "randomSeed 0",
-        "randomCbcSeed 0",
+        "randomSeed 1",
+        "randomCbcSeed 1",
     ]
     return pulp.PULP_CBC_CMD(
         msg=msg,
