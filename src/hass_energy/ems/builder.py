@@ -62,8 +62,8 @@ class InverterVars:
     E_batt_kwh: dict[int, pulp.LpVariable] | None
     # Terminal SoC shortfall slack (kWh) when softening the terminal constraint.
     E_batt_terminal_shortfall_kwh: pulp.LpVariable | None
-    # Curtailment binary variables per timestep t (None if curtailment disabled).
-    Curtail_inv: dict[int, pulp.LpVariable] | None
+    # Curtailed power (kW) per timestep t (None if curtailment disabled).
+    P_curtail_kw: dict[int, pulp.LpVariable] | None
 
 
 @dataclass(slots=True)
@@ -240,25 +240,6 @@ class MILPBuilder:
         )
         import_allowed = self._resolve_import_allowed(horizon)
 
-        for t in T:
-            # Prevent simultaneous grid import/export by selecting an import or export mode.
-            problem += (
-                P_import[t] <= cfg.max_import_kw * grid_import_on[t],
-                f"grid_import_exclusive_t{t}",
-            )
-            problem += (
-                P_export[t] <= cfg.max_export_kw * (1 - grid_import_on[t]),
-                f"grid_export_exclusive_t{t}",
-            )
-            # Enforce the per-slot import cap. When imports are forbidden, the RHS becomes 0,
-            # so only the violation variable can satisfy the constraint. It is heavily penalized
-            # in the objective, keeping the model feasible while discouraging forbidden imports.
-            problem += (
-                P_import[t]
-                <= cfg.max_import_kw * float(import_allowed[t]) + P_import_violation_kw[t],
-                f"grid_import_forbidden_or_violation_t{t}",
-            )
-
         realtime_import = self._resolver.resolve(self._plant.grid.realtime_price_import)
         realtime_export = self._resolver.resolve(self._plant.grid.realtime_price_export)
         price_import = self._price_aligner.align(
@@ -271,6 +252,27 @@ class MILPBuilder:
             forecasts.grid_price_export,
             first_slot_override=realtime_export,
         )
+
+        for t in T:
+            # Prevent simultaneous grid import/export by selecting an import or export mode.
+            problem += (
+                P_import[t] <= cfg.max_import_kw * grid_import_on[t],
+                f"grid_import_exclusive_t{t}",
+            )
+            # Block export when importing OR when price is negative (exporting would cost money).
+            export_allowed = 0 if float(price_export[t]) < _NEGATIVE_EXPORT_PRICE_THRESHOLD else 1
+            problem += (
+                P_export[t] <= cfg.max_export_kw * (1 - grid_import_on[t]) * export_allowed,
+                f"grid_export_limit_t{t}",
+            )
+            # Enforce the per-slot import cap. When imports are forbidden, the RHS becomes 0,
+            # so only the violation variable can satisfy the constraint. It is heavily penalized
+            # in the objective, keeping the model feasible while discouraging forbidden imports.
+            problem += (
+                P_import[t]
+                <= cfg.max_import_kw * float(import_allowed[t]) + P_import_violation_kw[t],
+                f"grid_import_forbidden_or_violation_t{t}",
+            )
 
         return GridBuild(
             P_import=P_import,
@@ -290,7 +292,6 @@ class MILPBuilder:
         forecasts: ResolvedForecasts,
     ) -> InverterBuild:
         T = horizon.T
-        price_export = grid.price_export
         inverters: dict[str, InverterVars] = {}
         # Per-inverter flow splits used to assemble system load/import/export balances.
         pv_load_by_inv: dict[str, dict[int, pulp.LpVariable]] = {}
@@ -331,7 +332,7 @@ class MILPBuilder:
             ]
 
             curtailment = inverter.curtailment
-            curtail_vars: dict[int, pulp.LpVariable] | None = None
+            curtail_kw: dict[int, pulp.LpVariable] | None = None
             if curtailment is None:
                 for t in T:
                     problem += (
@@ -339,46 +340,46 @@ class MILPBuilder:
                         pv_kw[t] == pv_available_kw_series[t],
                         f"inverter_pv_total_{inv_id}_t{t}",
                     )
-            else:
-                curtail = pulp.LpVariable.dicts(
+            elif curtailment == "binary":
+                curtail_binary = pulp.LpVariable.dicts(
                     f"Curtail_inv_{inv_id}",
                     T,
                     lowBound=0,
                     upBound=1,
                     cat="Binary",
                 )
-                curtail_vars = curtail
+                curtail_kw = pulp.LpVariable.dicts(
+                    f"P_curtail_{inv_id}_kw",
+                    T,
+                    lowBound=0,
+                )
                 for t in T:
-                    if curtailment == "binary":
-                        problem += (
-                            # Binary curtailment: either full PV or fully off.
-                            pv_kw[t] == pv_available_kw_series[t] * (1 - curtail[t]),
-                            f"inverter_pv_binary_{inv_id}_t{t}",
-                        )
-                    else:
-                        problem += (
-                            # Load-aware: output cannot exceed available PV.
-                            pv_kw[t] <= pv_available_kw_series[t],
-                            f"inverter_pv_max_{inv_id}_t{t}",
-                        )
-                        problem += (
-                            # Load-aware: curtail flag reduces minimum output (allows export block).
-                            pv_kw[t] >= pv_available_kw_series[t] * (1 - curtail[t]),
-                            f"inverter_pv_min_{inv_id}_t{t}",
-                        )
-                        problem += (
-                            # Load-aware: when curtailing, block grid export.
-                            grid.P_export[t] <= self._plant.grid.max_export_kw * (1 - curtail[t]),
-                            f"inverter_export_block_{inv_id}_t{t}",
-                        )
-                        if float(price_export[t]) < _NEGATIVE_EXPORT_PRICE_THRESHOLD:
-                            # Negative export prices always activate load-following curtailment.
-                            # We want PV to drop to match load and prevent any export,
-                            # even when PV is already below load (which keeps curtail off).
-                            problem += (
-                                curtail[t] == 1,
-                                f"inverter_curtail_neg_export_{inv_id}_t{t}",
-                            )
+                    problem += (
+                        # Binary curtailment: either full PV or fully off.
+                        pv_kw[t] == pv_available_kw_series[t] * (1 - curtail_binary[t]),
+                        f"inverter_pv_binary_{inv_id}_t{t}",
+                    )
+                    problem += (
+                        # Curtailed power is the unused PV.
+                        curtail_kw[t] == pv_available_kw_series[t] - pv_kw[t],
+                        f"inverter_curtail_power_{inv_id}_t{t}",
+                    )
+            else:
+                # Load-aware: PV can continuously vary from 0 to available.
+                curtail_kw = pulp.LpVariable.dicts(
+                    f"P_curtail_{inv_id}_kw",
+                    T,
+                    lowBound=0,
+                )
+                for t in T:
+                    problem += (
+                        pv_kw[t] <= pv_available_kw_series[t],
+                        f"inverter_pv_max_{inv_id}_t{t}",
+                    )
+                    problem += (
+                        curtail_kw[t] == pv_available_kw_series[t] - pv_kw[t],
+                        f"inverter_curtail_power_{inv_id}_t{t}",
+                    )
 
             battery = inverter.battery
             if battery is None:
@@ -407,7 +408,7 @@ class MILPBuilder:
                     P_batt_discharge_kw=None,
                     E_batt_kwh=None,
                     E_batt_terminal_shortfall_kwh=None,
-                    Curtail_inv=curtail_vars,
+                    P_curtail_kw=curtail_kw,
                 )
                 continue
 
@@ -575,7 +576,7 @@ class MILPBuilder:
                 P_batt_discharge_kw=P_batt_discharge,
                 E_batt_kwh=E_batt_kwh,
                 E_batt_terminal_shortfall_kwh=terminal_shortfall_kwh,
-                Curtail_inv=curtail_vars,
+                P_curtail_kw=curtail_kw,
             )
 
         # Portion of grid import serving load (separate from battery charging).
@@ -757,17 +758,23 @@ class MILPBuilder:
                     continue
                 objective += terminal_penalty * inv_vars.E_batt_terminal_shortfall_kwh
 
-        # Tiny tie-breaker to keep binary curtailment decisions stable across inverters.
+        # Curtailment energy cost: penalize wasted PV to prefer battery charging.
+        # This cost should exceed charge_cost_per_kwh so charging is preferred.
+        # Includes a tiny tie-breaker (indexed by inverter order) for stable decisions.
         w_curtail_tie = 1e-6
         total = len(self._plant.inverters)
         for idx, inverter in enumerate(self._plant.inverters):
             inv_vars = inverter_by_id.get(inverter.id)
-            if inv_vars is None or inv_vars.Curtail_inv is None:
+            if inv_vars is None or inv_vars.P_curtail_kw is None:
                 continue
-            series = inv_vars.Curtail_inv
-            weight = w_curtail_tie * (total - idx)
-            # Consistent ordering bias avoids multiple equivalent curtailment choices.
-            objective += pulp.lpSum(weight * series[t] * horizon.dt_hours(t) for t in horizon.T)
+            curtail_cost = inverter.curtailment_cost_per_kwh
+            tie_weight = w_curtail_tie * (total - idx)
+            effective_cost = max(curtail_cost, 0) + tie_weight
+            curtail_series = inv_vars.P_curtail_kw
+            objective += pulp.lpSum(
+                effective_cost * curtail_series[t] * horizon.dt_hours(t)
+                for t in horizon.T
+            )
         # EV terminal SoC incentives (piecewise per-kWh rewards).
         # Apply the same bias as export revenue so incentives compete fairly with export tariffs.
         # e.g., an 8c incentive should tie with an 8c export tariff after both are biased.
