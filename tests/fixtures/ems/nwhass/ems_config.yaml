@@ -77,7 +77,7 @@ plant:
       capacity_kwh: 41.9
       storage_efficiency_pct: 95.0
       charge_grid_cost_per_kwh: 0.02
-      charge_pv_cost_per_kwh: -0.01 # Incentivize charging from PV to break tie with curtailment
+      charge_pv_cost_per_kwh: -0.02 # Incentivize charging from PV to break tie with curtailment
       discharge_grid_cost_per_kwh: 0.08 # Disincentivize discharge to grid when profit doesn't exceed 8c/kWh
       discharge_load_cost_per_kwh: 0.00
       min_soc_pct: 11.0
