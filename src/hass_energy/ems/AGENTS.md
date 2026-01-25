@@ -41,7 +41,7 @@ time-stepped plan for plotting/inspection. The core code lives in:
 - Controlled EV loads can assume future connectivity using `connect_grace_minutes` plus optional `can_connect` and `allowed_connect_times` constraints.
 - Controlled EV loads apply a small internal ramp penalty to discourage large per-slot changes in charge power.
 - Controlled EV loads include a soft anchor penalty that keeps slot 0 close to realtime charge power; when realtime power is near zero (below 0.1 kW), the anchor penalty is skipped so charging can start immediately.
-- Load-aware curtailment is forced on whenever export price is negative so PV can follow load and export is blocked for those slots.
+- Negative export prices block grid export via a hard constraint; curtailment activates only when needed to satisfy this export limit.
 
 ### MPC anchoring behavior
 Slot 0 is used as the MPC decision window, but some realtime inputs anchor the
@@ -52,7 +52,7 @@ model at the start of the horizon:
 - EV charge power has a **soft** slot-0 anchor (penalty on deviation from
   realtime power). When realtime power is near zero (< 0.1 kW), the anchor
   penalty is skipped so slot 0 can start charging without bias.
-- Load-aware curtailment is forced on when export prices go negative, making PV output flexible and blocking export in those slots.
+- Grid export is hard-blocked when export prices are negative; curtailment is left as a solver decision.
 - Battery/EV SoC initialize `E_*[0]` using realtime sensors, and EV
   connectivity gates charging. These are feasibility anchors across the horizon.
 - Realtime grid power is **not** used by the EMS builder.
@@ -119,6 +119,10 @@ model at the start of the horizon:
   - Incentives are scaled by `(1 - self_consumption_bias)` so they compete fairly with export tariffs (an 8c incentive ties with an 8c export tariff).
 - Early-flow tie-breaker:
   - Small time-decay bonus on total grid flow `(P_import + P_export)` favoring earlier slots.
+- Curtailment energy cost:
+  - Penalizes wasted PV power (difference between available and used).
+  - Configurable per inverter via `plant.inverters[].curtailment_cost_per_kwh` (default 0.0).
+  - Should exceed battery `charge_cost_per_kwh` so charging is preferred over curtailing.
 
 ### Outputs & plotting
 `planner.py` emits per-slot:
