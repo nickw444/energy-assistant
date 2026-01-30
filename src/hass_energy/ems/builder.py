@@ -648,27 +648,20 @@ class MILPBuilder:
         inverter_by_id = inverters.inverters
         ev_by_id = loads.evs
 
-        # Self-consumption bias: add premium to import, discount export.
-        self_consumption_bias = self._plant.load.self_consumption_bias_pct / 100.0
-
         # Price-aware objective: minimize net cost (import cost minus export revenue).
         # When export price is exactly zero, add a tiny bonus to prefer exporting over curtailment.
-        # Self-consumption bias makes grid interaction slightly less attractive than local use.
         export_bonus = 1e-4
         # Effective export price series used consistently for revenue and penalties.
         export_price_eff = [
             (
                 export_bonus
                 if abs(float(price_export[t])) <= 1e-9
-                else float(price_export[t]) * (1.0 - self_consumption_bias)
+                else float(price_export[t])
             )
             for t in horizon.T
         ]
         objective: pulp.LpAffineExpression = pulp.lpSum(
-            (
-                P_import[t] * float(price_import[t]) * (1.0 + self_consumption_bias)
-                - P_export[t] * export_price_eff[t]
-            )
+            (P_import[t] * float(price_import[t]) - P_export[t] * export_price_eff[t])
             * horizon.dt_hours(t)
             for t in horizon.T
         )
@@ -776,14 +769,11 @@ class MILPBuilder:
                 for t in horizon.T
             )
         # EV terminal SoC incentives (piecewise per-kWh rewards).
-        # Apply the same bias as export revenue so incentives compete fairly with export tariffs.
-        # e.g., an 8c incentive should tie with an 8c export tariff after both are biased.
         for segments in loads.ev_incentive_segments.values():
             for segment_var, incentive in segments:
                 if abs(float(incentive)) <= 1e-12:
                     continue
-                biased_incentive = float(incentive) * (1.0 - self_consumption_bias)
-                objective += -biased_incentive * segment_var
+                objective += -float(incentive) * segment_var
         # EV ramp penalties (discourage large per-slot changes in charge power).
         ramp_penalty = _EV_RAMP_PENALTY_COST
         for load in self._loads:
