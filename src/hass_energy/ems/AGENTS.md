@@ -97,7 +97,7 @@ model at the start of the horizon:
 ### Objective (current terms)
 - Energy cost:
   - `import_cost - export_revenue` (with a tiny export bonus when price = 0).
-  - Self-consumption bias (`plant.load.self_consumption_bias_pct`) adds a premium to import prices and discount to export revenue, favoring local consumption.
+  - Grid price bias (`plant.grid.grid_price_bias_pct`) adds a premium to import prices and discount to export revenue, making grid interaction less attractive.
 - Forbidden import violations:
   - Large penalty on `P_grid_import_violation_kw`.
 - Battery wear:
@@ -113,7 +113,7 @@ model at the start of the horizon:
     the horizon ratio vs `terminal_soc.short_horizon_minutes`.
 - EV SoC incentives:
   - Piecewise per-kWh rewards for reaching terminal SoC targets.
-  - Incentives are scaled by `(1 - self_consumption_bias)` so they compete fairly with export tariffs (an 8c incentive ties with an 8c export tariff).
+  - Incentives are scaled by `(1 - grid_price_bias)` so they compete fairly with export tariffs (an 8c incentive ties with an 8c export tariff).
 - Early-flow tie-breaker:
   - Small time-decay bonus on total grid flow `(P_import + P_export)` favoring earlier slots.
 - Terminal SoC value:

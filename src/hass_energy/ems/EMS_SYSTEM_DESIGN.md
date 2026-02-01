@@ -96,6 +96,7 @@ Fields used by EMS:
 - `max_import_kw`, `max_export_kw`
 - `realtime_price_import`, `realtime_price_export`
 - `price_import_forecast`, `price_export_forecast`
+- `grid_price_bias_pct` (premium on import, discount on export)
 - `import_forbidden_periods` (list of `TimeWindow`)
 
 Note: `realtime_grid_power` exists in config but is **not used** by the EMS solver.
