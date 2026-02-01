@@ -775,6 +775,26 @@ class MILPBuilder:
                     continue
                 objective += terminal_penalty * inv_vars.E_batt_terminal_shortfall_kwh
 
+        # Terminal SoC value: reward stored energy at horizon end to incentivize
+        # higher battery charging when export prices are low.
+        for inverter in self._plant.inverters:
+            battery = inverter.battery
+            if battery is None:
+                continue
+            soc_value = battery.soc_value_per_kwh
+            if soc_value is None or soc_value <= 0:
+                continue
+            inv_vars = inverter_by_id.get(inverter.id)
+            if inv_vars is None:
+                continue
+            E_batt = inv_vars.E_batt_kwh
+            if E_batt is None:
+                continue
+            # Terminal SoC is at index len(horizon.T) (after the last slot).
+            terminal_idx = len(horizon.T)
+            if terminal_idx in E_batt:
+                objective += -soc_value * E_batt[terminal_idx]
+
         # Curtailment energy cost: penalize wasted PV to prefer battery charging.
         # This cost should exceed charge_pv_cost_per_kwh so charging is preferred.
         # Includes a tiny tie-breaker (indexed by inverter order) for stable decisions.

@@ -65,6 +65,11 @@ class BatteryConfig(BaseModel):
     charge_pv_cost_per_kwh: float = Field(default=0.0)
     discharge_grid_cost_per_kwh: float = Field(default=0.0)
     discharge_load_cost_per_kwh: float = Field(default=0.0)
+    # Value assigned to each kWh of stored energy at horizon end.
+    # When set, the objective includes a reward for terminal SoC, incentivizing
+    # higher battery charging when export prices are low.
+    # Default: None (disabled); typical value: 0.08-0.15 $/kWh.
+    soc_value_per_kwh: float | None = Field(default=None, ge=0)
     min_soc_pct: float = Field(ge=0, le=100)
     max_soc_pct: float = Field(ge=0, le=100)
     reserve_soc_pct: float = Field(ge=0, le=100)

@@ -117,6 +117,10 @@ model at the start of the horizon:
   - Incentives are scaled by `(1 - self_consumption_bias)` so they compete fairly with export tariffs (an 8c incentive ties with an 8c export tariff).
 - Early-flow tie-breaker:
   - Small time-decay bonus on total grid flow `(P_import + P_export)` favoring earlier slots.
+- Terminal SoC value:
+  - Per-kWh reward for stored battery energy at horizon end.
+  - Configurable via `plant.inverters[].battery.soc_value_per_kwh` (default: disabled).
+  - Incentivizes higher battery charging when export prices are low but positive.
 - Curtailment energy cost:
   - Penalizes wasted PV power (difference between available and used).
   - Configurable per inverter via `plant.inverters[].curtailment_cost_per_kwh` (default 0.0).
