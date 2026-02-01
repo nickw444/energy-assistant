@@ -12,6 +12,7 @@ ems:
   min_horizon_minutes: 720
   high_res_timestep_minutes: 5
   high_res_horizon_minutes: 120
+  max_profit_sacrifice_per_day: 0.5
   terminal_soc:
     mode: adaptive
     penalty_per_kwh: median
@@ -20,6 +21,7 @@ plant:
   grid:
     max_import_kw: 13.0
     max_export_kw: 13.0
+    allow_negative_export: false
     realtime_grid_power:
       type: home_assistant
       entity: sensor.hass_energy_grid_power_smoothed_1m
@@ -75,9 +77,9 @@ plant:
     battery:
       capacity_kwh: 41.9
       storage_efficiency_pct: 95.0
-      charge_cost_per_kwh: 0.02
-      discharge_cost_per_kwh: 0.02
-      export_penalty_per_kwh: 0.06
+      wear:
+        mode: symmetric
+        cost_per_kwh: 0.02
       min_soc_pct: 11.0
       max_soc_pct: 100.0
       reserve_soc_pct: 30.0

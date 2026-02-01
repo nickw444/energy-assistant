@@ -39,6 +39,7 @@ class EmsConfig(BaseModel):
     high_res_timestep_minutes: int | None = Field(default=None, ge=1, le=1440)
     high_res_horizon_minutes: int | None = Field(default=None, ge=1, le=525600)
     terminal_soc: TerminalSocConfig = Field(default_factory=TerminalSocConfig)
+    max_profit_sacrifice_per_day: float = Field(ge=0)
 
     model_config = ConfigDict(extra="forbid")
 

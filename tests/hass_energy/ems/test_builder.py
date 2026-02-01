@@ -12,6 +12,7 @@ from hass_energy.lib.source_resolver.hass_source import (
     HomeAssistantAmberElectricForecastSource,
     HomeAssistantCurrencyEntitySource,
     HomeAssistantHistoricalAverageForecastSource,
+    HomeAssistantPercentageEntitySource,
     HomeAssistantPowerKwEntitySource,
     HomeAssistantSolcastForecastSource,
 )
@@ -20,6 +21,8 @@ from hass_energy.lib.source_resolver.resolver import ValueResolver
 from hass_energy.lib.source_resolver.sources import EntitySource
 from hass_energy.models.config import AppConfig, EmsConfig, ServerConfig
 from hass_energy.models.plant import (
+    BatteryConfig,
+    BatteryWearSymmetric,
     GridConfig,
     InverterConfig,
     PlantConfig,
@@ -69,7 +72,11 @@ class DummyResolver(ValueResolver):
             return cast(R, self._load_forecasts[source.entity])
         if isinstance(
             source,
-            (HomeAssistantPowerKwEntitySource, HomeAssistantCurrencyEntitySource),
+            (
+                HomeAssistantPowerKwEntitySource,
+                HomeAssistantCurrencyEntitySource,
+                HomeAssistantPercentageEntitySource,
+            ),
         ):
             return cast(R, self._realtime_values[source.entity])
         raise TypeError(f"Unhandled source type: {type(source).__name__}")
@@ -83,12 +90,15 @@ def _make_config(
     min_horizon_minutes: int | None = None,
     high_res_timestep_minutes: int | None = None,
     high_res_horizon_minutes: int | None = None,
+    allow_negative_export: bool = False,
+    max_profit_sacrifice_per_day: float = 0.0,
 ) -> AppConfig:
     if min_horizon_minutes is None:
         min_horizon_minutes = timestep_minutes * 2
     grid = GridConfig(
         max_import_kw=10.0,
         max_export_kw=10.0,
+        allow_negative_export=allow_negative_export,
         realtime_grid_power=HomeAssistantPowerKwEntitySource(type="home_assistant", entity="grid"),
         realtime_price_import=HomeAssistantCurrencyEntitySource(
             type="home_assistant", entity="price_import"
@@ -144,6 +154,7 @@ def _make_config(
         min_horizon_minutes=min_horizon_minutes,
         high_res_timestep_minutes=high_res_timestep_minutes,
         high_res_horizon_minutes=high_res_horizon_minutes,
+        max_profit_sacrifice_per_day=max_profit_sacrifice_per_day,
     )
     return AppConfig(
         server=ServerConfig(),
@@ -492,6 +503,146 @@ def test_load_aware_curtailment_blocks_export() -> None:
     assert abs(step.grid.export_kw) < 1e-6
     assert abs(step.grid.import_kw) < 1e-6
 
+
+def test_negative_export_allowed_exports_when_forced() -> None:
+    now = datetime(2025, 12, 27, 9, 2, tzinfo=UTC)
+    inverter = InverterConfig(
+        id="forced",
+        name="Forced",
+        peak_power_kw=5.0,
+        curtailment=None,
+        pv=PvConfig(
+            realtime_power=None,
+            forecast=HomeAssistantSolcastForecastSource(
+                type="home_assistant",
+                platform="solcast",
+                entities=["pv_forecast"],
+            ),
+        ),
+        battery=None,
+    )
+    config = _make_config(
+        inverters=[inverter],
+        min_horizon_minutes=5,
+        allow_negative_export=True,
+    )
+    slot0 = now.replace(minute=0, second=0, microsecond=0)
+    slot_end = slot0 + timedelta(minutes=config.ems.timestep_minutes)
+    pv_intervals = [PowerForecastInterval(start=slot0, end=slot_end, value=2.0)]
+    price_import = [PriceForecastInterval(start=slot0, end=slot_end, value=0.2)]
+    price_export = [PriceForecastInterval(start=slot0, end=slot_end, value=-0.1)]
+    resolver = DummyResolver(
+        price_forecasts={
+            "price_import_forecast": price_import,
+            "price_export_forecast": price_export,
+        },
+        pv_forecasts={"pv_forecast": pv_intervals},
+        load_forecasts={"load_forecast": _load_intervals(now, config, value=0.0)},
+        realtime_values={
+            "load": 0.0,
+            "price_import": 0.2,
+            "price_export": -0.1,
+            "grid": 0.0,
+        },
+    )
+
+    plan = EmsMilpPlanner(config, resolver=resolver).generate_ems_plan(now=now)
+    step = plan.timesteps[0]
+    assert abs(step.grid.export_kw - 2.0) < 1e-6
+    assert abs(step.grid.import_kw) < 1e-6
+
+
+def test_preference_budget_scales_wear_and_curtailment() -> None:
+    now = datetime(2025, 12, 27, 8, 2, tzinfo=UTC)
+    inverter = InverterConfig(
+        id="inv",
+        name="Inv",
+        peak_power_kw=3.0,
+        curtailment="load-aware",
+        curtailment_cost_per_kwh=0.14,
+        pv=PvConfig(
+            realtime_power=None,
+            forecast=HomeAssistantSolcastForecastSource(
+                type="home_assistant",
+                platform="solcast",
+                entities=["pv_forecast"],
+            ),
+        ),
+        battery=BatteryConfig(
+            capacity_kwh=10.0,
+            storage_efficiency_pct=95.0,
+            wear=BatteryWearSymmetric(mode="symmetric", cost_per_kwh=0.7),
+            min_soc_pct=10.0,
+            max_soc_pct=100.0,
+            reserve_soc_pct=10.0,
+            max_charge_kw=2.0,
+            max_discharge_kw=2.0,
+            state_of_charge_pct=HomeAssistantPercentageEntitySource(
+                type="home_assistant",
+                entity="battery_soc",
+            ),
+            realtime_power=HomeAssistantPowerKwEntitySource(
+                type="home_assistant",
+                entity="battery_power",
+            ),
+        ),
+    )
+    config = _make_config(
+        inverters=[inverter],
+        timestep_minutes=60,
+        min_horizon_minutes=60,
+        max_profit_sacrifice_per_day=24.0,
+    )
+    slot0 = now.replace(minute=0, second=0, microsecond=0)
+    slot_end = slot0 + timedelta(minutes=config.ems.timestep_minutes)
+    pv_intervals = [PowerForecastInterval(start=slot0, end=slot_end, value=2.0)]
+    price_intervals = [PriceForecastInterval(start=slot0, end=slot_end, value=0.0)]
+    resolver = DummyResolver(
+        price_forecasts={
+            "price_import_forecast": price_intervals,
+            "price_export_forecast": price_intervals,
+        },
+        pv_forecasts={"pv_forecast": pv_intervals},
+        load_forecasts={"load_forecast": _load_intervals(now, config, value=0.0)},
+        realtime_values={
+            "load": 0.0,
+            "price_import": 0.0,
+            "price_export": 0.0,
+            "grid": 0.0,
+            "battery_soc": 50.0,
+            "battery_power": 0.0,
+        },
+    )
+
+    # Build the model to inspect objective coefficients.
+    from hass_energy.ems.builder import MILPBuilder
+    from hass_energy.ems.horizon import build_horizon
+
+    builder_impl = MILPBuilder(
+        plant=config.plant,
+        loads=config.loads,
+        resolver=resolver,
+        ems_config=config.ems,
+    )
+    forecasts = builder_impl.resolve_forecasts(now=now, interval_minutes=60)
+    horizon = build_horizon(
+        now=now,
+        timestep_minutes=60,
+        num_intervals=forecasts.min_coverage_intervals,
+    )
+    model = builder_impl.build(horizon=horizon, forecasts=forecasts)
+    inv_vars = model.inverters.inverters["inv"]
+    objective = model.problem.objective
+    charge_var = inv_vars.P_batt_charge_kw[0]
+    discharge_var = inv_vars.P_batt_discharge_kw[0]
+    curtail_var = inv_vars.P_curtail_kw[0]
+
+    expected_wear_cost = 0.1
+    expected_batt_coeff = expected_wear_cost + 1e-6
+    assert math.isclose(objective.get(charge_var), expected_batt_coeff, rel_tol=1e-6)
+    assert math.isclose(objective.get(discharge_var), expected_batt_coeff, rel_tol=1e-6)
+    expected_curtail_coeff = 0.02 + 1e-6
+    assert math.isclose(objective.get(curtail_var), expected_curtail_coeff, rel_tol=1e-6)
 
 def test_horizon_uses_shortest_forecast() -> None:
     now = datetime(2025, 12, 27, 10, 2, tzinfo=UTC)
