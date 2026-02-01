@@ -222,18 +222,7 @@
       "start": "2026-01-18T04:05:00+11:00"
     }
   ],
-  "evs": {
-    "tessie": {
-      "charge_kwh": 0.0,
-      "connected_minutes": 0.0,
-      "soc_kwh_end": 45.24,
-      "soc_kwh_max": 45.24,
-      "soc_kwh_min": 45.24,
-      "soc_pct_end": 58.0,
-      "soc_pct_max": 58.0,
-      "soc_pct_min": 58.0
-    }
-  },
+  "evs": {},
   "inverters": {
     "primary": {
       "ac_net_kwh": 13.35,
@@ -255,7 +244,7 @@
     "generated_at": "2026-01-17T01:05:25.117219+00:00",
     "horizon_end": "2026-01-18T05:00:00+11:00",
     "horizon_start": "2026-01-17T12:05:00+11:00",
-    "objective_value": -4.614,
+    "objective_value": 0.253,
     "status": "Optimal",
     "timestep_minutes": {
       "avg": 17.5,
