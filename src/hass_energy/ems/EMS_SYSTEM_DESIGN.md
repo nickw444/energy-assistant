@@ -96,6 +96,7 @@ Fields used by EMS:
 - `max_import_kw`, `max_export_kw`
 - `realtime_price_import`, `realtime_price_export`
 - `price_import_forecast`, `price_export_forecast`
+- `import_premium_per_kwh`, `export_premium_per_kwh`
 - `import_forbidden_periods` (list of `TimeWindow`)
 
 Note: `realtime_grid_power` exists in config but is **not used** by the EMS solver.
@@ -128,7 +129,8 @@ Fields:
 
 - `capacity_kwh`
 - `storage_efficiency_pct`
-- `charge_cost_per_kwh`, `discharge_cost_per_kwh`
+- `wear_cost_per_kwh`
+- `export_margin_per_kwh`
 - `min_soc_pct`, `max_soc_pct`, `reserve_soc_pct`
 - `max_charge_kw`, `max_discharge_kw` (optional)
 - `state_of_charge_pct` (realtime)
@@ -260,6 +262,9 @@ EV loads (per EV):
 - Import/export exclusivity via `Grid_import_on[t]`:
   - `P_grid_import[t] <= max_import * Grid_import_on[t]`
   - `P_grid_export[t] <= max_export * (1 - Grid_import_on[t])`
+- Export is additionally gated by real price:
+  - `P_grid_export[t] <= max_export * export_allowed[t]`
+  - `export_allowed[t] = price_export[t] >= 0`
 - Import forbidden periods:
   - `P_grid_import[t] <= max_import * import_allowed[t] + P_grid_import_violation[t]`
   - `P_grid_import_violation[t]` keeps feasibility and is heavily penalized.
@@ -353,18 +358,18 @@ include EV charge power.
 
 The objective is a sum of:
 
-1. **Energy cost** (per slot):
-   - `import_cost - export_revenue`.
-   - If export price is exactly zero, a tiny **export bonus** (1e-4) is used
-     to prefer export over curtailment.
+1. **Energy cost** (per slot), using effective prices:
+   - `import_cost - export_revenue`
+   - `eff_price_import = price_import + grid.import_premium_per_kwh`
+   - `eff_price_export = price_export - grid.export_premium_per_kwh`
 2. **Forbidden import penalty**:
    - Large penalty (`w_violation = 1e3`) on `P_grid_import_violation_kw`.
 3. **Early-flow tie-breaker**:
    - Tiny negative weight on `(P_import + P_export) / (t+1)` to bias flow earlier.
 4. **Battery wear cost**:
-   - `charge_cost_per_kwh * charge + discharge_cost_per_kwh * discharge`.
-5. **Battery export penalty** (optional):
-   - `export_penalty_per_kwh * battery_export` on battery-to-grid flow.
+   - `wear_cost_per_kwh * (charge + discharge)`.
+5. **Battery export margin** (optional):
+   - `export_margin_per_kwh * battery_export` on battery-to-grid flow.
 6. **Battery timing tie-breaker**:
    - Tiny time-weighted throughput penalty to stabilize dispatch ordering.
 7. **Curtailment tie-breaker**:
@@ -482,8 +487,8 @@ current EMS stack:
   AC net equation without inverter/DC efficiency losses.
 - **EV departure targets & switching penalties**: no explicit departure-time
   constraints or on/off switching penalty beyond the current soft ramp penalty.
-- **Improved curtailment behavior**: no explicit incentive to curtail when
-  export price is negative or zero beyond the small export bonus.
+- **Improved curtailment behavior**: there is no explicit curtailment incentive
+  beyond blocking export when real prices are negative.
 - **Output hierarchy**: plan output is a flat per-slot dict; no structured
   plant hierarchy in the plan payload.
 - **Cost reporting clarity**: incentives are included in the objective, and
