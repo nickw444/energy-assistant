@@ -635,25 +635,25 @@ class MILPBuilder:
         price_export = grid.price_export
         inverter_by_id = inverters.inverters
 
-        # Self-consumption bias: add premium to import, discount export.
-        self_consumption_bias = self._plant.load.self_consumption_bias_pct / 100.0
+        # Grid price bias: add premium to import, discount export.
+        grid_price_bias = self._plant.grid.grid_price_bias_pct / 100.0
 
         # Price-aware objective: minimize net cost (import cost minus export revenue).
         # When export price is exactly zero, add a tiny bonus to prefer exporting over curtailment.
-        # Self-consumption bias makes grid interaction slightly less attractive than local use.
+        # Grid price bias makes grid interaction slightly less attractive than local use.
         export_bonus = 1e-4
         # Effective export price series used consistently for revenue and penalties.
         export_price_eff = [
             (
                 export_bonus
                 if abs(float(price_export[t])) <= 1e-9
-                else float(price_export[t]) * (1.0 - self_consumption_bias)
+                else float(price_export[t]) * (1.0 - grid_price_bias)
             )
             for t in horizon.T
         ]
         objective: pulp.LpAffineExpression = pulp.lpSum(
             (
-                P_import[t] * float(price_import[t]) * (1.0 + self_consumption_bias)
+                P_import[t] * float(price_import[t]) * (1.0 + grid_price_bias)
                 - P_export[t] * export_price_eff[t]
             )
             * horizon.dt_hours(t)
@@ -742,7 +742,7 @@ class MILPBuilder:
             for segment_var, incentive in ev_vars.Ev_incentive_segments:
                 if abs(float(incentive)) <= 1e-12:
                     continue
-                biased_incentive = float(incentive) * (1.0 - self_consumption_bias)
+                biased_incentive = float(incentive) * (1.0 - grid_price_bias)
                 objective += -biased_incentive * segment_var
         # EV on/off switch penalty (per transition, not time-weighted).
         for load in self._loads:
