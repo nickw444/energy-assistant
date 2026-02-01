@@ -1,5 +1,8 @@
 # EMS MILP System Design (Implemented)
 
+> Note: Controlled EV load support is temporarily disabled in the EMS planner. EV-related
+> sections below are historical and should be treated as stale until EV modeling is reworked.
+
 This document describes the **current implementation** under `src/hass_energy/ems/`.
 It is intended to mirror the shipped code (builder, solver, horizon, forecast
 alignment, resolver inputs). Keep it in sync with `src/hass_energy/ems/AGENTS.md`.
@@ -9,7 +12,7 @@ alignment, resolver inputs). Keep it in sync with `src/hass_energy/ems/AGENTS.md
 ## 1. Scope and status
 
 The EMS package builds and solves a PuLP MILP that produces a **time-stepped plan**
-for grid import/export, PV utilization, battery usage, and controllable EV charging.
+for grid import/export, PV utilization, and battery usage.
 It does **not** currently apply control actions to devices; it only solves and
 emits a plan for inspection/plotting. The plan is used by:
 

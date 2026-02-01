@@ -12,6 +12,10 @@ time-stepped plan for plotting/inspection. The core code lives in:
 - `src/hass_energy/ems/forecast_alignment.py` (forecast alignment)
 - `src/hass_energy/ems/models.py` (typed plan output models; `EmsMilpPlanner.generate_ems_plan` returns `EmsPlanOutput`)
 
+Note: Controlled EV load support is temporarily disabled in the EMS planner.
+`ControlledEvLoad` entries are ignored during optimization and the plan output
+will include empty EV maps.
+
 ## EMS Design (Canonical)
 
 ### Data flow
@@ -38,9 +42,6 @@ time-stepped plan for plotting/inspection. The core code lives in:
   - `first_slot_override` replaces the first slot with a realtime value.
 - Plant load forecasts/realtime values should exclude controlled loads; controllable loads are added separately in the MILP.
 - Historical-average load forecasts support `forecast_horizon_hours` to repeat the daily profile beyond 24h.
-- Controlled EV loads can assume future connectivity using `connect_grace_minutes` plus optional `can_connect` and `allowed_connect_times` constraints.
-- Controlled EV loads apply a small internal ramp penalty to discourage large per-slot changes in charge power.
-- Controlled EV loads include a soft anchor penalty that keeps slot 0 close to realtime charge power; when realtime power is near zero (below 0.1 kW), the anchor penalty is skipped so charging can start immediately.
 - Negative export prices block grid export via a hard constraint; curtailment activates only when needed to satisfy this export limit.
 
 ### MPC anchoring behavior
@@ -49,12 +50,8 @@ model at the start of the horizon:
 - Realtime load, PV, and prices override slot 0 via `first_slot_override` when
   forecasts are available. This constrains exogenous inputs for slot 0 but does
   not directly set decision variables.
-- EV charge power has a **soft** slot-0 anchor (penalty on deviation from
-  realtime power). When realtime power is near zero (< 0.1 kW), the anchor
-  penalty is skipped so slot 0 can start charging without bias.
 - Grid export is hard-blocked when export prices are negative; curtailment is left as a solver decision.
-- Battery/EV SoC initialize `E_*[0]` using realtime sensors, and EV
-  connectivity gates charging. These are feasibility anchors across the horizon.
+- Battery SoC initializes `E_*[0]` using realtime sensors. These are feasibility anchors across the horizon.
 - Realtime grid power is **not** used by the EMS builder.
 
 ### Variables (key decision variables)
@@ -113,8 +110,6 @@ model at the start of the horizon:
   - Applied when the terminal constraint is softened; default penalty uses the average
     import price (unless `ems.terminal_soc.penalty_per_kwh` is set) and scales with
     the horizon ratio vs `terminal_soc.short_horizon_minutes`.
-- EV SoC incentives:
-  - Piecewise per-kWh rewards for reaching terminal SoC targets.
 - Early-flow tie-breaker:
   - Small time-decay bonus on total grid flow `(P_import + P_export)` favoring earlier slots.
 - Curtailment energy cost:
@@ -127,7 +122,6 @@ model at the start of the horizon:
 - `grid_import_kw`, `grid_export_kw`, `grid_kw`
 - `pv_kw`, `pv_inverters`, `curtail_inverters`
 - `battery_charge_kw`, `battery_discharge_kw`, `battery_soc_kwh`
-- `ev_charge_kw`, `ev_soc_kwh`
 - `inverter_ac_net_kw`
 - `price_import`, `price_export`, `segment_cost`, `cumulative_cost`
 
@@ -135,7 +129,7 @@ Top-level output:
 - `objective_value` (solver objective value; may be `None` if no value is available)
 
 Plotting (`src/hass_energy/plotting/plan.py`):
-- Main panel includes net grid, PV, net battery, inverter net AC, base load, and EV charge.
+- Main panel includes net grid, PV, net battery, inverter net AC, and base load.
 - Price and cost panels render with hover tooltips.
 - SoC panel displays percentages (0–100%+, with headroom if needed) for clarity.
 
@@ -171,7 +165,6 @@ Plotting (`src/hass_energy/plotting/plan.py`):
   `ems_plan.json` for each bundle. Set `EMS_SCENARIO=<fixture>/<scenario>` to target a specific scenario.
 
 ### Known gaps / future work
-- Controlled EV load modeling is now supported (charge-only with SoC incentives).
-- EV departure-time targets and on/off switching penalties are still deferred.
+- Controlled EV load modeling is disabled and will be revisited.
 - No smoothing/ramping constraints beyond current tie-breakers.
 - Inverter/DC efficiency modeling is intentionally simplified.

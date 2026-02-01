@@ -200,21 +200,6 @@ def _extract_plan(model: MILPModel, horizon: Horizon) -> tuple[EmsPlanStatus, li
             )
 
         ev_plans: dict[str, EvTimestepPlan] = {}
-        for key, ev in sorted(loads.evs.items()):
-            ev_series = ev.P_ev_charge_kw
-            ev_soc_series = ev.E_ev_kwh
-            connected = ev.connected
-            ev_soc_kwh = _value(ev_soc_series.get(t))
-            ev_soc_pct = None
-            if ev.capacity_kwh:
-                ev_soc_pct = (ev_soc_kwh / float(ev.capacity_kwh)) * 100.0
-            ev_plans[key] = EvTimestepPlan(
-                name=str(ev.name),
-                charge_kw=_value(ev_series.get(t)),
-                soc_kwh=ev_soc_kwh,
-                soc_pct=ev_soc_pct,
-                connected=connected,
-            )
 
         base_load_kw = float(loads.base_load_kw[t]) if t < len(loads.base_load_kw) else 0.0
         extra_load_kw = _value(loads.load_contribs.get(t))

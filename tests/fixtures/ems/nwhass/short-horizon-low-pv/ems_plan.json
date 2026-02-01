@@ -53,40 +53,40 @@
       "start": "2026-01-17T11:40:00+11:00"
     },
     {
-      "battery_charge_kwh": 1.113,
+      "battery_charge_kwh": 1.323,
       "battery_discharge_kwh": 0.0,
       "curtailment_minutes": 0.0,
       "end": "2026-01-17T13:40:00+11:00",
       "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.21,
+      "grid_export_kwh": 0.0,
       "grid_import_kwh": 0.0,
-      "grid_net_kwh": -0.21,
+      "grid_net_kwh": 0.0,
       "load_kwh": 0.857,
       "pv_kwh": 2.181,
       "start": "2026-01-17T12:40:00+11:00"
     },
     {
-      "battery_charge_kwh": 1.052,
+      "battery_charge_kwh": 1.459,
       "battery_discharge_kwh": 0.0,
       "curtailment_minutes": 0.0,
       "end": "2026-01-17T14:40:00+11:00",
       "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.67,
+      "grid_export_kwh": 0.263,
       "grid_import_kwh": 0.0,
-      "grid_net_kwh": -0.67,
+      "grid_net_kwh": -0.263,
       "load_kwh": 0.518,
       "pv_kwh": 2.239,
       "start": "2026-01-17T13:40:00+11:00"
     },
     {
-      "battery_charge_kwh": 0.618,
+      "battery_charge_kwh": 0.0,
       "battery_discharge_kwh": 0.0,
       "curtailment_minutes": 0.0,
       "end": "2026-01-17T15:40:00+11:00",
       "ev_charge_kwh": 0.0,
-      "grid_export_kwh": 0.671,
+      "grid_export_kwh": 1.289,
       "grid_import_kwh": 0.0,
-      "grid_net_kwh": -0.671,
+      "grid_net_kwh": -1.289,
       "load_kwh": 0.496,
       "pv_kwh": 1.785,
       "start": "2026-01-17T14:40:00+11:00"
@@ -274,18 +274,7 @@
       "start": "2026-01-18T04:40:00+11:00"
     }
   ],
-  "evs": {
-    "tessie": {
-      "charge_kwh": 0.0,
-      "connected_minutes": 1220.0,
-      "soc_kwh_end": 46.8,
-      "soc_kwh_max": 46.8,
-      "soc_kwh_min": 46.8,
-      "soc_pct_end": 60.0,
-      "soc_pct_max": 60.0,
-      "soc_pct_min": 60.0
-    }
-  },
+  "evs": {},
   "inverters": {
     "primary": {
       "ac_net_kwh": 18.727,
@@ -307,7 +296,7 @@
     "generated_at": "2026-01-16T21:44:46.448939+00:00",
     "horizon_end": "2026-01-18T05:00:00+11:00",
     "horizon_start": "2026-01-17T08:40:00+11:00",
-    "objective_value": -4.743,
+    "objective_value": 0.249,
     "status": "Optimal",
     "timestep_minutes": {
       "avg": 19.062,
@@ -343,7 +332,7 @@
     "load_base_kwh": 16.136,
     "load_total_kwh": 16.136,
     "pv_kwh": 16.798,
-    "segment_cost_total": -0.112,
-    "total_cost": -0.113
+    "segment_cost_total": -0.118,
+    "total_cost": -0.119
   }
 }
