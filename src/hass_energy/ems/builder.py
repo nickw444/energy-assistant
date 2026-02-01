@@ -22,7 +22,6 @@ from hass_energy.models.plant import PlantConfig, TimeWindow
 _EV_RAMP_PENALTY_COST = 1e-4
 _EV_ANCHOR_PENALTY_COST = 0.05
 _EV_ANCHOR_ACTIVE_THRESHOLD_KW = 0.1
-_NEGATIVE_EXPORT_PRICE_THRESHOLD = -1e-9
 _TERMINAL_SOC_REFERENCE_MINUTES = 1440.0
 
 logger = logging.getLogger(__name__)
@@ -255,10 +254,9 @@ class MILPBuilder:
                 P_import[t] <= cfg.max_import_kw * grid_import_on[t],
                 f"grid_import_exclusive_t{t}",
             )
-            # Block export when importing OR when price is negative (exporting would cost money).
-            export_allowed = 0 if float(price_export[t]) < _NEGATIVE_EXPORT_PRICE_THRESHOLD else 1
+            # Block export when importing; export price is handled by the objective.
             problem += (
-                P_export[t] <= cfg.max_export_kw * (1 - grid_import_on[t]) * export_allowed,
+                P_export[t] <= cfg.max_export_kw * (1 - grid_import_on[t]),
                 f"grid_export_limit_t{t}",
             )
             # Enforce the per-slot import cap. When imports are forbidden, the RHS becomes 0,
