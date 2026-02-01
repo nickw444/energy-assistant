@@ -146,6 +146,7 @@ Fields:
 - `connect_grace_minutes` (minutes before assuming EV can be connected)
 - `realtime_power`, `state_of_charge_pct`
 - `soc_incentives` (list of `{target_soc_pct, incentive}`)
+- `switch_penalty` (optional per-switch cost to discourage on/off cycling)
 
 `nonvariable_load` exists but is currently a placeholder (no constraints added).
 
@@ -252,8 +253,8 @@ EV loads (per EV):
 
 - `P_ev_charge_kw[ev][t]`
 - `E_ev_kwh[ev][t]` (SoC indexed 0..N)
-- `Ev_charge_ramp_kw[ev][t]` (absolute ramp magnitude)
-- `Ev_charge_anchor_kw[ev]` (absolute deviation from realtime power at t=0)
+- `Ev_charge_on[ev][t]` (binary when min power or switch penalty is enabled)
+- `Ev_charge_switch[ev][t]` (on/off transition indicator for switch penalty)
 - `Ev_*_incentive_*` (piecewise incentive segment variables)
 
 ### 7.2 Grid constraints
@@ -323,21 +324,22 @@ For `controlled_ev` loads:
   - If `min_power_kw > 0`, a binary `charge_on[t]` enforces either 0 or
     `[min_power_kw, max_power_kw]`.
   - If `min_power_kw == 0`, charging is fully continuous.
-- **Ramp penalty variables**:
-  - `Ev_charge_ramp_kw[t] >= |P_ev[t] - P_ev[t-1]|` for `t > 0`.
-- **Soft realtime anchor**:
-  - `Ev_charge_anchor_kw >= |P_ev[0] - realtime_power|`.
+- **Switch penalty (optional)**:
+  - When `switch_penalty > 0`, `charge_on[t]` is enabled even if `min_power_kw == 0`.
+  - `Ev_charge_switch[t] >= |charge_on[t] - charge_on[t-1]|` for `t > 0`.
+  - `Ev_charge_switch[0]` compares `charge_on[0]` to the realtime charger state
+    to avoid a t-1 decision slot.
 - **SoC dynamics** (charge-only):
   - `E_ev[t+1] = E_ev[t] + P_ev[t] * dt`.
 
 ### 7.7 EV SoC incentives
 
-The EV terminal SoC is decomposed into piecewise segments:
+The EV charged energy above the current SoC is decomposed into piecewise segments:
 
 - Incentive targets must be **non-decreasing**.
 - Each segment covers a SoC range and has a per-kWh reward.
 - A trailing zero-incentive segment fills remaining capacity.
-- Constraint: `sum(segments) == E_ev[terminal]`.
+- Constraint: `sum(segments) == E_ev[terminal] - E_ev[0]`.
 
 ### 7.8 AC power balance
 
@@ -369,11 +371,9 @@ The objective is a sum of:
 6. **Terminal SoC value** (optional):
    - `-soc_value_per_kwh * E_batt[terminal]` rewards stored energy at horizon end.
 7. **EV incentive rewards**:
-   - Subtract incentive per kWh on terminal SoC segments.
-8. **EV ramp penalties**:
-   - Penalize `Ev_charge_ramp_kw[t]` for `t > 0`.
-9. **EV anchor penalty**:
-   - Penalize `Ev_charge_anchor_kw` at slot 0.
+   - Subtract incentive per kWh on incremental SoC segments.
+8. **EV switch penalty** (optional):
+   - Add a fixed cost per on/off transition.
 
 ---
 
@@ -383,7 +383,7 @@ The EMS uses a standard MPC-style horizon but **anchors** some inputs at slot 0:
 
 - Load, PV, and prices override **slot 0** with realtime values.
 - Battery and EV SoC at `t=0` are set from realtime sensors.
-- EV charge power uses a **soft** anchor (penalty only) to remain near realtime power.
+- EV switch penalties (when enabled) seed `t=0` from the realtime charger state.
 - Grid realtime power is **not** used by the EMS builder.
 
 Note: Because the horizon start is floored to the interval boundary, slot 0 can
@@ -459,7 +459,7 @@ Current gaps or intentional simplifications:
 - No actuation layer (EMS only produces plans).
 - No DC/AC efficiency or inverter loss modeling.
 - EV discharge is not modeled (charge-only).
-- No battery/EV ramp smoothing beyond current tie-breakers.
+- No battery/EV ramp smoothing (only tiny battery timing tie-breaker).
 - No explicit demand charges, peak power penalties, or block tariffs.
 - `nonvariable_load` is a placeholder (no constraints).
 - Grid realtime power is unused.
@@ -480,7 +480,7 @@ current EMS stack:
 - **Explicit DC bus + AC efficiency modeling**: the model uses a simplified
   AC net equation without inverter/DC efficiency losses.
 - **EV departure targets & switching penalties**: no explicit departure-time
-  constraints or on/off switching penalty beyond the current soft ramp penalty.
+  constraints or on/off switching penalty.
 - **Improved curtailment behavior**: no explicit incentive to curtail when
   export price is negative or zero beyond the small export bonus.
 - **Output hierarchy**: plan output is a flat per-slot dict; no structured
