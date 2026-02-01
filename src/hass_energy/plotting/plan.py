@@ -297,8 +297,8 @@ def _build_plan_figure(
     soc_values = [
         value for series in (*batt_soc_pct.values(), *ev_soc_pct.values()) for value in series
     ]
-    soc_max = max((abs(value) for value in soc_values), default=0.0)
-    soc_axis_max = max(soc_max, 100.0) * 1.05
+    soc_max = max(soc_values, default=0.0)
+    soc_axis_max = max(soc_max, 100.0)
 
     power_max = max(
         max(abs(v) for v in grid_net) if grid_net else 0,
@@ -327,6 +327,19 @@ def _build_plan_figure(
         for index, active in enumerate(curtailment_flags)
         if active
     ]
+    soc_reference_line = None
+    if has_soc:
+        soc_reference_line = {
+            "type": "line",
+            "xref": "x",
+            "yref": "y2",
+            "x0": times[0],
+            "x1": times[-1],
+            "y0": 100,
+            "y1": 100,
+            "line": {"color": "rgba(76, 175, 80, 0.6)", "width": 1, "dash": "dot"},
+            "layer": "below",
+        }
 
     fig.update_layout(
         title={
@@ -401,7 +414,7 @@ def _build_plan_figure(
         plot_bgcolor="white",
         paper_bgcolor="white",
         margin={"l": 60, "r": 130, "t": 50, "b": 100},
-        shapes=curtailment_shapes,
+        shapes=curtailment_shapes + ([soc_reference_line] if soc_reference_line else []),
     )
 
     return fig, total_cost
