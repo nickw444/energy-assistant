@@ -95,7 +95,7 @@ model at the start of the horizon:
 ### Objective (current terms)
 - Energy cost:
   - `import_cost - export_revenue` (with a tiny export bonus when price = 0).
-- Grid price bias (`plant.grid.grid_price_bias_pct`) adds a premium to import prices and discount to export revenue, favoring local consumption.
+- Grid price bias (`plant.grid.grid_price_bias_pct`) adds a premium to import prices and discount to export revenue, making grid interaction less attractive.
 - Forbidden import violations:
   - Large penalty on `P_grid_import_violation_kw`.
 - Battery wear:
