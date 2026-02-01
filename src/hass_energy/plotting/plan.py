@@ -812,7 +812,3 @@ def _aggregate_series(series_dict: dict[str, list[float]]) -> list[float]:
 def _has_any(values: list[float]) -> bool:
     return any(abs(value) > 1e-9 for value in values)
 
-
-def _is_meaningful_curtailment(step: TimestepPlan) -> bool:
-    total_curtailment = sum(float(inv.pv_curtail_kw or 0.0) for inv in step.inverters.values())
-    return total_curtailment > _CURTAILMENT_THRESHOLD_KW
