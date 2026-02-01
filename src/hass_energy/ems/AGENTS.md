@@ -41,7 +41,8 @@ time-stepped plan for plotting/inspection. The core code lives in:
 - Controlled EV loads can assume future connectivity using `connect_grace_minutes` plus optional `can_connect` and `allowed_connect_times` constraints.
 - Controlled EV loads apply a small internal ramp penalty to discourage large per-slot changes in charge power.
 - Controlled EV loads include a soft anchor penalty that keeps slot 0 close to realtime charge power; when realtime power is near zero (below 0.1 kW), the anchor penalty is skipped so charging can start immediately.
-- Negative export prices block grid export via a hard constraint; curtailment activates only when needed to satisfy this export limit.
+- Grid export is hard-blocked when the real export price is negative; curtailment
+  activates only when needed to satisfy this export limit.
 
 ### MPC anchoring behavior
 Slot 0 is used as the MPC decision window, but some realtime inputs anchor the
@@ -52,7 +53,8 @@ model at the start of the horizon:
 - EV charge power has a **soft** slot-0 anchor (penalty on deviation from
   realtime power). When realtime power is near zero (< 0.1 kW), the anchor
   penalty is skipped so slot 0 can start charging without bias.
-- Grid export is hard-blocked when export prices are negative; curtailment is left as a solver decision.
+- Grid export is hard-blocked when the real export price is negative; curtailment
+  is left as a solver decision.
 - Battery/EV SoC initialize `E_*[0]` using realtime sensors, and EV
   connectivity gates charging. These are feasibility anchors across the horizon.
 - Realtime grid power is **not** used by the EMS builder.
@@ -78,7 +80,8 @@ model at the start of the horizon:
 - PV:
   - No curtailment: `P_pv_kw == forecast`.
   - Binary curtailment: `P_pv_kw == forecast * (1 - Curtail_inv)`.
-  - Load-aware curtailment: `P_pv_kw` bounded by forecast with export blocked.
+  - Load-aware curtailment: `P_pv_kw` bounded by forecast; export limits come from
+    grid capacity and negative export price blocking.
 - Inverter net AC:
   - `P_inv_ac_net_kw = P_pv_kw + P_batt_discharge - P_batt_charge`.
 - Battery:
@@ -96,16 +99,17 @@ model at the start of the horizon:
 
 ### Objective (current terms)
 - Energy cost:
-  - `import_cost - export_revenue` (with a tiny export bonus when price = 0).
+  - `import_cost - export_revenue`, using effective prices:
+    - `eff_price_import = price_import + grid.import_premium_per_kwh`
+    - `eff_price_export = price_export - grid.export_premium_per_kwh`
 - Forbidden import violations:
   - Large penalty on `P_grid_import_violation_kw`.
 - Battery wear:
-  - `discharge_cost_per_kwh` applied to discharge, `charge_cost_per_kwh` applied to charge.
-  - Both default to 0.0; set `charge_cost_per_kwh: 0.0` to capture PV energy freely.
+  - `wear_cost_per_kwh` applied symmetrically to charge + discharge throughput.
   - Efficiency losses are already in the SoC dynamics constraints.
-- Battery export penalty (optional):
-  - `export_penalty_per_kwh` applied to battery export flow (battery → grid).
-  - Configure per inverter via `plant.inverters[].battery.export_penalty_per_kwh`.
+- Battery export margin (optional):
+  - `export_margin_per_kwh` applied to battery export flow (battery → grid).
+  - Configure per inverter via `plant.inverters[].battery.export_margin_per_kwh`.
 - Battery timing tie-breaker:
   - Tiny time-weighted throughput penalty to stabilize dispatch ordering across
     equivalent-cost slots.
@@ -120,7 +124,7 @@ model at the start of the horizon:
 - Curtailment energy cost:
   - Penalizes wasted PV power (difference between available and used).
   - Configurable per inverter via `plant.inverters[].curtailment_cost_per_kwh` (default 0.0).
-  - Should exceed battery `charge_cost_per_kwh` so charging is preferred over curtailing.
+  - Should exceed battery `wear_cost_per_kwh` so charging is preferred over curtailing.
 
 ### Outputs & plotting
 `planner.py` emits per-slot:

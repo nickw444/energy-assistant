@@ -48,6 +48,8 @@ Energy management system that pulls Home Assistant data, plans using MILP (stub 
          type: home_assistant
          platform: amberelectric
          entity: sensor.price_export_forecast
+       import_premium_per_kwh: 0.0
+       export_premium_per_kwh: 0.0
      load:
        realtime_load_power:
          type: home_assistant

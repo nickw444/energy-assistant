@@ -39,6 +39,8 @@ plant:
       entity: sensor.amber_feed_in_forecast
       platform: amberelectric
       price_forecast_mode: spot
+    import_premium_per_kwh: 0.04
+    export_premium_per_kwh: 0.04
     import_forbidden_periods:
     - start: '14:55'
       end: '21:05'
@@ -75,9 +77,8 @@ plant:
     battery:
       capacity_kwh: 41.9
       storage_efficiency_pct: 95.0
-      charge_cost_per_kwh: 0.02
-      discharge_cost_per_kwh: 0.02
-      export_penalty_per_kwh: 0.06
+      wear_cost_per_kwh: 0.02
+      export_margin_per_kwh: 0.06
       min_soc_pct: 11.0
       max_soc_pct: 100.0
       reserve_soc_pct: 30.0

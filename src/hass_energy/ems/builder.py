@@ -13,6 +13,7 @@ from hass_energy.ems.forecast_alignment import (
 )
 from hass_energy.ems.horizon import Horizon, floor_to_interval_boundary
 from hass_energy.ems.models import ResolvedForecasts
+from hass_energy.ems.pricing import apply_price_preferences
 from hass_energy.lib.source_resolver.models import PowerForecastInterval
 from hass_energy.lib.source_resolver.resolver import ValueResolver
 from hass_energy.models.config import EmsConfig
@@ -22,7 +23,7 @@ from hass_energy.models.plant import PlantConfig, TimeWindow
 _EV_RAMP_PENALTY_COST = 1e-4
 _EV_ANCHOR_PENALTY_COST = 0.05
 _EV_ANCHOR_ACTIVE_THRESHOLD_KW = 0.1
-_NEGATIVE_EXPORT_PRICE_THRESHOLD = -1e-9
+_PRICE_EPS = 1e-9
 _TERMINAL_SOC_REFERENCE_MINUTES = 1440.0
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,10 @@ class GridBuild:
     price_import: list[float]
     # Export price series aligned to Horizon.T (slot 0 may be realtime override).
     price_export: list[float]
+    # Effective import price series after user premiums.
+    price_import_eff: list[float]
+    # Effective export price series after user premiums.
+    price_export_eff: list[float]
     # Import permission flags aligned to Horizon.T from forbidden time windows.
     import_allowed: list[bool]
 
@@ -252,6 +257,12 @@ class MILPBuilder:
             forecasts.grid_price_export,
             first_slot_override=realtime_export,
         )
+        price_import_eff, price_export_eff = apply_price_preferences(
+            price_import,
+            price_export,
+            import_premium_per_kwh=cfg.import_premium_per_kwh,
+            export_premium_per_kwh=cfg.export_premium_per_kwh,
+        )
 
         for t in T:
             # Prevent simultaneous grid import/export by selecting an import or export mode.
@@ -259,8 +270,12 @@ class MILPBuilder:
                 P_import[t] <= cfg.max_import_kw * grid_import_on[t],
                 f"grid_import_exclusive_t{t}",
             )
-            # Block export when importing OR when price is negative (exporting would cost money).
-            export_allowed = 0 if float(price_export[t]) < _NEGATIVE_EXPORT_PRICE_THRESHOLD else 1
+            # Block export when importing OR when real export price is negative.
+            export_allowed = (
+                1
+                if float(price_export[t]) >= 0.0 - _PRICE_EPS
+                else 0
+            )
             problem += (
                 P_export[t] <= cfg.max_export_kw * (1 - grid_import_on[t]) * export_allowed,
                 f"grid_export_limit_t{t}",
@@ -280,6 +295,8 @@ class MILPBuilder:
             P_import_violation_kw=P_import_violation_kw,
             price_import=price_import,
             price_export=price_export,
+            price_import_eff=price_import_eff,
+            price_export_eff=price_export_eff,
             import_allowed=import_allowed,
         )
 
@@ -643,25 +660,15 @@ class MILPBuilder:
         P_import = grid.P_import
         P_export = grid.P_export
         P_import_violation = grid.P_import_violation_kw
-        price_import = grid.price_import
-        price_export = grid.price_export
+        price_import_eff = grid.price_import_eff
+        price_export_eff = grid.price_export_eff
         inverter_by_id = inverters.inverters
         ev_by_id = loads.evs
 
         # Price-aware objective: minimize net cost (import cost minus export revenue).
-        # When export price is exactly zero, add a tiny bonus to prefer exporting over curtailment.
-        export_bonus = 1e-4
-        # Effective export price series used consistently for revenue and penalties.
-        export_price_eff = [
-            (
-                export_bonus
-                if abs(float(price_export[t])) <= 1e-9
-                else float(price_export[t])
-            )
-            for t in horizon.T
-        ]
+        export_price_eff = [float(price_export_eff[t]) for t in horizon.T]
         objective: pulp.LpAffineExpression = pulp.lpSum(
-            (P_import[t] * float(price_import[t]) - P_export[t] * export_price_eff[t])
+            (P_import[t] * float(price_import_eff[t]) - P_export[t] * export_price_eff[t])
             * horizon.dt_hours(t)
             for t in horizon.T
         )
@@ -676,10 +683,8 @@ class MILPBuilder:
             (-w_early * (P_import[t] + P_export[t]) * (1.0 / (t + 1)) * horizon.dt_hours(t))
             for t in horizon.T
         )
-        # Battery wear costs applied separately to discharge and charge.
-        # Set charge_cost_per_kwh to 0 when you want PV charging to be free.
-        # Efficiency losses are already modeled in the SoC dynamics
-        # (E[t+1] = E[t] + charge * eta - discharge / eta).
+        # Battery wear costs applied to charge + discharge throughput.
+        # Efficiency losses are already modeled in the SoC dynamics.
         for inverter in self._plant.inverters:
             battery = inverter.battery
             if battery is None:
@@ -691,16 +696,12 @@ class MILPBuilder:
             charge_series = inv_vars.P_batt_charge_kw
             if discharge_series is None or charge_series is None:
                 continue
-            discharge_cost = battery.discharge_cost_per_kwh
-            charge_cost = battery.charge_cost_per_kwh
-            if discharge_cost > 0:
+            wear_cost = battery.wear_cost_per_kwh
+            if wear_cost > 0:
                 objective += pulp.lpSum(
-                    discharge_cost * discharge_series[t] * horizon.dt_hours(t)
-                    for t in horizon.T
-                )
-            if charge_cost > 0:
-                objective += pulp.lpSum(
-                    charge_cost * charge_series[t] * horizon.dt_hours(t)
+                    wear_cost
+                    * (charge_series[t] + discharge_series[t])
+                    * horizon.dt_hours(t)
                     for t in horizon.T
                 )
             # Tiny time-weighted throughput penalty to stabilize dispatch ordering
@@ -713,13 +714,13 @@ class MILPBuilder:
                 * horizon.dt_hours(t)
                 for t in horizon.T
             )
-            export_penalty = battery.export_penalty_per_kwh
+            export_margin = battery.export_margin_per_kwh
             batt_export_series = inverters.battery_export_kw.get(inverter.id)
-            # Battery export penalty discourages low-value battery -> grid export
+            # Battery export margin discourages low-value battery -> grid export
             # while leaving PV export untouched.
-            if export_penalty > 0 and batt_export_series is not None:
+            if export_margin > 0 and batt_export_series is not None:
                 objective += pulp.lpSum(
-                    export_penalty * batt_export_series[t] * horizon.dt_hours(t)
+                    export_margin * batt_export_series[t] * horizon.dt_hours(t)
                     for t in horizon.T
                 )
             pv_export_series = inverters.pv_export_kw.get(inverter.id)
@@ -736,14 +737,14 @@ class MILPBuilder:
                         0.0,
                         min(
                             export_price_eff[t],
-                            export_price_eff[t] - discharge_cost + pv_export_penalty_eps,
+                            export_price_eff[t] - wear_cost + pv_export_penalty_eps,
                         ),
                     )
                     * pv_export_series[t]
                     * horizon.dt_hours(t)
                     for t in horizon.T
                 )
-        terminal_penalty = self._terminal_soc_penalty_per_kwh(horizon, price_import)
+        terminal_penalty = self._terminal_soc_penalty_per_kwh(horizon, price_import_eff)
         if terminal_penalty > 0:
             for inverter in self._plant.inverters:
                 inv_vars = inverter_by_id.get(inverter.id)
@@ -752,7 +753,7 @@ class MILPBuilder:
                 objective += terminal_penalty * inv_vars.E_batt_terminal_shortfall_kwh
 
         # Curtailment energy cost: penalize wasted PV to prefer battery charging.
-        # This cost should exceed charge_cost_per_kwh so charging is preferred.
+        # This cost should exceed wear_cost_per_kwh so charging is preferred.
         # Includes a tiny tie-breaker (indexed by inverter order) for stable decisions.
         w_curtail_tie = 1e-6
         total = len(self._plant.inverters)
@@ -762,10 +763,9 @@ class MILPBuilder:
                 continue
             curtail_cost = inverter.curtailment_cost_per_kwh
             tie_weight = w_curtail_tie * (total - idx)
-            effective_cost = max(curtail_cost, 0) + tie_weight
             curtail_series = inv_vars.P_curtail_kw
             objective += pulp.lpSum(
-                effective_cost * curtail_series[t] * horizon.dt_hours(t)
+                (max(curtail_cost, 0) + tie_weight) * curtail_series[t] * horizon.dt_hours(t)
                 for t in horizon.T
             )
         # EV terminal SoC incentives (piecewise per-kWh rewards).
