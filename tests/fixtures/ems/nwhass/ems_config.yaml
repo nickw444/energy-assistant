@@ -55,13 +55,13 @@ plant:
       interval_duration: 5
       forecast_horizon_hours: 48
       realtime_window_minutes: 180
-    self_consumption_bias_pct: 0.0
+    self_consumption_bias_pct: 25.0
   inverters:
   - id: primary
     name: Primary
     peak_power_kw: 10.0
     curtailment: load-aware
-    curtailment_cost_per_kwh: 0.0
+    curtailment_cost_per_kwh: 0.000
     pv:
       realtime_power:
         type: home_assistant
@@ -77,9 +77,10 @@ plant:
       capacity_kwh: 41.9
       storage_efficiency_pct: 95.0
       charge_grid_cost_per_kwh: 0.02
-      charge_pv_cost_per_kwh: -0.01 # Incentivize charging from PV to break tie with curtailment
-      discharge_grid_cost_per_kwh: 0.08 # Disincentivize discharge to grid when profit doesn't exceed 8c/kWh
-      discharge_load_cost_per_kwh: 0.00
+      charge_pv_cost_per_kwh: 0.02 # Consider charging from PV to be free - pay for it on discharge!
+      discharge_grid_cost_per_kwh: 0.02 # Disincentivize discharge to grid when profit doesn't exceed 8c/kWh
+      discharge_load_cost_per_kwh: 0.02 # Minor cost to discharge to load
+      soc_value_per_kwh: 0.05 # Value terminal SoC to incentivize higher charging
       min_soc_pct: 11.0
       max_soc_pct: 100.0
       reserve_soc_pct: 30.0
