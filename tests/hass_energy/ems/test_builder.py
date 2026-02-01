@@ -4,14 +4,19 @@ import math
 from datetime import UTC, datetime, timedelta
 from typing import TypeVar, cast
 
+import pulp
 import pytest
 
+from hass_energy.ems.builder import MILPBuilder
+from hass_energy.ems.horizon import build_horizon
 from hass_energy.ems.planner import EmsMilpPlanner
 from hass_energy.lib.home_assistant import HomeAssistantConfig
 from hass_energy.lib.source_resolver.hass_source import (
     HomeAssistantAmberElectricForecastSource,
+    HomeAssistantBinarySensorEntitySource,
     HomeAssistantCurrencyEntitySource,
     HomeAssistantHistoricalAverageForecastSource,
+    HomeAssistantPercentageEntitySource,
     HomeAssistantPowerKwEntitySource,
     HomeAssistantSolcastForecastSource,
 )
@@ -19,6 +24,7 @@ from hass_energy.lib.source_resolver.models import PowerForecastInterval, PriceF
 from hass_energy.lib.source_resolver.resolver import ValueResolver
 from hass_energy.lib.source_resolver.sources import EntitySource
 from hass_energy.models.config import AppConfig, EmsConfig, ServerConfig
+from hass_energy.models.loads import ControlledEvLoad, LoadConfig
 from hass_energy.models.plant import (
     GridConfig,
     InverterConfig,
@@ -69,7 +75,12 @@ class DummyResolver(ValueResolver):
             return cast(R, self._load_forecasts[source.entity])
         if isinstance(
             source,
-            (HomeAssistantPowerKwEntitySource, HomeAssistantCurrencyEntitySource),
+            (
+                HomeAssistantPowerKwEntitySource,
+                HomeAssistantCurrencyEntitySource,
+                HomeAssistantBinarySensorEntitySource,
+                HomeAssistantPercentageEntitySource,
+            ),
         ):
             return cast(R, self._realtime_values[source.entity])
         raise TypeError(f"Unhandled source type: {type(source).__name__}")
@@ -83,6 +94,7 @@ def _make_config(
     min_horizon_minutes: int | None = None,
     high_res_timestep_minutes: int | None = None,
     high_res_horizon_minutes: int | None = None,
+    loads: list[LoadConfig] | None = None,
 ) -> AppConfig:
     if min_horizon_minutes is None:
         min_horizon_minutes = timestep_minutes * 2
@@ -150,7 +162,7 @@ def _make_config(
         homeassistant=HomeAssistantConfig(base_url="http://localhost", token="token"),
         ems=ems,
         plant=plant,
-        loads=[],
+        loads=loads or [],
     )
 
 
@@ -189,6 +201,11 @@ def _power_intervals(
     return intervals
 
 
+def _require_value(value: float | None) -> float:
+    assert value is not None
+    return float(value)
+
+
 def _price_intervals(
     start: datetime,
     *,
@@ -202,6 +219,116 @@ def _price_intervals(
         slot_end = slot_start + timedelta(minutes=interval_minutes)
         intervals.append(PriceForecastInterval(start=slot_start, end=slot_end, value=value))
     return intervals
+
+
+def _solve_ev_switch_t0(
+    *,
+    realtime_power_kw: float,
+    price_import: float,
+) -> tuple[float, float]:
+    now = datetime(2025, 12, 27, 8, 2, tzinfo=UTC)
+    ev_load = ControlledEvLoad(
+        id="ev",
+        name="EV",
+        load_type="controlled_ev",
+        min_power_kw=0.0,
+        max_power_kw=0.1,
+        energy_kwh=10.0,
+        connected=HomeAssistantBinarySensorEntitySource(
+            type="home_assistant",
+            entity="ev_connected",
+        ),
+        can_connect=None,
+        allowed_connect_times=[],
+        connect_grace_minutes=0,
+        realtime_power=HomeAssistantPowerKwEntitySource(
+            type="home_assistant",
+            entity="ev_power",
+        ),
+        state_of_charge_pct=HomeAssistantPercentageEntitySource(
+            type="home_assistant",
+            entity="ev_soc",
+        ),
+        soc_incentives=[],
+        switch_penalty=0.02,
+    )
+    config = _make_config(
+        timestep_minutes=60,
+        min_horizon_minutes=60,
+        loads=[ev_load],
+    )
+    horizon = build_horizon(now=now, timestep_minutes=60, num_intervals=1)
+    slot_start = horizon.start
+    resolver = DummyResolver(
+        price_forecasts={
+            "price_import_forecast": _price_intervals(
+                slot_start,
+                interval_minutes=60,
+                num_intervals=1,
+                value=price_import,
+            ),
+            "price_export_forecast": _price_intervals(
+                slot_start,
+                interval_minutes=60,
+                num_intervals=1,
+                value=0.0,
+            ),
+        },
+        pv_forecasts={
+            "pv_forecast": _power_intervals(
+                slot_start,
+                interval_minutes=60,
+                num_intervals=1,
+                value=0.0,
+            ),
+        },
+        load_forecasts={
+            "load_forecast": _power_intervals(
+                slot_start,
+                interval_minutes=60,
+                num_intervals=1,
+                value=0.0,
+            ),
+        },
+        realtime_values={
+            "load": 0.0,
+            "price_import": price_import,
+            "price_export": 0.0,
+            "grid": 0.0,
+            "ev_power": realtime_power_kw,
+            "ev_soc": 50.0,
+            "ev_connected": True,
+        },
+    )
+    builder = MILPBuilder(config.plant, config.loads, resolver, config.ems)
+    forecasts = builder.resolve_forecasts(now=now, interval_minutes=horizon.interval_minutes)
+    model = builder.build(horizon=horizon, forecasts=forecasts)
+    model.problem.solve(pulp.PULP_CBC_CMD(msg=False))
+    ev_vars = model.loads.evs["ev"]
+    return (
+        _require_value(pulp.value(ev_vars.P_ev_charge_kw[0])),
+        _require_value(pulp.value(ev_vars.Ev_charge_switch[0])),
+    )
+
+
+def test_ev_switch_t0_seed_uses_realtime_state() -> None:
+    charge_on, switch_on = _solve_ev_switch_t0(realtime_power_kw=1.0, price_import=-1.0)
+    charge_off, switch_off = _solve_ev_switch_t0(realtime_power_kw=0.0, price_import=-1.0)
+
+    assert charge_on > 0.0
+    assert charge_off > 0.0
+    assert abs(switch_on) < 1e-6
+    assert abs(switch_off - 1.0) < 1e-6
+
+
+def test_ev_switch_t0_seed_when_turning_off() -> None:
+    charge_on, switch_on = _solve_ev_switch_t0(realtime_power_kw=1.0, price_import=1.0)
+    charge_off, switch_off = _solve_ev_switch_t0(realtime_power_kw=0.0, price_import=1.0)
+
+    assert abs(charge_on) < 1e-6
+    assert abs(charge_off) < 1e-6
+    assert abs(switch_on - 1.0) < 1e-6
+    assert abs(switch_off) < 1e-6
 
 
 def test_solver_exports_with_positive_price() -> None:
