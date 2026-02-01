@@ -489,6 +489,8 @@ def test_load_aware_curtailment_blocks_export() -> None:
     plan = EmsMilpPlanner(config, resolver=resolver).generate_ems_plan(now=now)
     step = plan.timesteps[0]
     assert step.inverters["curtail"].curtailment is True
+    assert step.inverters["curtail"].pv_curtail_kw is not None
+    assert abs(step.inverters["curtail"].pv_curtail_kw - 1.5) < 1e-6
     assert abs(step.grid.export_kw) < 1e-6
     assert abs(step.grid.import_kw) < 1e-6
 
