@@ -1,5 +1,5 @@
 import re
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -27,6 +27,7 @@ def _default_import_forbidden_periods() -> list[TimeWindow]:
 class GridConfig(BaseModel):
     max_import_kw: float = Field(ge=0)
     max_export_kw: float = Field(ge=0)
+    allow_negative_export: bool
     realtime_grid_power: HomeAssistantPowerKwEntitySource
     realtime_price_import: HomeAssistantCurrencyEntitySource
     realtime_price_export: HomeAssistantCurrencyEntitySource
@@ -52,15 +53,29 @@ class PvConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
+class BatteryWearNone(BaseModel):
+    mode: Literal["none"]
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+
+class BatteryWearSymmetric(BaseModel):
+    mode: Literal["symmetric"]
+    cost_per_kwh: float = Field(ge=0)
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+
+BatteryWearConfig = Annotated[
+    BatteryWearNone | BatteryWearSymmetric,
+    Field(discriminator="mode"),
+]
+
+
 class BatteryConfig(BaseModel):
     capacity_kwh: float = Field(ge=0)
     storage_efficiency_pct: float = Field(gt=0, le=100)
-    charge_cost_per_kwh: float = Field(default=0.0, ge=0)
-    discharge_cost_per_kwh: float = Field(default=0.0, ge=0)
-    # Discourages low-value battery -> grid export without penalizing PV export.
-    # Use when you want self-consumption to win over small arbitrage spreads but still
-    # allow export at sufficiently high prices.
-    export_penalty_per_kwh: float = Field(default=0.0, ge=0)
+    wear: BatteryWearConfig
     min_soc_pct: float = Field(ge=0, le=100)
     max_soc_pct: float = Field(ge=0, le=100)
     reserve_soc_pct: float = Field(ge=0, le=100)
@@ -85,8 +100,9 @@ class InverterConfig(BaseModel):
     name: str = Field(min_length=1)
     peak_power_kw: float = Field(ge=0)
     curtailment: Literal["load-aware", "binary"] | None = None
-    # Cost per kWh of curtailed PV; should exceed battery charge_cost_per_kwh
-    # so the solver prefers charging over curtailing. Default 0.03 (3c/kWh).
+    # Cost per kWh of curtailed PV used as a preference weight in the objective.
+    # It is scaled by the EMS preference budget, so it should reflect relative
+    # importance rather than a direct tariff.
     curtailment_cost_per_kwh: float = Field(default=0.0, ge=0)
     pv: PvConfig
     battery: BatteryConfig | None = None

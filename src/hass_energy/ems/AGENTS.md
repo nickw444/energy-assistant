@@ -41,7 +41,7 @@ time-stepped plan for plotting/inspection. The core code lives in:
 - Controlled EV loads can assume future connectivity using `connect_grace_minutes` plus optional `can_connect` and `allowed_connect_times` constraints.
 - Controlled EV loads apply a small internal ramp penalty to discourage large per-slot changes in charge power.
 - Controlled EV loads include a soft anchor penalty that keeps slot 0 close to realtime charge power; when realtime power is near zero (below 0.1 kW), the anchor penalty is skipped so charging can start immediately.
-- Negative export prices block grid export via a hard constraint; curtailment activates only when needed to satisfy this export limit.
+- Negative export prices are blocked when `grid.allow_negative_export` is false; otherwise they are treated as real tariffs and export is allowed.
 
 ### MPC anchoring behavior
 Slot 0 is used as the MPC decision window, but some realtime inputs anchor the
@@ -52,7 +52,7 @@ model at the start of the horizon:
 - EV charge power has a **soft** slot-0 anchor (penalty on deviation from
   realtime power). When realtime power is near zero (< 0.1 kW), the anchor
   penalty is skipped so slot 0 can start charging without bias.
-- Grid export is hard-blocked when export prices are negative; curtailment is left as a solver decision.
+- Grid export is blocked when export prices are negative and `grid.allow_negative_export` is false; curtailment remains a solver decision.
 - Battery/EV SoC initialize `E_*[0]` using realtime sensors, and EV
   connectivity gates charging. These are feasibility anchors across the horizon.
 - Realtime grid power is **not** used by the EMS builder.
@@ -97,15 +97,12 @@ model at the start of the horizon:
 ### Objective (current terms)
 - Energy cost:
   - `import_cost - export_revenue` (with a tiny export bonus when price = 0).
+  - `grid.allow_negative_export` controls whether negative export prices are honored or clamped to 0 in the objective.
 - Forbidden import violations:
   - Large penalty on `P_grid_import_violation_kw`.
-- Battery wear:
-  - `discharge_cost_per_kwh` applied to discharge, `charge_cost_per_kwh` applied to charge.
-  - Both default to 0.0; set `charge_cost_per_kwh: 0.0` to capture PV energy freely.
-  - Efficiency losses are already in the SoC dynamics constraints.
-- Battery export penalty (optional):
-  - `export_penalty_per_kwh` applied to battery export flow (battery → grid).
-  - Configure per inverter via `plant.inverters[].battery.export_penalty_per_kwh`.
+- Battery wear (preference-bounded):
+  - Symmetric wear cost applied to `(charge + discharge)` when `battery.wear.mode == "symmetric"`.
+  - Scaled so the total additional bill impact across the horizon is capped by `ems.max_profit_sacrifice_per_day * horizon_days`.
 - Battery timing tie-breaker:
   - Tiny time-weighted throughput penalty to stabilize dispatch ordering across
     equivalent-cost slots.
@@ -117,10 +114,10 @@ model at the start of the horizon:
   - Piecewise per-kWh rewards for reaching terminal SoC targets.
 - Early-flow tie-breaker:
   - Small time-decay bonus on total grid flow `(P_import + P_export)` favoring earlier slots.
-- Curtailment energy cost:
+- Curtailment preference (preference-bounded):
   - Penalizes wasted PV power (difference between available and used).
   - Configurable per inverter via `plant.inverters[].curtailment_cost_per_kwh` (default 0.0).
-  - Should exceed battery `charge_cost_per_kwh` so charging is preferred over curtailing.
+  - Scaled by the same budget as battery wear, with a tiny tie-breaker by inverter index.
 
 ### Outputs & plotting
 `planner.py` emits per-slot:
@@ -169,6 +166,12 @@ Plotting (`src/hass_energy/plotting/plan.py`):
   of the plan summary (excluding `generated_at`) for stable change detection.
 - Fixture baseline tests compare the generated plan summary against the stored
   `ems_plan.json` for each bundle. Set `EMS_SCENARIO=<fixture>/<scenario>` to target a specific scenario.
+
+### Tuning guide (preference budget)
+- Start with `ems.max_profit_sacrifice_per_day` (e.g., `0.50`) to cap non-economic preferences.
+- Set `battery.wear.cost_per_kwh` based on your wear intuition (e.g., 0.03–0.05).
+- Set `curtailment_cost_per_kwh` to express how much you want to avoid wasting PV relative to wear.
+- Use EV `soc_incentives` as real value curves (these are not budget-capped).
 
 ### Known gaps / future work
 - Controlled EV load modeling is now supported (charge-only with SoC incentives).

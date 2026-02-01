@@ -17,7 +17,7 @@ from hass_energy.lib.source_resolver.models import PowerForecastInterval
 from hass_energy.lib.source_resolver.resolver import ValueResolver
 from hass_energy.models.config import EmsConfig
 from hass_energy.models.loads import ControlledEvLoad, LoadConfig, NonVariableLoad
-from hass_energy.models.plant import PlantConfig, TimeWindow
+from hass_energy.models.plant import BatteryWearSymmetric, PlantConfig, TimeWindow
 
 _EV_RAMP_PENALTY_COST = 1e-4
 _EV_ANCHOR_PENALTY_COST = 0.05
@@ -252,6 +252,7 @@ class MILPBuilder:
             forecasts.grid_price_export,
             first_slot_override=realtime_export,
         )
+        allow_negative_export = cfg.allow_negative_export
 
         for t in T:
             # Prevent simultaneous grid import/export by selecting an import or export mode.
@@ -259,8 +260,10 @@ class MILPBuilder:
                 P_import[t] <= cfg.max_import_kw * grid_import_on[t],
                 f"grid_import_exclusive_t{t}",
             )
-            # Block export when importing OR when price is negative (exporting would cost money).
-            export_allowed = 0 if float(price_export[t]) < _NEGATIVE_EXPORT_PRICE_THRESHOLD else 1
+            # Block export when importing. Optionally block negative-price export.
+            export_allowed = 1
+            if not allow_negative_export and float(price_export[t]) < _NEGATIVE_EXPORT_PRICE_THRESHOLD:
+                export_allowed = 0
             problem += (
                 P_export[t] <= cfg.max_export_kw * (1 - grid_import_on[t]) * export_allowed,
                 f"grid_export_limit_t{t}",
@@ -652,14 +655,17 @@ class MILPBuilder:
         # When export price is exactly zero, add a tiny bonus to prefer exporting over curtailment.
         export_bonus = 1e-4
         # Effective export price series used consistently for revenue and penalties.
-        export_price_eff = [
-            (
-                export_bonus
-                if abs(float(price_export[t])) <= 1e-9
-                else float(price_export[t])
-            )
-            for t in horizon.T
-        ]
+        allow_negative_export = self._plant.grid.allow_negative_export
+        export_price_eff: list[float] = []
+        for t in horizon.T:
+            raw = float(price_export[t])
+            if not allow_negative_export and raw < _NEGATIVE_EXPORT_PRICE_THRESHOLD:
+                eff = 0.0
+            elif abs(raw) <= 1e-9:
+                eff = export_bonus
+            else:
+                eff = raw
+            export_price_eff.append(eff)
         objective: pulp.LpAffineExpression = pulp.lpSum(
             (P_import[t] * float(price_import[t]) - P_export[t] * export_price_eff[t])
             * horizon.dt_hours(t)
@@ -676,10 +682,12 @@ class MILPBuilder:
             (-w_early * (P_import[t] + P_export[t]) * (1.0 / (t + 1)) * horizon.dt_hours(t))
             for t in horizon.T
         )
-        # Battery wear costs applied separately to discharge and charge.
-        # Set charge_cost_per_kwh to 0 when you want PV charging to be free.
-        # Efficiency losses are already modeled in the SoC dynamics
-        # (E[t+1] = E[t] + charge * eta - discharge / eta).
+        horizon_minutes = _horizon_duration_minutes(horizon)
+        horizon_days = horizon_minutes / (60.0 * 24.0) if horizon_minutes > 0 else 0.0
+        pref_budget = float(self._ems_config.max_profit_sacrifice_per_day) * horizon_days
+        total_pref_kwh_upper_bound = 0.0
+
+        # Battery throughput tie-breaker and preference upper bound.
         for inverter in self._plant.inverters:
             battery = inverter.battery
             if battery is None:
@@ -691,18 +699,21 @@ class MILPBuilder:
             charge_series = inv_vars.P_batt_charge_kw
             if discharge_series is None or charge_series is None:
                 continue
-            discharge_cost = battery.discharge_cost_per_kwh
-            charge_cost = battery.charge_cost_per_kwh
-            if discharge_cost > 0:
-                objective += pulp.lpSum(
-                    discharge_cost * discharge_series[t] * horizon.dt_hours(t)
-                    for t in horizon.T
+            wear_cfg = battery.wear
+            if isinstance(wear_cfg, BatteryWearSymmetric) and wear_cfg.cost_per_kwh > 0:
+                charge_limit = (
+                    battery.max_charge_kw
+                    if battery.max_charge_kw is not None
+                    else inverter.peak_power_kw
                 )
-            if charge_cost > 0:
-                objective += pulp.lpSum(
-                    charge_cost * charge_series[t] * horizon.dt_hours(t)
-                    for t in horizon.T
+                discharge_limit = (
+                    battery.max_discharge_kw
+                    if battery.max_discharge_kw is not None
+                    else inverter.peak_power_kw
                 )
+                max_throughput_kw = float(charge_limit) + float(discharge_limit)
+                for t in horizon.T:
+                    total_pref_kwh_upper_bound += max_throughput_kw * horizon.dt_hours(t)
             # Tiny time-weighted throughput penalty to stabilize dispatch ordering
             # across equivalent-cost slots without affecting economics.
             w_batt_time = 1e-6
@@ -713,34 +724,60 @@ class MILPBuilder:
                 * horizon.dt_hours(t)
                 for t in horizon.T
             )
-            export_penalty = battery.export_penalty_per_kwh
-            batt_export_series = inverters.battery_export_kw.get(inverter.id)
-            # Battery export penalty discourages low-value battery -> grid export
-            # while leaving PV export untouched.
-            if export_penalty > 0 and batt_export_series is not None:
+
+        for inverter in self._plant.inverters:
+            inv_vars = inverter_by_id.get(inverter.id)
+            if (
+                inv_vars is None
+                or inv_vars.P_curtail_kw is None
+                or inverter.curtailment_cost_per_kwh <= 0
+            ):
+                continue
+            max_curtail_kw = float(inverter.peak_power_kw)
+            for t in horizon.T:
+                total_pref_kwh_upper_bound += max_curtail_kw * horizon.dt_hours(t)
+
+        if pref_budget <= 0.0 or total_pref_kwh_upper_bound <= 0.0:
+            pref_scale = 0.0
+        else:
+            pref_scale = pref_budget / total_pref_kwh_upper_bound
+
+        # Apply preference costs (battery wear + curtailment) scaled by the budget.
+        for inverter in self._plant.inverters:
+            inv_vars = inverter_by_id.get(inverter.id)
+            if inv_vars is None:
+                continue
+            battery = inverter.battery
+            if battery is not None and pref_scale > 0.0:
+                wear_cfg = battery.wear
+                if isinstance(wear_cfg, BatteryWearSymmetric):
+                    wear_cost = wear_cfg.cost_per_kwh * pref_scale
+                    charge_series = inv_vars.P_batt_charge_kw
+                    discharge_series = inv_vars.P_batt_discharge_kw
+                    if charge_series is not None and discharge_series is not None:
+                        objective += pulp.lpSum(
+                            wear_cost
+                            * (charge_series[t] + discharge_series[t])
+                            * horizon.dt_hours(t)
+                            for t in horizon.T
+                        )
+
+        w_curtail_tie = 1e-6
+        total_inverters = len(self._plant.inverters)
+        for idx, inverter in enumerate(self._plant.inverters):
+            inv_vars = inverter_by_id.get(inverter.id)
+            if inv_vars is None:
+                continue
+            curtail_series = inv_vars.P_curtail_kw
+            if curtail_series is None:
+                continue
+            tie_weight = w_curtail_tie * (total_inverters - idx)
+            effective_cost = tie_weight
+            if pref_scale > 0.0 and inverter.curtailment_cost_per_kwh > 0:
+                effective_cost += inverter.curtailment_cost_per_kwh * pref_scale
+            if effective_cost > 0:
                 objective += pulp.lpSum(
-                    export_penalty * batt_export_series[t] * horizon.dt_hours(t)
-                    for t in horizon.T
-                )
-            pv_export_series = inverters.pv_export_kw.get(inverter.id)
-            if pv_export_series is not None:
-                # PV export penalty targets the PV-export + battery-discharge-to-load pattern
-                # where PV is sent to the grid while the battery covers household load. Without
-                # this term, serving load with PV is "free" but has no explicit reward, while
-                # exporting PV earns revenue. If export=0.06 and bias=20%, export value=0.048/kWh
-                # beats a 0.01/kWh battery discharge cost, so the model prefers exporting PV and
-                # discharging the battery to serve load.
-                pv_export_penalty_eps = 1e-4
-                objective += pulp.lpSum(
-                    max(
-                        0.0,
-                        min(
-                            export_price_eff[t],
-                            export_price_eff[t] - discharge_cost + pv_export_penalty_eps,
-                        ),
-                    )
-                    * pv_export_series[t]
-                    * horizon.dt_hours(t)
+                    effective_cost * curtail_series[t] * horizon.dt_hours(t)
                     for t in horizon.T
                 )
         terminal_penalty = self._terminal_soc_penalty_per_kwh(horizon, price_import)
@@ -751,23 +788,6 @@ class MILPBuilder:
                     continue
                 objective += terminal_penalty * inv_vars.E_batt_terminal_shortfall_kwh
 
-        # Curtailment energy cost: penalize wasted PV to prefer battery charging.
-        # This cost should exceed charge_cost_per_kwh so charging is preferred.
-        # Includes a tiny tie-breaker (indexed by inverter order) for stable decisions.
-        w_curtail_tie = 1e-6
-        total = len(self._plant.inverters)
-        for idx, inverter in enumerate(self._plant.inverters):
-            inv_vars = inverter_by_id.get(inverter.id)
-            if inv_vars is None or inv_vars.P_curtail_kw is None:
-                continue
-            curtail_cost = inverter.curtailment_cost_per_kwh
-            tie_weight = w_curtail_tie * (total - idx)
-            effective_cost = max(curtail_cost, 0) + tie_weight
-            curtail_series = inv_vars.P_curtail_kw
-            objective += pulp.lpSum(
-                effective_cost * curtail_series[t] * horizon.dt_hours(t)
-                for t in horizon.T
-            )
         # EV terminal SoC incentives (piecewise per-kWh rewards).
         for segments in loads.ev_incentive_segments.values():
             for segment_var, incentive in segments:

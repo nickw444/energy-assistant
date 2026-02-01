@@ -27,10 +27,12 @@ Energy management system that pulls Home Assistant data, plans using MILP (stub 
    ems:
      timestep_minutes: 60
      min_horizon_minutes: 1440
+     max_profit_sacrifice_per_day: 0.5
    plant:
      grid:
        max_import_kw: 0.0
        max_export_kw: 0.0
+       allow_negative_export: false
        realtime_grid_power:
          type: home_assistant
          entity: sensor.grid_power
@@ -70,6 +72,7 @@ Energy management system that pulls Home Assistant data, plans using MILP (stub 
    ems:
      min_horizon_minutes: 120
      timestep_minutes: 30
+     max_profit_sacrifice_per_day: 0.5
      high_res_timestep_minutes: 5
      high_res_horizon_minutes: 120
    # Coarser intervals snap to their natural clock boundaries (e.g., 30-min slots on :00/:30).
