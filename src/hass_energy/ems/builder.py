@@ -676,8 +676,8 @@ class MILPBuilder:
             (-w_early * (P_import[t] + P_export[t]) * (1.0 / (t + 1)) * horizon.dt_hours(t))
             for t in horizon.T
         )
-        # Battery wear costs applied separately to discharge and charge.
-        # Set charge_cost_per_kwh to 0 when you want PV charging to be free.
+        # Battery wear cost applied symmetrically to discharge and charge.
+        # Set wear_cost_per_kwh to 0 to ignore battery wear in the objective.
         # Efficiency losses are already modeled in the SoC dynamics
         # (E[t+1] = E[t] + charge * eta - discharge / eta).
         for inverter in self._plant.inverters:
@@ -691,16 +691,12 @@ class MILPBuilder:
             charge_series = inv_vars.P_batt_charge_kw
             if discharge_series is None or charge_series is None:
                 continue
-            discharge_cost = battery.discharge_cost_per_kwh
-            charge_cost = battery.charge_cost_per_kwh
-            if discharge_cost > 0:
+            wear_cost = battery.wear_cost_per_kwh
+            if wear_cost > 0:
                 objective += pulp.lpSum(
-                    discharge_cost * discharge_series[t] * horizon.dt_hours(t)
-                    for t in horizon.T
-                )
-            if charge_cost > 0:
-                objective += pulp.lpSum(
-                    charge_cost * charge_series[t] * horizon.dt_hours(t)
+                    wear_cost
+                    * (charge_series[t] + discharge_series[t])
+                    * horizon.dt_hours(t)
                     for t in horizon.T
                 )
             # Tiny time-weighted throughput penalty to stabilize dispatch ordering
@@ -713,13 +709,13 @@ class MILPBuilder:
                 * horizon.dt_hours(t)
                 for t in horizon.T
             )
-            export_penalty = battery.export_penalty_per_kwh
+            export_margin = battery.export_margin_per_kwh
             batt_export_series = inverters.battery_export_kw.get(inverter.id)
-            # Battery export penalty discourages low-value battery -> grid export
-            # while leaving PV export untouched.
-            if export_penalty > 0 and batt_export_series is not None:
+            # Battery export margin adds explicit cost to battery -> grid export
+            # as part of the objective economics (not a tie-breaker).
+            if export_margin > 0 and batt_export_series is not None:
                 objective += pulp.lpSum(
-                    export_penalty * batt_export_series[t] * horizon.dt_hours(t)
+                    export_margin * batt_export_series[t] * horizon.dt_hours(t)
                     for t in horizon.T
                 )
             pv_export_series = inverters.pv_export_kw.get(inverter.id)
@@ -728,7 +724,7 @@ class MILPBuilder:
                 # where PV is sent to the grid while the battery covers household load. Without
                 # this term, serving load with PV is "free" but has no explicit reward, while
                 # exporting PV earns revenue. If export=0.06 and bias=20%, export value=0.048/kWh
-                # beats a 0.01/kWh battery discharge cost, so the model prefers exporting PV and
+                # beats a 0.01/kWh battery wear cost, so the model prefers exporting PV and
                 # discharging the battery to serve load.
                 pv_export_penalty_eps = 1e-4
                 objective += pulp.lpSum(
@@ -736,7 +732,7 @@ class MILPBuilder:
                         0.0,
                         min(
                             export_price_eff[t],
-                            export_price_eff[t] - discharge_cost + pv_export_penalty_eps,
+                            export_price_eff[t] - wear_cost + pv_export_penalty_eps,
                         ),
                     )
                     * pv_export_series[t]
@@ -752,7 +748,7 @@ class MILPBuilder:
                 objective += terminal_penalty * inv_vars.E_batt_terminal_shortfall_kwh
 
         # Curtailment energy cost: penalize wasted PV to prefer battery charging.
-        # This cost should exceed charge_cost_per_kwh so charging is preferred.
+        # This cost should exceed wear_cost_per_kwh so charging is preferred.
         # Includes a tiny tie-breaker (indexed by inverter order) for stable decisions.
         w_curtail_tie = 1e-6
         total = len(self._plant.inverters)
