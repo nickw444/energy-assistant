@@ -78,7 +78,7 @@ plant:
       charge_cost_per_kwh: 0.02
       discharge_cost_per_kwh: 0.02
       soc_value_per_kwh: 0.06
-      min_soc_pct: 11.0
+      min_soc_pct: 10.0
       max_soc_pct: 100.0
       reserve_soc_pct: 30.0
       max_charge_kw: 11.0
@@ -118,6 +118,6 @@ loads:
   - target_soc_pct: 60.0
     incentive: 0.08
   - target_soc_pct: 80.0
-    incentive: 0.03
+    incentive: 0.04
   - target_soc_pct: 100.0
-    incentive: 0.01
+    incentive: 0.005
