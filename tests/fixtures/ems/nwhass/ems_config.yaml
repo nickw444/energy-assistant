@@ -39,6 +39,7 @@ plant:
       entity: sensor.amber_feed_in_forecast
       platform: amberelectric
       price_forecast_mode: spot
+    grid_price_bias_pct: 25.0
     import_forbidden_periods:
     - start: '14:55'
       end: '21:05'
@@ -55,7 +56,6 @@ plant:
       interval_duration: 5
       forecast_horizon_hours: 48
       realtime_window_minutes: 180
-    self_consumption_bias_pct: 25.0
   inverters:
   - id: primary
     name: Primary
