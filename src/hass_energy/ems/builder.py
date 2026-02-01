@@ -70,10 +70,6 @@ class InverterVars:
 class InverterBuild:
     # Inverter vars keyed by inverter id from config.
     inverters: dict[str, InverterVars]
-    # Battery export flow per inverter id (kW per timestep).
-    battery_export_kw: dict[str, dict[int, pulp.LpVariable]]
-    # PV export flow per inverter id (kW per timestep).
-    pv_export_kw: dict[str, dict[int, pulp.LpVariable]]
 
 
 @dataclass(slots=True)
@@ -605,11 +601,7 @@ class MILPBuilder:
                 f"grid_export_split_t{t}",
             )
 
-        return InverterBuild(
-            inverters=inverters,
-            battery_export_kw=batt_export_by_inv,
-            pv_export_kw=pv_export_by_inv,
-        )
+        return InverterBuild(inverters=inverters)
 
     def _build_ac_balance(
         self,
@@ -720,36 +712,6 @@ class MILPBuilder:
                 * horizon.dt_hours(t)
                 for t in horizon.T
             )
-            export_penalty = battery.export_penalty_per_kwh
-            batt_export_series = inverters.battery_export_kw.get(inverter.id)
-            # Battery export penalty discourages low-value battery -> grid export
-            # while leaving PV export untouched.
-            if export_penalty > 0 and batt_export_series is not None:
-                objective += pulp.lpSum(
-                    export_penalty * batt_export_series[t] * horizon.dt_hours(t)
-                    for t in horizon.T
-                )
-            pv_export_series = inverters.pv_export_kw.get(inverter.id)
-            if pv_export_series is not None:
-                # PV export penalty targets the PV-export + battery-discharge-to-load pattern
-                # where PV is sent to the grid while the battery covers household load. Without
-                # this term, serving load with PV is "free" but has no explicit reward, while
-                # exporting PV earns revenue. If export=0.06 and bias=20%, export value=0.048/kWh
-                # beats a 0.01/kWh battery discharge cost, so the model prefers exporting PV and
-                # discharging the battery to serve load.
-                pv_export_penalty_eps = 1e-4
-                objective += pulp.lpSum(
-                    max(
-                        0.0,
-                        min(
-                            export_price_eff[t],
-                            export_price_eff[t] - discharge_cost + pv_export_penalty_eps,
-                        ),
-                    )
-                    * pv_export_series[t]
-                    * horizon.dt_hours(t)
-                    for t in horizon.T
-                )
         terminal_penalty = self._terminal_soc_penalty_per_kwh(horizon, price_import)
         if terminal_penalty > 0:
             for inverter in self._plant.inverters:
@@ -758,23 +720,26 @@ class MILPBuilder:
                     continue
                 objective += terminal_penalty * inv_vars.E_batt_terminal_shortfall_kwh
 
-        # Curtailment energy cost: penalize wasted PV to prefer battery charging.
-        # This cost should exceed charge_cost_per_kwh so charging is preferred.
-        # Includes a tiny tie-breaker (indexed by inverter order) for stable decisions.
-        w_curtail_tie = 1e-6
-        total = len(self._plant.inverters)
-        for idx, inverter in enumerate(self._plant.inverters):
-            inv_vars = inverter_by_id.get(inverter.id)
-            if inv_vars is None or inv_vars.P_curtail_kw is None:
+        # Terminal SoC value: reward stored energy at horizon end to incentivize
+        # higher battery charging when export prices are low.
+        for inverter in self._plant.inverters:
+            battery = inverter.battery
+            if battery is None:
                 continue
-            curtail_cost = inverter.curtailment_cost_per_kwh
-            tie_weight = w_curtail_tie * (total - idx)
-            effective_cost = max(curtail_cost, 0) + tie_weight
-            curtail_series = inv_vars.P_curtail_kw
-            objective += pulp.lpSum(
-                effective_cost * curtail_series[t] * horizon.dt_hours(t)
-                for t in horizon.T
-            )
+            soc_value = battery.soc_value_per_kwh
+            if soc_value is None or soc_value <= 0:
+                continue
+            inv_vars = inverter_by_id.get(inverter.id)
+            if inv_vars is None:
+                continue
+            E_batt = inv_vars.E_batt_kwh
+            if E_batt is None:
+                continue
+            # Terminal SoC is at index len(horizon.T) (after the last slot).
+            terminal_idx = len(horizon.T)
+            if terminal_idx in E_batt:
+                objective += -soc_value * E_batt[terminal_idx]
+
         # EV terminal SoC incentives (piecewise per-kWh rewards).
         # Apply the same bias as export revenue so incentives compete fairly with export tariffs.
         # e.g., an 8c incentive should tie with an 8c export tariff after both are biased.
