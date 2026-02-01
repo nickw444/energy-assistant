@@ -40,7 +40,7 @@ time-stepped plan for plotting/inspection. The core code lives in:
 - Historical-average load forecasts support `forecast_horizon_hours` to repeat the daily profile beyond 24h.
 - Controlled EV loads can assume future connectivity using `connect_grace_minutes` plus optional `can_connect` and `allowed_connect_times` constraints.
 - Controlled EV loads charge at any rate within min/max bounds while connected; optional switch penalties can discourage on/off flapping.
-- Negative export prices block grid export via a hard constraint; curtailment activates only when needed to satisfy this export limit.
+- Negative export prices are handled by the objective; export remains feasible and the solver decides whether to export or curtail.
 
 ### MPC anchoring behavior
 Slot 0 is used as the MPC decision window, but some realtime inputs anchor the
@@ -48,7 +48,7 @@ model at the start of the horizon:
 - Realtime load, PV, and prices override slot 0 via `first_slot_override` when
   forecasts are available. This constrains exogenous inputs for slot 0 but does
   not directly set decision variables.
-- Grid export is hard-blocked when export prices are negative; curtailment is left as a solver decision.
+- Grid export remains feasible when export prices are negative; curtailment is left as a solver decision.
 - Battery/EV SoC initialize `E_*[0]` using realtime sensors, and EV
   connectivity gates charging. These are feasibility anchors across the horizon.
 - EV switch penalties (when enabled) use realtime charger state to seed the
