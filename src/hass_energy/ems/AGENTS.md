@@ -39,8 +39,7 @@ time-stepped plan for plotting/inspection. The core code lives in:
 - Plant load forecasts/realtime values should exclude controlled loads; controllable loads are added separately in the MILP.
 - Historical-average load forecasts support `forecast_horizon_hours` to repeat the daily profile beyond 24h.
 - Controlled EV loads can assume future connectivity using `connect_grace_minutes` plus optional `can_connect` and `allowed_connect_times` constraints.
-- Controlled EV loads apply a small internal ramp penalty to discourage large per-slot changes in charge power.
-- Controlled EV loads include a soft anchor penalty that keeps slot 0 close to realtime charge power; when realtime power is near zero (below 0.1 kW), the anchor penalty is skipped so charging can start immediately.
+- Controlled EV loads charge at any rate within min/max bounds while connected; optional switch penalties can discourage on/off flapping.
 - Negative export prices are handled by the objective; export remains feasible and the solver decides whether to export or curtail.
 
 ### MPC anchoring behavior
@@ -49,12 +48,11 @@ model at the start of the horizon:
 - Realtime load, PV, and prices override slot 0 via `first_slot_override` when
   forecasts are available. This constrains exogenous inputs for slot 0 but does
   not directly set decision variables.
-- EV charge power has a **soft** slot-0 anchor (penalty on deviation from
-  realtime power). When realtime power is near zero (< 0.1 kW), the anchor
-  penalty is skipped so slot 0 can start charging without bias.
 - Grid export remains feasible when export prices are negative; curtailment is left as a solver decision.
 - Battery/EV SoC initialize `E_*[0]` using realtime sensors, and EV
   connectivity gates charging. These are feasibility anchors across the horizon.
+- EV switch penalties (when enabled) use realtime charger state to seed the
+  t0 switch indicator without introducing a t-1 decision slot.
 - Realtime grid power is **not** used by the EMS builder.
 
 ### Variables (key decision variables)
@@ -112,8 +110,11 @@ model at the start of the horizon:
     import price (unless `ems.terminal_soc.penalty_per_kwh` is set) and scales with
     the horizon ratio vs `terminal_soc.short_horizon_minutes`.
 - EV SoC incentives:
-  - Piecewise per-kWh rewards for reaching terminal SoC targets.
+  - Piecewise per-kWh rewards for energy charged above the current SoC, based on the configured target bands.
   - Incentives are scaled by `(1 - grid_price_bias)` so they compete fairly with export tariffs (an 8c incentive ties with an 8c export tariff).
+- EV switch penalty:
+  - Optional per-switch cost to discourage rapid on/off cycling (not time-weighted).
+  - The t0 switch indicator compares `charge_on[0]` to the realtime charger state.
 - Early-flow tie-breaker:
   - Small time-decay bonus on total grid flow `(P_import + P_export)` favoring earlier slots.
 - Terminal SoC value:
