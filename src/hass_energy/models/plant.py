@@ -32,6 +32,9 @@ class GridConfig(BaseModel):
     realtime_price_export: HomeAssistantCurrencyEntitySource
     price_import_forecast: HomeAssistantAmberElectricForecastSource
     price_export_forecast: HomeAssistantAmberElectricForecastSource
+    # Grid price bias: add a premium to import prices and discount to
+    # export revenue to make grid interaction less attractive.
+    grid_price_bias_pct: float = Field(default=0.0, ge=0, le=100)
     import_forbidden_periods: list[TimeWindow] = Field(
         default_factory=_default_import_forbidden_periods
     )
@@ -42,10 +45,6 @@ class GridConfig(BaseModel):
 class PlantLoadConfig(BaseModel):
     realtime_load_power: HomeAssistantPowerKwEntitySource
     forecast: HomeAssistantHistoricalAverageForecastSource
-
-    # Self-consumption bias: add a premium to import prices and discount to
-    # export revenue to favor serving loads from local generation/storage.
-    self_consumption_bias_pct: float = Field(default=0.0, ge=0, le=100)
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
