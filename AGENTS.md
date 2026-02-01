@@ -31,7 +31,7 @@
 - When config schemas change in backward-incompatible ways, the shared `tests/fixtures/ems/<fixture>/ems_config.yaml` must be updated to keep fixture tests passing.
 - EMS-specific guidance lives in `src/hass_energy/ems/AGENTS.md`.
 - EMS plan `EconomicsTimestepPlan` costs are grid import/export only and exclude other objective terms (EV incentives, penalties, curtailment tie-breaks, violation penalties, battery wear).
-- Battery wear cost (`charge_cost_per_kwh`, `discharge_cost_per_kwh`) allows separate cost per kWh for charge and discharge.
+- Battery wear cost (`wear_cost_per_kwh`) applies symmetrically to charge and discharge.
 - `EmsPlanOutput` now includes `objective_value` with the solver objective (may be negative/None).
 - Load-aware curtailment is forced on whenever export price is negative, enabling PV to follow load and blocking export for those slots.
 - EMS horizons can use `EmsConfig.timestep_minutes` plus `high_res_timestep_minutes` / `high_res_horizon_minutes` to run a higher-resolution window before switching to the default timestep; boundaries snap to the next interval boundary for aligned coarse slots and alignment uses time-weighted averages for variable slot sizes.

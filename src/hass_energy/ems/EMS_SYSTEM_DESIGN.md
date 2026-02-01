@@ -128,7 +128,7 @@ Fields:
 
 - `capacity_kwh`
 - `storage_efficiency_pct`
-- `charge_cost_per_kwh`, `discharge_cost_per_kwh`
+- `wear_cost_per_kwh`
 - `min_soc_pct`, `max_soc_pct`, `reserve_soc_pct`
 - `max_charge_kw`, `max_discharge_kw` (optional)
 - `state_of_charge_pct` (realtime)
@@ -362,9 +362,9 @@ The objective is a sum of:
 3. **Early-flow tie-breaker**:
    - Tiny negative weight on `(P_import + P_export) / (t+1)` to bias flow earlier.
 4. **Battery wear cost**:
-   - `charge_cost_per_kwh * charge + discharge_cost_per_kwh * discharge`.
-5. **Battery export penalty** (optional):
-   - `export_penalty_per_kwh * battery_export` on battery-to-grid flow.
+   - `wear_cost_per_kwh * (charge + discharge)`.
+5. **Battery export margin** (optional):
+   - `export_margin_per_kwh * battery_export` as explicit economic cost on battery-to-grid flow.
 6. **Battery timing tie-breaker**:
    - Tiny time-weighted throughput penalty to stabilize dispatch ordering.
 7. **Curtailment tie-breaker**:

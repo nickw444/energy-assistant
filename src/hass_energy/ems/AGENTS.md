@@ -100,12 +100,12 @@ model at the start of the horizon:
 - Forbidden import violations:
   - Large penalty on `P_grid_import_violation_kw`.
 - Battery wear:
-  - `discharge_cost_per_kwh` applied to discharge, `charge_cost_per_kwh` applied to charge.
-  - Both default to 0.0; set `charge_cost_per_kwh: 0.0` to capture PV energy freely.
+  - `wear_cost_per_kwh` applied symmetrically to charge and discharge.
+  - Defaults to 0.0; increase to penalize battery throughput.
   - Efficiency losses are already in the SoC dynamics constraints.
-- Battery export penalty (optional):
-  - `export_penalty_per_kwh` applied to battery export flow (battery → grid).
-  - Configure per inverter via `plant.inverters[].battery.export_penalty_per_kwh`.
+- Battery export margin (optional):
+  - `export_margin_per_kwh` adds an explicit cost to battery export flow (battery → grid).
+  - Configure per inverter via `plant.inverters[].battery.export_margin_per_kwh`.
 - Battery timing tie-breaker:
   - Tiny time-weighted throughput penalty to stabilize dispatch ordering across
     equivalent-cost slots.
@@ -120,7 +120,7 @@ model at the start of the horizon:
 - Curtailment energy cost:
   - Penalizes wasted PV power (difference between available and used).
   - Configurable per inverter via `plant.inverters[].curtailment_cost_per_kwh` (default 0.0).
-  - Should exceed battery `charge_cost_per_kwh` so charging is preferred over curtailing.
+  - Should exceed battery `wear_cost_per_kwh` so charging is preferred over curtailing.
 
 ### Outputs & plotting
 `planner.py` emits per-slot:
