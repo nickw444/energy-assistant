@@ -114,10 +114,11 @@ loads:
     entity: sensor.tessie_battery
   soc_incentives:
   - target_soc_pct: 40.0
-    incentive: 0.12
+    incentive: 0.16
   - target_soc_pct: 60.0
     incentive: 0.08
   - target_soc_pct: 80.0
     incentive: 0.04
   - target_soc_pct: 100.0
     incentive: 0.005
+  switch_penalty: 0.02

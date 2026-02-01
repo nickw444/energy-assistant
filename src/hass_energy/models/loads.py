@@ -43,6 +43,7 @@ class ControlledEvLoad(BaseModel):
     realtime_power: HomeAssistantPowerKwEntitySource
     state_of_charge_pct: HomeAssistantPercentageEntitySource
     soc_incentives: list[SocIncentive] = Field(default_factory=_default_soc_incentives)
+    switch_penalty: float = Field(default=0.0, ge=0)
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 

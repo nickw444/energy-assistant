@@ -19,9 +19,7 @@ from hass_energy.models.config import EmsConfig
 from hass_energy.models.loads import ControlledEvLoad, LoadConfig, NonVariableLoad
 from hass_energy.models.plant import PlantConfig, TimeWindow
 
-_EV_RAMP_PENALTY_COST = 1e-4
-_EV_ANCHOR_PENALTY_COST = 0.05
-_EV_ANCHOR_ACTIVE_THRESHOLD_KW = 0.1
+_EV_SWITCH_ON_THRESHOLD_KW = 0.1
 _TERMINAL_SOC_REFERENCE_MINUTES = 1440.0
 
 logger = logging.getLogger(__name__)
@@ -83,10 +81,10 @@ class EvVars:
     P_ev_charge_kw: dict[int, pulp.LpVariable]
     # EV SoC variables at slot boundaries (indexed 0..N).
     E_ev_kwh: dict[int, pulp.LpVariable]
-    # EV charge ramp magnitude per timestep t (t>0 has ramp constraints).
-    Ev_charge_ramp_kw: dict[int, pulp.LpVariable]
-    # EV anchor deviation variable for slot 0 vs realtime power.
-    Ev_charge_anchor_kw: pulp.LpVariable
+    # EV switch indicator variables (t>0 only when enabled).
+    Ev_charge_switch: dict[int, pulp.LpVariable]
+    # EV SoC incentive segments (per-kWh rewards).
+    Ev_incentive_segments: list[tuple[pulp.LpVariable, float]]
 
 
 @dataclass(slots=True)
@@ -97,8 +95,6 @@ class LoadBuild:
     load_contribs: dict[int, pulp.LpAffineExpression]
     # EV vars keyed by load id from config.
     evs: dict[str, EvVars]
-    # EV SoC incentive segments keyed by load id.
-    ev_incentive_segments: dict[str, list[tuple[pulp.LpVariable, float]]]
 
 
 @dataclass(slots=True)
@@ -636,7 +632,6 @@ class MILPBuilder:
         price_import = grid.price_import
         price_export = grid.price_export
         inverter_by_id = inverters.inverters
-        ev_by_id = loads.evs
 
         # Grid price bias: add premium to import, discount export.
         grid_price_bias = self._plant.grid.grid_price_bias_pct / 100.0
@@ -741,36 +736,23 @@ class MILPBuilder:
         # EV terminal SoC incentives (piecewise per-kWh rewards).
         # Apply the same bias as export revenue so incentives compete fairly with export tariffs.
         # e.g., an 8c incentive should tie with an 8c export tariff after both are biased.
-        for segments in loads.ev_incentive_segments.values():
-            for segment_var, incentive in segments:
+        for ev_vars in loads.evs.values():
+            for segment_var, incentive in ev_vars.Ev_incentive_segments:
                 if abs(float(incentive)) <= 1e-12:
                     continue
                 biased_incentive = float(incentive) * (1.0 - grid_price_bias)
                 objective += -biased_incentive * segment_var
-        # EV ramp penalties (discourage large per-slot changes in charge power).
-        ramp_penalty = _EV_RAMP_PENALTY_COST
+        # EV on/off switch penalty (per transition, not time-weighted).
         for load in self._loads:
             if not isinstance(load, ControlledEvLoad):
                 continue
-            ev_vars = ev_by_id.get(load.id)
-            if ev_vars is None:
+            switch_penalty = load.switch_penalty
+            if switch_penalty <= 0:
                 continue
-            ramp_series = ev_vars.Ev_charge_ramp_kw
-            objective += pulp.lpSum(ramp_penalty * ramp_series[t] for t in horizon.T if t > 0)
-        # EV soft anchor to realtime power for slot 0.
-        anchor_penalty = _EV_ANCHOR_PENALTY_COST
-        if horizon.num_intervals > 0:
-            for load in self._loads:
-                if not isinstance(load, ControlledEvLoad):
-                    continue
-                realtime_power = float(self._resolver.resolve(load.realtime_power))
-                if abs(realtime_power) < _EV_ANCHOR_ACTIVE_THRESHOLD_KW:
-                    continue
-                ev_vars = ev_by_id.get(load.id)
-                if ev_vars is None:
-                    continue
-                anchor_var = ev_vars.Ev_charge_anchor_kw
-                objective += anchor_penalty * anchor_var * horizon.dt_hours(0)
+            ev_vars = loads.evs.get(load.id)
+            if ev_vars is None or not ev_vars.Ev_charge_switch:
+                continue
+            objective += switch_penalty * pulp.lpSum(ev_vars.Ev_charge_switch.values())
         problem += objective
 
     def _terminal_soc_return_ratio(self, horizon: Horizon) -> float:
@@ -830,15 +812,13 @@ class MILPBuilder:
             t: pulp.LpAffineExpression() for t in horizon.T
         }
         evs: dict[str, EvVars] = {}
-        ev_incentive_segments: dict[str, list[tuple[pulp.LpVariable, float]]] = {}
         for load in self._loads:
             if isinstance(load, ControlledEvLoad):
                 ev_id = load.id
-                ev_vars, segments = self._build_controlled_ev_load(
+                ev_vars = self._build_controlled_ev_load(
                     problem, horizon, load, load_contribs, ev_id
                 )
                 evs[ev_id] = ev_vars
-                ev_incentive_segments[ev_id] = segments
                 continue
             elif isinstance(load, NonVariableLoad):  # pyright: ignore[reportUnnecessaryIsInstance]
                 self._build_nonvariable_load(problem, horizon, load, load_contribs)
@@ -849,7 +829,6 @@ class MILPBuilder:
             base_load_kw=base_load_kw,
             load_contribs=load_contribs,
             evs=evs,
-            ev_incentive_segments=ev_incentive_segments,
         )
 
     def _build_nonvariable_load(
@@ -869,12 +848,11 @@ class MILPBuilder:
         load: ControlledEvLoad,
         load_contribs: dict[int, pulp.LpAffineExpression],
         ev_id: str,
-    ) -> tuple[EvVars, list[tuple[pulp.LpVariable, float]]]:
+    ) -> EvVars:
         T = horizon.T
         ev_name = load.name
 
         connected = bool(self._resolver.resolve(load.connected))
-        realtime_power = float(self._resolver.resolve(load.realtime_power))
         initial_soc_pct = float(self._resolver.resolve(load.state_of_charge_pct))
         can_connect = True
         if load.can_connect is not None:
@@ -911,7 +889,8 @@ class MILPBuilder:
             grace_minutes=load.connect_grace_minutes,
         )
         charge_on = None
-        if load.min_power_kw > 0:
+        needs_charge_on = load.min_power_kw > 0 or load.switch_penalty > 0
+        if needs_charge_on:
             charge_on = pulp.LpVariable.dicts(
                 f"Ev_{ev_id}_charge_on",
                 T,
@@ -919,28 +898,44 @@ class MILPBuilder:
                 upBound=1,
                 cat="Binary",
             )
-        ramp_vars = pulp.LpVariable.dicts(
-            f"Ev_{ev_id}_ramp_kw",
-            T,
-            lowBound=0,
-        )
-        anchor_var = pulp.LpVariable(
-            f"Ev_{ev_id}_anchor_kw",
-            lowBound=0,
-        )
-        problem += (
-            ramp_vars[0] == 0,
-            f"ev_charge_ramp_init_{ev_id}",
-        )
-        problem += (
-            anchor_var >= P_ev_charge[0] - realtime_power,
-            f"ev_anchor_up_{ev_id}",
-        )
-        problem += (
-            anchor_var >= realtime_power - P_ev_charge[0],
-            f"ev_anchor_down_{ev_id}",
-        )
-
+        switch_vars: dict[int, pulp.LpVariable] = {}
+        if load.switch_penalty > 0 and charge_on is not None:
+            switch_indices = list(T)
+            if switch_indices:
+                switch_vars = pulp.LpVariable.dicts(
+                    f"Ev_{ev_id}_switch",
+                    switch_indices,
+                    lowBound=0,
+                    upBound=1,
+                )
+                switch_threshold_kw = (
+                    load.min_power_kw
+                    if load.min_power_kw > 0
+                    else _EV_SWITCH_ON_THRESHOLD_KW
+                )
+                # Use the realtime charger state to seed the t0 switch penalty.
+                # This avoids a t-1 decision slot while keeping t0 as a free decision.
+                realtime_power = float(self._resolver.resolve(load.realtime_power))
+                initial_on = 1.0 if connected and realtime_power >= switch_threshold_kw else 0.0
+                problem += (
+                    switch_vars[0] >= charge_on[0] - initial_on,
+                    f"ev_switch_up_{ev_id}_t0",
+                )
+                problem += (
+                    switch_vars[0] >= initial_on - charge_on[0],
+                    f"ev_switch_down_{ev_id}_t0",
+                )
+                for t in switch_indices:
+                    if t == 0:
+                        continue
+                    problem += (
+                        switch_vars[t] >= charge_on[t] - charge_on[t - 1],
+                        f"ev_switch_up_{ev_id}_t{t}",
+                    )
+                    problem += (
+                        switch_vars[t] >= charge_on[t - 1] - charge_on[t],
+                        f"ev_switch_down_{ev_id}_t{t}",
+                    )
         for t in T:
             connected_allow = connected_allow_by_slot[t]
             # Enforce connection gating.
@@ -953,22 +948,17 @@ class MILPBuilder:
                     charge_on[t] <= connected_allow,
                     f"ev_charge_on_connected_{ev_id}_t{t}",
                 )
-                problem += (
-                    P_ev_charge[t] >= load.min_power_kw * charge_on[t],
-                    f"ev_charge_min_{ev_id}_t{t}",
-                )
+                min_power = load.min_power_kw
+                if min_power <= 0 and load.switch_penalty > 0:
+                    min_power = _EV_SWITCH_ON_THRESHOLD_KW
+                if min_power > 0:
+                    problem += (
+                        P_ev_charge[t] >= min_power * charge_on[t],
+                        f"ev_charge_min_{ev_id}_t{t}",
+                    )
                 problem += (
                     P_ev_charge[t] <= load.max_power_kw * charge_on[t],
                     f"ev_charge_max_{ev_id}_t{t}",
-                )
-            if t > 0:
-                problem += (
-                    ramp_vars[t] >= P_ev_charge[t] - P_ev_charge[t - 1],
-                    f"ev_charge_ramp_up_{ev_id}_t{t}",
-                )
-                problem += (
-                    ramp_vars[t] >= P_ev_charge[t - 1] - P_ev_charge[t],
-                    f"ev_charge_ramp_down_{ev_id}_t{t}",
                 )
             # SoC dynamics (charge-only).
             problem += (
@@ -983,6 +973,7 @@ class MILPBuilder:
             ev_id,
             ev_name,
             E_ev_kwh[horizon.num_intervals],
+            initial_soc_kwh,
         )
 
         ev_vars = EvVars(
@@ -991,10 +982,10 @@ class MILPBuilder:
             connected=connected,
             P_ev_charge_kw=P_ev_charge,
             E_ev_kwh=E_ev_kwh,
-            Ev_charge_ramp_kw=ramp_vars,
-            Ev_charge_anchor_kw=anchor_var,
+            Ev_charge_switch=switch_vars,
+            Ev_incentive_segments=segments,
         )
-        return ev_vars, segments
+        return ev_vars
 
     def _ev_connected_allowance(
         self,
@@ -1042,6 +1033,7 @@ class MILPBuilder:
         ev_id: str,
         ev_name: str,
         terminal_soc: pulp.LpVariable,
+        initial_soc_kwh: float,
     ) -> list[tuple[pulp.LpVariable, float]]:
         incentives = sorted(load.soc_incentives, key=lambda item: item.target_soc_pct)
         if not incentives:
@@ -1051,6 +1043,7 @@ class MILPBuilder:
         segments: list[tuple[pulp.LpVariable, float]] = []
         prev_target_kwh = 0.0
 
+        # Segment variables track incremental energy above the current SoC.
         for idx, incentive in enumerate(incentives):
             target_kwh = capacity_kwh * float(incentive.target_soc_pct) / 100.0
             if target_kwh < prev_target_kwh:
@@ -1058,26 +1051,27 @@ class MILPBuilder:
                     f"EV incentive targets must be non-decreasing (got {target_kwh} <"
                     f" {prev_target_kwh}) for {ev_name}"
                 )
-            segment_size = target_kwh - prev_target_kwh
-            segment_var = pulp.LpVariable(
-                f"E_ev_{ev_id}_incentive_{idx}_kwh",
-                lowBound=0,
-                upBound=segment_size,
-            )
-            segments.append((segment_var, float(incentive.incentive)))
+            available = max(0.0, target_kwh - max(prev_target_kwh, initial_soc_kwh))
+            if available > 0:
+                segment_var = pulp.LpVariable(
+                    f"E_ev_{ev_id}_incentive_{idx}_kwh",
+                    lowBound=0,
+                    upBound=available,
+                )
+                segments.append((segment_var, float(incentive.incentive)))
             prev_target_kwh = target_kwh
 
-        final_size = max(0.0, capacity_kwh - prev_target_kwh)
-        if final_size > 0:
+        final_available = max(0.0, capacity_kwh - max(prev_target_kwh, initial_soc_kwh))
+        if final_available > 0:
             segment_var = pulp.LpVariable(
                 f"E_ev_{ev_id}_incentive_final_kwh",
                 lowBound=0,
-                upBound=final_size,
+                upBound=final_available,
             )
             segments.append((segment_var, 0.0))
 
         problem += (
-            pulp.lpSum(segment for segment, _ in segments) == terminal_soc,
+            pulp.lpSum(segment for segment, _ in segments) == terminal_soc - initial_soc_kwh,
             f"ev_incentive_total_{ev_id}",
         )
         return segments
