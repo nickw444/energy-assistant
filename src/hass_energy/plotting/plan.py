@@ -19,6 +19,8 @@ from hass_energy.ems.models import (
 COLORS = {
     "pv": "rgba(255, 193, 7, 1.0)",
     "pv_fill": "rgba(255, 193, 7, 0.5)",
+    "curtailment": "rgba(255, 152, 0, 1.0)",
+    "curtailment_line": "rgba(255, 152, 0, 0.35)",
     "load": "rgba(156, 39, 176, 1.0)",
     "load_fill": "rgba(156, 39, 176, 0.4)",
     "grid_net": "rgba(33, 150, 243, 1.0)",
@@ -35,6 +37,8 @@ COLORS = {
     "price_export": "rgba(233, 30, 99, 1.0)",
     "curtailment_fill": "rgba(255, 193, 7, 0.12)",
 }
+
+_CURTAILMENT_THRESHOLD_KW = 0.01
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,7 +90,12 @@ def _build_plan_figure(
 
     price_import = [float(step.economics.price_import) for step in timesteps]
     price_export = [float(step.economics.price_export) for step in timesteps]
-    curtailment_flags = [_is_meaningful_curtailment(step) for step in timesteps]
+
+    curtailment_by_inverter = _collect_inverter_series(
+        timesteps, lambda inv: inv.pv_curtail_kw
+    )
+    total_curtailment = _aggregate_series(curtailment_by_inverter)
+    curtailment_flags = [value > _CURTAILMENT_THRESHOLD_KW for value in total_curtailment]
 
     has_soc = any(_has_any(series) for series in batt_soc_pct.values()) or any(
         _has_any(series) for series in ev_soc_pct.values()
@@ -115,6 +124,24 @@ def _build_plan_figure(
                 fillcolor=COLORS["pv_fill"],
                 line={"color": COLORS["pv"], "width": 2, "shape": "hv"},
                 hovertemplate="%{y:.2f} kW<extra>PV</extra>" if include_hover else None,
+                legendgroup=legend_group_power,
+            ),
+            secondary_y=False,
+        )
+
+    if _has_any(total_curtailment):
+        fig.add_trace(
+            go.Scatter(
+                x=time_labels,
+                y=total_curtailment,
+                name="PV Curtailment",
+                mode="lines",
+                fill="tozeroy",
+                fillcolor=COLORS["curtailment_line"],
+                line={"color": COLORS["curtailment"], "width": 2, "shape": "hv"},
+                hovertemplate="%{y:.2f} kW<extra>Curtailment</extra>"
+                if include_hover
+                else None,
                 legendgroup=legend_group_power,
             ),
             secondary_y=False,
@@ -304,6 +331,7 @@ def _build_plan_figure(
         max(abs(v) for v in grid_net) if grid_net else 0,
         max(abs(v) for v in load_kw) if load_kw else 0,
         max(abs(v) for v in total_pv) if total_pv else 0,
+        max(abs(v) for v in total_curtailment) if total_curtailment else 0,
         max(abs(v) for v in total_batt_charge) if total_batt_charge else 0,
         max(abs(v) for v in total_batt_discharge) if total_batt_discharge else 0,
         max(abs(v) for v in total_ev_charge) if total_ev_charge else 0,
@@ -786,15 +814,5 @@ def _has_any(values: list[float]) -> bool:
 
 
 def _is_meaningful_curtailment(step: TimestepPlan) -> bool:
-    has_curtailment = any(
-        inv.curtailment
-        for inv in step.inverters.values()
-        if inv.curtailment is not None
-    )
-    if not has_curtailment:
-        return False
-
-    total_pv = sum(float(inv.pv_kw or 0.0) for inv in step.inverters.values())
-    total_load = float(step.loads.total_kw)
-    total_batt_charge = sum(float(inv.battery_charge_kw or 0.0) for inv in step.inverters.values())
-    return abs(total_pv - total_load) <= 1e-3 and abs(total_batt_charge) <= 1e-3
+    total_curtailment = sum(float(inv.pv_curtail_kw or 0.0) for inv in step.inverters.values())
+    return total_curtailment > _CURTAILMENT_THRESHOLD_KW
