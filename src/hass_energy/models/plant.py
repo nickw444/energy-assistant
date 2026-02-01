@@ -62,10 +62,11 @@ class BatteryConfig(BaseModel):
     storage_efficiency_pct: float = Field(gt=0, le=100)
     charge_cost_per_kwh: float = Field(default=0.0, ge=0)
     discharge_cost_per_kwh: float = Field(default=0.0, ge=0)
-    # Discourages low-value battery -> grid export without penalizing PV export.
-    # Use when you want self-consumption to win over small arbitrage spreads but still
-    # allow export at sufficiently high prices.
-    export_penalty_per_kwh: float = Field(default=0.0, ge=0)
+    # Value assigned to each kWh of stored energy at horizon end.
+    # When set, the objective includes a reward for terminal SoC, incentivizing
+    # higher battery charging when export prices are low.
+    # Default: None (disabled); typical value: 0.08-0.15 $/kWh.
+    soc_value_per_kwh: float | None = Field(default=None, ge=0)
     min_soc_pct: float = Field(ge=0, le=100)
     max_soc_pct: float = Field(ge=0, le=100)
     reserve_soc_pct: float = Field(ge=0, le=100)
@@ -90,9 +91,6 @@ class InverterConfig(BaseModel):
     name: str = Field(min_length=1)
     peak_power_kw: float = Field(ge=0)
     curtailment: Literal["load-aware", "binary"] | None = None
-    # Cost per kWh of curtailed PV; should exceed battery charge_cost_per_kwh
-    # so the solver prefers charging over curtailing. Default 0.03 (3c/kWh).
-    curtailment_cost_per_kwh: float = Field(default=0.0, ge=0)
     pv: PvConfig
     battery: BatteryConfig | None = None
 

@@ -104,9 +104,6 @@ model at the start of the horizon:
   - `discharge_cost_per_kwh` applied to discharge, `charge_cost_per_kwh` applied to charge.
   - Both default to 0.0; set `charge_cost_per_kwh: 0.0` to capture PV energy freely.
   - Efficiency losses are already in the SoC dynamics constraints.
-- Battery export penalty (optional):
-  - `export_penalty_per_kwh` applied to battery export flow (battery → grid).
-  - Configure per inverter via `plant.inverters[].battery.export_penalty_per_kwh`.
 - Battery timing tie-breaker:
   - Tiny time-weighted throughput penalty to stabilize dispatch ordering across
     equivalent-cost slots.
@@ -119,10 +116,11 @@ model at the start of the horizon:
   - Incentives are scaled by `(1 - self_consumption_bias)` so they compete fairly with export tariffs (an 8c incentive ties with an 8c export tariff).
 - Early-flow tie-breaker:
   - Small time-decay bonus on total grid flow `(P_import + P_export)` favoring earlier slots.
-- Curtailment energy cost:
-  - Penalizes wasted PV power (difference between available and used).
-  - Configurable per inverter via `plant.inverters[].curtailment_cost_per_kwh` (default 0.0).
-  - Should exceed battery `charge_cost_per_kwh` so charging is preferred over curtailing.
+- Terminal SoC value:
+  - Per-kWh reward for stored battery energy at horizon end.
+  - Configurable via `plant.inverters[].battery.soc_value_per_kwh` (default: disabled).
+  - Incentivizes higher battery charging when export prices are low but positive.
+  - Also makes charging preferred over curtailment when battery headroom exists.
 
 ### Outputs & plotting
 `planner.py` emits per-slot:

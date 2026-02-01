@@ -55,13 +55,12 @@ plant:
       interval_duration: 5
       forecast_horizon_hours: 48
       realtime_window_minutes: 180
-    self_consumption_bias_pct: 0.0
+    self_consumption_bias_pct: 25.0
   inverters:
   - id: primary
     name: Primary
     peak_power_kw: 10.0
     curtailment: load-aware
-    curtailment_cost_per_kwh: 0.03
     pv:
       realtime_power:
         type: home_assistant
@@ -78,7 +77,7 @@ plant:
       storage_efficiency_pct: 95.0
       charge_cost_per_kwh: 0.02
       discharge_cost_per_kwh: 0.02
-      export_penalty_per_kwh: 0.06
+      soc_value_per_kwh: 0.06
       min_soc_pct: 11.0
       max_soc_pct: 100.0
       reserve_soc_pct: 30.0
@@ -119,6 +118,6 @@ loads:
   - target_soc_pct: 60.0
     incentive: 0.08
   - target_soc_pct: 80.0
-    incentive: 0.02
+    incentive: 0.03
   - target_soc_pct: 100.0
-    incentive: -0.01
+    incentive: 0.01
