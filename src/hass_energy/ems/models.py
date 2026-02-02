@@ -114,6 +114,38 @@ class EmsPlanOutput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+PlanIntentMode = Literal[
+    "Backup",
+    "Force Charge",
+    "Force Discharge",
+    "Export Priority",
+    "Self Consumption",
+]
+
+
+class InverterPlanIntent(BaseModel):
+    mode: PlanIntentMode
+    export_limit_kw: Rounded3
+    force_charge_kw: Rounded3
+    force_discharge_kw: Rounded3
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class EvPlanIntent(BaseModel):
+    charge_kw: Rounded3
+    charge_on: bool
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class PlanIntent(BaseModel):
+    inverters: dict[str, InverterPlanIntent]
+    loads: dict[str, EvPlanIntent]
+
+    model_config = ConfigDict(extra="forbid")
+
+
 @dataclass(slots=True)
 class ResolvedForecasts:
     grid_price_import: list[PriceForecastInterval]

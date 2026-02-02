@@ -118,9 +118,42 @@ class EmsPlanOutput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+PlanIntentMode = Literal[
+    "Backup",
+    "Force Charge",
+    "Force Discharge",
+    "Export Priority",
+    "Self Consumption",
+]
+
+
+class InverterPlanIntent(BaseModel):
+    mode: PlanIntentMode
+    export_limit_kw: float
+    force_charge_kw: float
+    force_discharge_kw: float
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class EvPlanIntent(BaseModel):
+    charge_kw: float
+    charge_on: bool
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class PlanIntent(BaseModel):
+    inverters: dict[str, InverterPlanIntent]
+    loads: dict[str, EvPlanIntent]
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class PlanLatestResponse(BaseModel):
     run: PlanRunState
     plan: EmsPlanOutput
+    intent: PlanIntent
 
     model_config = ConfigDict(extra="forbid")
 
@@ -128,6 +161,7 @@ class PlanLatestResponse(BaseModel):
 class PlanAwaitResponse(BaseModel):
     run: PlanRunState
     plan: EmsPlanOutput
+    intent: PlanIntent
 
     model_config = ConfigDict(extra="forbid")
 
