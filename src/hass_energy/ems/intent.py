@@ -4,8 +4,8 @@ from typing import cast
 
 from hass_energy.ems.models import (
     EmsPlanOutput,
-    EvPlanIntent,
     InverterPlanIntent,
+    LoadPlanIntent,
     PlanIntent,
     PlanIntentMode,
 )
@@ -72,14 +72,14 @@ def build_plan_intent(
             force_discharge_kw=_clamp_kw(discharge_kw, max_discharge_kw),
         )
 
-    ev_configs = _ev_config_map(app_config.loads)
-    loads: dict[str, EvPlanIntent] = {}
+    load_configs = _load_config_map(app_config.loads)
+    loads: dict[str, LoadPlanIntent] = {}
     for ev_id, ev in step.loads.evs.items():
-        ev_config = ev_configs.get(ev_id)
+        ev_config = load_configs.get(ev_id)
         min_power_kw = ev_config.min_power_kw if ev_config is not None else 0.0
         charge_kw = float(ev.charge_kw)
         charge_on = ev.connected and charge_kw >= min_power_kw
-        loads[ev_id] = EvPlanIntent(charge_kw=charge_kw, charge_on=charge_on)
+        loads[ev_id] = LoadPlanIntent(charge_kw=charge_kw, charge_on=charge_on)
 
     return PlanIntent(inverters=inverters, loads=loads)
 
@@ -146,7 +146,7 @@ def _inverter_config_map(
     return {inv.id: inv for inv in inverters}
 
 
-def _ev_config_map(loads: list[LoadConfig]) -> dict[str, ControlledEvLoad]:
+def _load_config_map(loads: list[LoadConfig]) -> dict[str, ControlledEvLoad]:
     evs: dict[str, ControlledEvLoad] = {}
     for load in loads:
         if getattr(load, "load_type", None) != "controlled_ev":

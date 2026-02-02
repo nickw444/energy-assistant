@@ -132,7 +132,7 @@ class InverterPlanIntent(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class EvPlanIntent(BaseModel):
+class LoadPlanIntent(BaseModel):
     charge_kw: Rounded3
     charge_on: bool
 
@@ -141,7 +141,7 @@ class EvPlanIntent(BaseModel):
 
 class PlanIntent(BaseModel):
     inverters: dict[str, InverterPlanIntent]
-    loads: dict[str, EvPlanIntent]
+    loads: dict[str, LoadPlanIntent]
 
     model_config = ConfigDict(extra="forbid")
 
