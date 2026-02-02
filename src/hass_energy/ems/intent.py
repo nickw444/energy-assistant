@@ -13,14 +13,14 @@ from hass_energy.models.config import AppConfig
 from hass_energy.models.loads import ControlledEvLoad, LoadConfig
 from hass_energy.models.plant import InverterConfig
 
-DEFAULT_EPS = 0.15
+NEAR_ZERO_TOLERENCE_KW = 0.15
 
 
 def build_plan_intent(
     plan: EmsPlanOutput,
     app_config: AppConfig,
     *,
-    eps: float = DEFAULT_EPS,
+    near_zero_tolerence_kw: float = NEAR_ZERO_TOLERENCE_KW,
 ) -> PlanIntent:
     if not plan.timesteps:
         return PlanIntent(inverters={}, loads={})
@@ -52,7 +52,7 @@ def build_plan_intent(
             grid_import_kw=grid_import_kw,
             grid_export_kw=grid_export_kw,
             no_export=no_export,
-            eps=eps,
+            near_zero_tolerence_kw=near_zero_tolerence_kw,
         )
 
         export_limit_kw = _export_limit_target(
@@ -62,7 +62,7 @@ def build_plan_intent(
             max_discharge_kw=max_discharge_kw,
             export_limit_normal_kw=export_limit_normal_kw,
             no_export=no_export,
-            eps=eps,
+            near_zero_tolerence_kw=near_zero_tolerence_kw,
         )
 
         inverters[inverter_id] = InverterPlanIntent(
@@ -92,17 +92,25 @@ def _inverter_mode(
     grid_import_kw: float,
     grid_export_kw: float,
     no_export: bool,
-    eps: float,
+    near_zero_tolerence_kw: float,
 ) -> PlanIntentMode:
-    if discharge_kw <= eps and grid_import_kw > eps and ac_net_kw >= -eps:
+    if (
+        discharge_kw <= near_zero_tolerence_kw
+        and grid_import_kw > near_zero_tolerence_kw
+        and ac_net_kw >= -near_zero_tolerence_kw
+    ):
         return "Backup"
     if no_export:
-        return "Force Charge" if ac_net_kw < -eps else "Self Consumption"
-    if ac_net_kw < -eps:
+        return (
+            "Force Charge"
+            if ac_net_kw < -near_zero_tolerence_kw
+            else "Self Consumption"
+        )
+    if ac_net_kw < -near_zero_tolerence_kw:
         return "Force Charge"
-    if discharge_kw > eps and grid_export_kw > eps:
+    if discharge_kw > near_zero_tolerence_kw and grid_export_kw > near_zero_tolerence_kw:
         return "Force Discharge"
-    if grid_export_kw > eps and discharge_kw <= eps:
+    if grid_export_kw > near_zero_tolerence_kw and discharge_kw <= near_zero_tolerence_kw:
         return "Export Priority"
     return "Self Consumption"
 
@@ -115,14 +123,15 @@ def _export_limit_target(
     max_discharge_kw: float | None,
     export_limit_normal_kw: float,
     no_export: bool,
-    eps: float,
+    near_zero_tolerence_kw: float,
 ) -> float:
     if no_export:
         return 0.0
     if mode != "Force Discharge":
         return export_limit_normal_kw
     at_max_discharge = (
-        max_discharge_kw is not None and ac_net_kw >= (max_discharge_kw - eps)
+        max_discharge_kw is not None
+        and ac_net_kw >= (max_discharge_kw - near_zero_tolerence_kw)
     )
     if at_max_discharge:
         return export_limit_normal_kw

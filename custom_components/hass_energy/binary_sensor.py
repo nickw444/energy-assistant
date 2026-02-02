@@ -43,7 +43,7 @@ class HassEnergyCurtailmentSensor(  # type: ignore[misc]
     BinarySensorEntity,
 ):
     _attr_has_entity_name = True
-    _attr_name = "Curtailment"
+    _attr_name = "Plan Curtailment"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _unrecorded_attributes = frozenset({"plan"})
 
@@ -174,12 +174,12 @@ def _build_intent_entities(
                 coordinator,
                 unique_id=entity_unique_id(base_url, "plan", "ev", name, "charge_on"),
                 suggested_object_id=suggested_object_id(
-                    "plan",
+                    "intent",
                     "ev",
                     name,
                     "charge_on",
                 ),
-                name="Plan Charge On",
+                name="Intent Charge On",
                 value_getter=intent_load_value_getter(name, "charge_on"),
                 device_info=load_device,
                 icon="mdi:ev-plug",
