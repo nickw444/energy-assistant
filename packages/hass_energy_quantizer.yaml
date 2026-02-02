@@ -30,14 +30,7 @@ automation:
       price_export: "{{ states('sensor.hass_energy_price_export')|float(0) }}"
       no_export: "{{ price_export < 0 }}"
       export_limit_current_kw: "{{ states('number.inverter_modbus_export_limit')|float(0) }}"
-      battery_soc_pct: >-
-        {% set soc = states('sensor.inverter_primary_battery_soc') %}
-        {% if soc is number %}
-        {{ soc | float(0) }}
-        {% else %}
-        {% set soc = states('sensor.inverter_primary_battery_soc_pct') %}
-        {{ soc | float(0) }}
-        {% endif %}
+      battery_soc_pct: "{{ states('sensor.inverter_primary_battery_soc') | float(0) }}"
       battery_full: "{{ battery_soc_pct >= battery_full_pct }}"
 
       mode_desired: >-
