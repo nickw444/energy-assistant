@@ -10,6 +10,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CURRENCY_DOLLAR, PERCENTAGE, UnitOfEnergy, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -20,6 +21,8 @@ from .coordinator import (
     ev_step_getter,
     ev_value_getter,
     get_timestep0,
+    intent_inverter_value_getter,
+    intent_load_value_getter,
     inverter_step_getter,
     inverter_value_getter,
     sorted_items,
@@ -46,6 +49,7 @@ class HassEnergyPlanSensor(  # type: ignore[misc]
 ):
     _attr_has_entity_name = True
     _attr_name = "Plan Status"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _unrecorded_attributes = frozenset({"plan"})
 
     def __init__(
@@ -87,6 +91,7 @@ class HassEnergyPlanUpdatedSensor(  # type: ignore[misc]
     _attr_name = "Plan Updated"
     _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_icon = "mdi:clock-outline"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(
         self,
@@ -131,10 +136,12 @@ class HassEnergyPlanValueSensor(  # type: ignore[misc]
         device_info: DeviceInfo | None,
         unit: str | None,
         icon: str | None,
+        entity_category: EntityCategory | None = EntityCategory.DIAGNOSTIC,
     ) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = unique_id
         self._attr_name = name
+        self._attr_entity_category = entity_category
         self._value_getter = value_getter
         self._series_getter = series_getter
         if suggested_object_id is not None:
@@ -191,6 +198,7 @@ async def async_setup_entry(
         ),
     ]
     entities.extend(_build_mpc_entities(coordinator, base_url))
+    entities.extend(_build_intent_entities(coordinator, base_url))
     async_add_entities(entities)
 
 
@@ -202,6 +210,156 @@ def _build_mpc_entities(
     if not payload:
         return []
     return _build_mpc_entities_for_plan(coordinator, payload.response.plan, base_url)
+
+
+def _build_intent_entities(
+    coordinator: HassEnergyCoordinator,
+    base_url: str,
+) -> list[SensorEntity]:
+    payload = coordinator.data
+    if not payload:
+        return []
+    return _build_intent_entities_for_response(coordinator, payload.response, base_url)
+
+
+def _build_intent_entities_for_response(
+    coordinator: HassEnergyCoordinator,
+    response: PlanLatestResponse,
+    base_url: str,
+) -> list[SensorEntity]:
+    intent = response.intent
+    if not intent.inverters and not intent.loads:
+        return []
+
+    entities: list[SensorEntity] = []
+    for name in sorted(intent.inverters.keys()):
+        inverter_device = inverter_device_info(base_url, name)
+        entities.extend(
+            [
+                HassEnergyPlanValueSensor(
+                    coordinator,
+                    unique_id=entity_unique_id(
+                        base_url,
+                        "plan",
+                        "inverter",
+                        name,
+                        "mode",
+                    ),
+                    suggested_object_id=suggested_object_id(
+                        "plan",
+                        "inverter",
+                        name,
+                        "mode",
+                    ),
+                    name="Plan Inverter Mode",
+                    value_getter=intent_inverter_value_getter(name, "mode"),
+                    series_getter=None,
+                    device_info=inverter_device,
+                    unit=None,
+                    icon="mdi:transition",
+                    entity_category=None,
+                ),
+                HassEnergyPlanValueSensor(
+                    coordinator,
+                    unique_id=entity_unique_id(
+                        base_url,
+                        "plan",
+                        "inverter",
+                        name,
+                        "export_limit",
+                    ),
+                    suggested_object_id=suggested_object_id(
+                        "plan",
+                        "inverter",
+                        name,
+                        "export_limit",
+                    ),
+                    name="Plan Export Limit",
+                    value_getter=intent_inverter_value_getter(name, "export_limit_kw"),
+                    series_getter=None,
+                    device_info=inverter_device,
+                    unit="kW",
+                    icon="mdi:transmission-tower",
+                    entity_category=None,
+                ),
+                HassEnergyPlanValueSensor(
+                    coordinator,
+                    unique_id=entity_unique_id(
+                        base_url,
+                        "plan",
+                        "inverter",
+                        name,
+                        "force_charge_power",
+                    ),
+                    suggested_object_id=suggested_object_id(
+                        "plan",
+                        "inverter",
+                        name,
+                        "force_charge_power",
+                    ),
+                    name="Plan Force Charge Power",
+                    value_getter=intent_inverter_value_getter(
+                        name,
+                        "force_charge_kw",
+                    ),
+                    series_getter=None,
+                    device_info=inverter_device,
+                    unit="kW",
+                    icon="mdi:battery-charging",
+                    entity_category=None,
+                ),
+                HassEnergyPlanValueSensor(
+                    coordinator,
+                    unique_id=entity_unique_id(
+                        base_url,
+                        "plan",
+                        "inverter",
+                        name,
+                        "force_discharge_power",
+                    ),
+                    suggested_object_id=suggested_object_id(
+                        "plan",
+                        "inverter",
+                        name,
+                        "force_discharge_power",
+                    ),
+                    name="Plan Force Discharge Power",
+                    value_getter=intent_inverter_value_getter(
+                        name,
+                        "force_discharge_kw",
+                    ),
+                    series_getter=None,
+                    device_info=inverter_device,
+                    unit="kW",
+                    icon="mdi:battery-minus",
+                    entity_category=None,
+                ),
+            ]
+        )
+
+    for name in sorted(intent.loads.keys()):
+        load_device = load_device_info(base_url, name)
+        entities.append(
+            HassEnergyPlanValueSensor(
+                coordinator,
+                unique_id=entity_unique_id(base_url, "plan", "ev", name, "charge_power"),
+                suggested_object_id=suggested_object_id(
+                    "plan",
+                    "ev",
+                    name,
+                    "charge_power",
+                ),
+                name="Plan Charge Power",
+                value_getter=intent_load_value_getter(name, "charge_kw"),
+                series_getter=None,
+                device_info=load_device,
+                unit="kW",
+                icon="mdi:ev-station",
+                entity_category=None,
+            )
+        )
+
+    return entities
 
 
 def _build_mpc_entities_for_plan(
