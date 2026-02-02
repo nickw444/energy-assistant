@@ -18,8 +18,6 @@ automation:
       battery_full_pct: 99.0
       backup_import_kw_on: 0.5
       backup_import_kw_off: 0.2
-      backup_ac_net_kw_on: 0.3
-      backup_ac_net_kw_off: 0.1
 
       plan_age_s: >-
         {{ (as_timestamp(now()) - as_timestamp(states('sensor.hass_energy_plan_updated'), default=0)) | int }}
@@ -39,9 +37,9 @@ automation:
       battery_full: "{{ battery_soc_pct >= battery_full_pct }}"
       backup_hold: >-
         {% if current_mode == 'Back-up' -%}
-        {{ discharge_kw <= eps and grid_import_kw > backup_import_kw_off and ac_net_kw >= -backup_ac_net_kw_off }}
+        {{ discharge_kw <= eps and grid_import_kw > backup_import_kw_off }}
         {%- else -%}
-        {{ discharge_kw <= eps and grid_import_kw > backup_import_kw_on and ac_net_kw >= -backup_ac_net_kw_on }}
+        {{ discharge_kw <= eps and grid_import_kw > backup_import_kw_on }}
         {%- endif %}
 
       mode_desired: >-
