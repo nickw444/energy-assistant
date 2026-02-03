@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict
@@ -114,13 +115,12 @@ class EmsPlanOutput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-PlanIntentMode = Literal[
-    "Backup",
-    "Force Charge",
-    "Force Discharge",
-    "Export Priority",
-    "Self Consumption",
-]
+class PlanIntentMode(StrEnum):
+    BACKUP = "Backup"
+    FORCE_CHARGE = "Force Charge"
+    FORCE_DISCHARGE = "Force Discharge"
+    EXPORT_PRIORITY = "Export Priority"
+    SELF_CONSUMPTION = "Self Consumption"
 
 
 class InverterPlanIntent(BaseModel):

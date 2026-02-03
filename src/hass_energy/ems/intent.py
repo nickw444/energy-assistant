@@ -99,20 +99,20 @@ def _inverter_mode(
         and grid_import_kw > near_zero_tolerence_kw
         and ac_net_kw >= -near_zero_tolerence_kw
     ):
-        return "Backup"
+        return PlanIntentMode.BACKUP
     if no_export:
         return (
-            "Force Charge"
+            PlanIntentMode.FORCE_CHARGE
             if ac_net_kw < -near_zero_tolerence_kw
-            else "Self Consumption"
+            else PlanIntentMode.SELF_CONSUMPTION
         )
     if ac_net_kw < -near_zero_tolerence_kw:
-        return "Force Charge"
+        return PlanIntentMode.FORCE_CHARGE
     if discharge_kw > near_zero_tolerence_kw and grid_export_kw > near_zero_tolerence_kw:
-        return "Force Discharge"
+        return PlanIntentMode.FORCE_DISCHARGE
     if grid_export_kw > near_zero_tolerence_kw and discharge_kw <= near_zero_tolerence_kw:
-        return "Export Priority"
-    return "Self Consumption"
+        return PlanIntentMode.EXPORT_PRIORITY
+    return PlanIntentMode.SELF_CONSUMPTION
 
 
 def _export_limit_target(
@@ -127,7 +127,7 @@ def _export_limit_target(
 ) -> float:
     if no_export:
         return 0.0
-    if mode != "Force Discharge":
+    if mode != PlanIntentMode.FORCE_DISCHARGE:
         return export_limit_normal_kw
     at_max_discharge = (
         max_discharge_kw is not None
