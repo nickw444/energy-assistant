@@ -15,6 +15,11 @@ from hass_energy.models.plant import InverterConfig
 
 EPSILON_KW = 0.15
 
+# TODO: This intent layer is a step toward shifting control from HA automations to Hass Energy
+# Ideally this takes the plan, then sends commands to HA depending on what integration the user has configured.
+# Plan -> Quantize -> Command
+# but for now it instead gets picked up by the HA integration and an automation actions it
+
 
 def build_plan_intent(
     plan: EmsPlanOutput,
@@ -104,7 +109,7 @@ def _inverter_mode(
         return (
             PlanIntentMode.FORCE_CHARGE
             if ac_net_kw < -near_zero_tolerence_kw
-            else PlanIntentMode.SELF_CONSUMPTION
+            else PlanIntentMode.SELF_USE
         )
     if ac_net_kw < -near_zero_tolerence_kw:
         return PlanIntentMode.FORCE_CHARGE
@@ -112,7 +117,7 @@ def _inverter_mode(
         return PlanIntentMode.FORCE_DISCHARGE
     if grid_export_kw > near_zero_tolerence_kw and discharge_kw <= near_zero_tolerence_kw:
         return PlanIntentMode.EXPORT_PRIORITY
-    return PlanIntentMode.SELF_CONSUMPTION
+    return PlanIntentMode.SELF_USE
 
 
 def _export_limit_target(
