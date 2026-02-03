@@ -228,10 +228,46 @@ def _build_intent_entities_for_response(
     base_url: str,
 ) -> list[SensorEntity]:
     intent = response.intent
-    if not intent.inverters and not intent.loads:
-        return []
-
     entities: list[SensorEntity] = []
+    timestep0 = get_timestep0(response.plan)
+    if timestep0 is not None:
+        base_device = root_device_info(base_url)
+        entities.extend(
+            [
+                HassEnergyPlanValueSensor(
+                    coordinator,
+                    unique_id=entity_unique_id(base_url, "grid", "import_power"),
+                    suggested_object_id=suggested_object_id(
+                        "intent",
+                        "grid",
+                        "import_power",
+                    ),
+                    name="Intent Grid Import Power",
+                    value_getter=_timestep0_getter(lambda step: step.grid.import_kw),
+                    series_getter=lambda step: step.grid.import_kw,
+                    device_info=base_device,
+                    unit="kW",
+                    icon="mdi:transmission-tower",
+                    entity_category=None,
+                ),
+                HassEnergyPlanValueSensor(
+                    coordinator,
+                    unique_id=entity_unique_id(base_url, "grid", "export_power"),
+                    suggested_object_id=suggested_object_id(
+                        "intent",
+                        "grid",
+                        "export_power",
+                    ),
+                    name="Intent Grid Export Power",
+                    value_getter=_timestep0_getter(lambda step: step.grid.export_kw),
+                    series_getter=lambda step: step.grid.export_kw,
+                    device_info=base_device,
+                    unit="kW",
+                    icon="mdi:transmission-tower",
+                    entity_category=None,
+                ),
+            ]
+        )
     for name in sorted(intent.inverters.keys()):
         inverter_device = inverter_device_info(base_url, name)
         entities.extend(
@@ -257,29 +293,6 @@ def _build_intent_entities_for_response(
                     device_info=inverter_device,
                     unit=None,
                     icon="mdi:transition",
-                    entity_category=None,
-                ),
-                HassEnergyPlanValueSensor(
-                    coordinator,
-                    unique_id=entity_unique_id(
-                        base_url,
-                        "plan",
-                        "inverter",
-                        name,
-                        "export_limit",
-                    ),
-                    suggested_object_id=suggested_object_id(
-                        "intent",
-                        "inverter",
-                        name,
-                        "export_limit",
-                    ),
-                    name="Intent Export Limit",
-                    value_getter=intent_inverter_value_getter(name, "export_limit_kw"),
-                    series_getter=None,
-                    device_info=inverter_device,
-                    unit="kW",
-                    icon="mdi:transmission-tower",
                     entity_category=None,
                 ),
                 HassEnergyPlanValueSensor(
@@ -373,28 +386,6 @@ def _build_mpc_entities_for_plan(
 
     base_device = root_device_info(base_url)
     entities: list[SensorEntity] = [
-        HassEnergyPlanValueSensor(
-            coordinator,
-            unique_id=entity_unique_id(base_url, "grid", "import_power"),
-            suggested_object_id=None,
-            name="Plan Grid Import Power",
-            value_getter=_timestep0_getter(lambda step: step.grid.import_kw),
-            series_getter=lambda step: step.grid.import_kw,
-            device_info=base_device,
-            unit="kW",
-            icon="mdi:transmission-tower",
-        ),
-        HassEnergyPlanValueSensor(
-            coordinator,
-            unique_id=entity_unique_id(base_url, "grid", "export_power"),
-            suggested_object_id=None,
-            name="Plan Grid Export Power",
-            value_getter=_timestep0_getter(lambda step: step.grid.export_kw),
-            series_getter=lambda step: step.grid.export_kw,
-            device_info=base_device,
-            unit="kW",
-            icon="mdi:transmission-tower",
-        ),
         HassEnergyPlanValueSensor(
             coordinator,
             unique_id=entity_unique_id(base_url, "grid", "net_power"),
