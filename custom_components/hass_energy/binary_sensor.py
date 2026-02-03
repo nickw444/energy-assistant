@@ -179,7 +179,7 @@ def _build_intent_entities(
                     name,
                     "charge_on",
                 ),
-                name="Intent Charge On",
+                name="Charge On",
                 value_getter=intent_load_value_getter(name, "charge_on"),
                 device_info=load_device,
                 icon="mdi:ev-plug",
