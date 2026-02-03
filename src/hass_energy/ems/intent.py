@@ -1,0 +1,185 @@
+from __future__ import annotations
+
+from typing import cast
+
+from hass_energy.ems.models import (
+    EmsPlanOutput,
+    InverterPlanIntent,
+    LoadPlanIntent,
+    PlanIntent,
+    PlanIntentMode,
+)
+from hass_energy.models.config import AppConfig
+from hass_energy.models.loads import ControlledEvLoad, LoadConfig
+from hass_energy.models.plant import BatteryConfig, InverterConfig
+
+EPSILON_KW = 0.15
+BATTERY_FULL_TOLERANCE_PCT = 1.0
+
+# TODO: This intent layer is a step toward shifting control from HA automations to Hass Energy
+# Ideally this takes the plan, then sends commands to HA depending on what integration the
+# user has configured.
+# Plan -> Quantize -> Command
+# but for now it instead gets picked up by the HA integration and an automation actions it
+
+
+def build_plan_intent(
+    plan: EmsPlanOutput,
+    app_config: AppConfig,
+    *,
+    near_zero_tolerence_kw: float = EPSILON_KW,
+) -> PlanIntent:
+    if not plan.timesteps:
+        return PlanIntent(inverters={}, loads={})
+
+    step = plan.timesteps[0]
+    grid_import_kw = float(step.grid.import_kw)
+    grid_export_kw = float(step.grid.export_kw)
+    price_export = float(step.economics.price_export)
+    no_export = price_export < 0.0
+    export_limit_normal_kw = float(app_config.plant.grid.max_export_kw)
+
+    inverter_configs = _inverter_config_map(app_config.plant.inverters)
+    inverters: dict[str, InverterPlanIntent] = {}
+
+    for inverter_id, inverter in step.inverters.items():
+        config = inverter_configs.get(inverter_id)
+        battery = config.battery if config is not None else None
+        max_charge_kw = battery.max_charge_kw if battery is not None else None
+        max_discharge_kw = battery.max_discharge_kw if battery is not None else None
+
+        ac_net_kw = float(inverter.ac_net_kw)
+        charge_kw = _safe_kw(inverter.battery_charge_kw)
+        discharge_kw = _safe_kw(inverter.battery_discharge_kw)
+        battery_full = _battery_full(inverter.battery_soc_pct, battery)
+
+        mode = _inverter_mode(
+            ac_net_kw=ac_net_kw,
+            charge_kw=charge_kw,
+            discharge_kw=discharge_kw,
+            grid_import_kw=grid_import_kw,
+            grid_export_kw=grid_export_kw,
+            no_export=no_export,
+            battery_full=battery_full,
+            near_zero_tolerence_kw=near_zero_tolerence_kw,
+        )
+
+        export_limit_kw = _export_limit_target(
+            mode=mode,
+            ac_net_kw=ac_net_kw,
+            grid_export_kw=grid_export_kw,
+            max_discharge_kw=max_discharge_kw,
+            export_limit_normal_kw=export_limit_normal_kw,
+            no_export=no_export,
+            near_zero_tolerence_kw=near_zero_tolerence_kw,
+        )
+
+        inverters[inverter_id] = InverterPlanIntent(
+            mode=mode,
+            export_limit_kw=export_limit_kw,
+            force_charge_kw=_clamp_kw(charge_kw, max_charge_kw),
+            force_discharge_kw=_clamp_kw(discharge_kw, max_discharge_kw),
+        )
+
+    load_configs = _load_config_map(app_config.loads)
+    loads: dict[str, LoadPlanIntent] = {}
+    for ev_id, ev in step.loads.evs.items():
+        ev_config = load_configs.get(ev_id)
+        min_power_kw = ev_config.min_power_kw if ev_config is not None else 0.0
+        charge_kw = float(ev.charge_kw)
+        charge_on = ev.connected and charge_kw >= min_power_kw
+        loads[ev_id] = LoadPlanIntent(charge_kw=charge_kw, charge_on=charge_on)
+
+    return PlanIntent(inverters=inverters, loads=loads)
+
+
+def _inverter_mode(
+    *,
+    ac_net_kw: float,
+    charge_kw: float,
+    discharge_kw: float,
+    grid_import_kw: float,
+    grid_export_kw: float,
+    no_export: bool,
+    battery_full: bool,
+    near_zero_tolerence_kw: float,
+) -> PlanIntentMode:
+    if (
+        discharge_kw <= near_zero_tolerence_kw
+        and grid_import_kw > near_zero_tolerence_kw
+        and ac_net_kw >= -near_zero_tolerence_kw
+    ):
+        return PlanIntentMode.BACKUP
+    if no_export:
+        return (
+            PlanIntentMode.FORCE_CHARGE
+            if ac_net_kw < -near_zero_tolerence_kw
+            else PlanIntentMode.SELF_USE
+        )
+    if ac_net_kw < -near_zero_tolerence_kw:
+        return PlanIntentMode.FORCE_CHARGE
+    if discharge_kw > near_zero_tolerence_kw and grid_export_kw > near_zero_tolerence_kw:
+        return PlanIntentMode.FORCE_DISCHARGE
+    if grid_export_kw > near_zero_tolerence_kw and discharge_kw <= near_zero_tolerence_kw:
+        return PlanIntentMode.SELF_USE if battery_full else PlanIntentMode.EXPORT_PRIORITY
+    return PlanIntentMode.SELF_USE
+
+
+def _export_limit_target(
+    *,
+    mode: PlanIntentMode,
+    ac_net_kw: float,
+    grid_export_kw: float,
+    max_discharge_kw: float | None,
+    export_limit_normal_kw: float,
+    no_export: bool,
+    near_zero_tolerence_kw: float,
+) -> float:
+    if no_export:
+        return 0.0
+    if mode != PlanIntentMode.FORCE_DISCHARGE:
+        return export_limit_normal_kw
+    at_max_discharge = (
+        max_discharge_kw is not None
+        and ac_net_kw >= (max_discharge_kw - near_zero_tolerence_kw)
+    )
+    if at_max_discharge:
+        return export_limit_normal_kw
+    return min(export_limit_normal_kw, max(0.0, grid_export_kw))
+
+
+def _clamp_kw(value: float, max_kw: float | None) -> float:
+    clamped = max(0.0, float(value))
+    if max_kw is not None:
+        clamped = min(clamped, float(max_kw))
+    return clamped
+
+
+def _safe_kw(value: float | None) -> float:
+    return 0.0 if value is None else float(value)
+
+
+def _battery_full(
+    battery_soc_pct: float | None,
+    battery: BatteryConfig | None,
+) -> bool:
+    if battery_soc_pct is None or battery is None:
+        return False
+    full_threshold = max(0.0, float(battery.max_soc_pct) - BATTERY_FULL_TOLERANCE_PCT)
+    return float(battery_soc_pct) >= full_threshold
+
+
+def _inverter_config_map(
+    inverters: list[InverterConfig],
+) -> dict[str, InverterConfig]:
+    return {inv.id: inv for inv in inverters}
+
+
+def _load_config_map(loads: list[LoadConfig]) -> dict[str, ControlledEvLoad]:
+    evs: dict[str, ControlledEvLoad] = {}
+    for load in loads:
+        if getattr(load, "load_type", None) != "controlled_ev":
+            continue
+        ev = cast(ControlledEvLoad, load)
+        evs[ev.id] = ev
+    return evs

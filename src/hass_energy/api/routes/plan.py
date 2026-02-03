@@ -11,6 +11,8 @@ from hass_energy.api.routes.plan_dto import (
     PlanRunResponseDto,
     PlanRunStateDto,
 )
+from hass_energy.ems.intent import build_plan_intent
+from hass_energy.models.config import AppConfig
 from hass_energy.worker import PlanRunState, Worker
 
 router = APIRouter(prefix="/plan", tags=["plan"])
@@ -24,6 +26,16 @@ def get_worker(request: Request) -> Worker:
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail="Worker not available",
     )
+
+
+def get_app_config(request: Request) -> AppConfig:
+    config: AppConfig | None = getattr(request.app.state, "app_config", None)
+    if config is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Config missing",
+        )
+    return config
 
 
 def _run_to_dto(run: PlanRunState) -> PlanRunStateDto:
@@ -48,6 +60,7 @@ async def run_plan(
 @router.get("/latest", response_model=PlanLatestResponseDto)
 async def latest_plan(
     worker: Annotated[Worker, Depends(get_worker)],
+    app_config: Annotated[AppConfig, Depends(get_app_config)],
 ) -> PlanLatestResponseDto:
     latest = await worker.get_latest()
     if latest is None:
@@ -56,6 +69,7 @@ async def latest_plan(
     return PlanLatestResponseDto(
         run=_run_to_dto(run_state),
         plan=plan,
+        intent=build_plan_intent(plan, app_config),
     )
 
 
@@ -78,6 +92,7 @@ def _parse_since(value: str | None) -> float:
 @router.get("/await", response_model=PlanAwaitResponseDto)
 async def await_plan(
     worker: Annotated[Worker, Depends(get_worker)],
+    app_config: Annotated[AppConfig, Depends(get_app_config)],
     since: str | None = None,
     timeout: int = 30,
 ) -> PlanAwaitResponseDto | Response:
@@ -95,4 +110,5 @@ async def await_plan(
     return PlanAwaitResponseDto(
         run=_run_to_dto(run_state),
         plan=plan,
+        intent=build_plan_intent(plan, app_config),
     )
