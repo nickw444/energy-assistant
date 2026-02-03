@@ -13,14 +13,14 @@ from hass_energy.models.config import AppConfig
 from hass_energy.models.loads import ControlledEvLoad, LoadConfig
 from hass_energy.models.plant import InverterConfig
 
-NEAR_ZERO_TOLERENCE_KW = 0.15
+EPSILON_KW = 0.15
 
 
 def build_plan_intent(
     plan: EmsPlanOutput,
     app_config: AppConfig,
     *,
-    near_zero_tolerence_kw: float = NEAR_ZERO_TOLERENCE_KW,
+    near_zero_tolerence_kw: float = EPSILON_KW,
 ) -> PlanIntent:
     if not plan.timesteps:
         return PlanIntent(inverters={}, loads={})

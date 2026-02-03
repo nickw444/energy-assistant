@@ -35,7 +35,7 @@ automation:
 
       mode_desired: >-
         {% if discharge_kw <= eps and grid_import_kw > eps and ac_net_kw >= -eps -%}
-        Backup
+        Back-up
         {%- elif no_export -%}
         {%- if ac_net_kw < -eps -%}
         Force Charge
