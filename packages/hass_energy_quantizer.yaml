@@ -40,7 +40,7 @@ automation:
         {%- if ac_net_kw < -eps -%}
         Force Charge
         {%- else -%}
-        Self Consumption
+        Self Use
         {%- endif -%}
         {%- elif ac_net_kw < -eps -%}
         Force Charge
@@ -50,10 +50,10 @@ automation:
         {%- if battery_full -%}
         Self Use
         {%- else -%}
-        Feed-in First
+        Export Priority
         {%- endif -%}
         {%- else -%}
-        Self Consumption
+        Self Use
         {%- endif %}
 
       export_limit_target_kw: >-
@@ -153,13 +153,13 @@ automation:
         default:
           - if:
               - condition: template
-                value_template: "{{ not (plan_ok | bool) and states('select.inverter_modbus_work_mode') != 'Self Consumption' }}"
+                value_template: "{{ not (plan_ok | bool) and states('select.inverter_modbus_work_mode') != 'Self Use' }}"
             then:
               - service: select.select_option
                 target:
                   entity_id: select.inverter_modbus_work_mode
                 data:
-                  option: "Self Consumption"
+                  option: "Self Use"
 
   - alias: "EMS: Apply EV (t0) w/ fallback"
     id: "ems_apply_ev_t0_w_fallback"
