@@ -120,11 +120,11 @@ class EmsPlanOutput(BaseModel):
 
 
 class PlanIntentMode(StrEnum):
-    BACKUP = "Backup"
+    BACKUP = "Back-up"
     FORCE_CHARGE = "Force Charge"
     FORCE_DISCHARGE = "Force Discharge"
     EXPORT_PRIORITY = "Export Priority"
-    SELF_CONSUMPTION = "Self Consumption"
+    SELF_USE = "Self Use"
 
 
 class InverterPlanIntent(BaseModel):
