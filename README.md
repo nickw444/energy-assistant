@@ -48,6 +48,10 @@ Energy management system that pulls Home Assistant data, plans using MILP (stub 
          type: home_assistant
          platform: amberelectric
          entity: sensor.price_export_forecast
+       import_forbidden_periods:
+         - start: "16:00"
+           end: "21:00"
+           months: [jun, jul, aug]
      load:
        realtime_load_power:
          type: home_assistant

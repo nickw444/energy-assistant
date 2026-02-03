@@ -17,7 +17,7 @@ from hass_energy.lib.source_resolver.models import PowerForecastInterval
 from hass_energy.lib.source_resolver.resolver import ValueResolver
 from hass_energy.models.config import EmsConfig
 from hass_energy.models.loads import ControlledEvLoad, LoadConfig, NonVariableLoad
-from hass_energy.models.plant import PlantConfig, TimeWindow
+from hass_energy.models.plant import MONTH_ABBRS, PlantConfig, TimeWindow
 
 _EV_SWITCH_ON_THRESHOLD_KW = 0.1
 _TERMINAL_SOC_REFERENCE_MINUTES = 1440.0
@@ -1018,11 +1018,8 @@ class MILPBuilder:
     def _within_time_windows(slot_start: datetime, windows: list[TimeWindow]) -> bool:
         if not windows:
             return True
-        minute_of_day = slot_start.hour * 60 + slot_start.minute
         for window in windows:
-            start = _parse_hhmm(window.start)
-            end = _parse_hhmm(window.end)
-            if _minute_in_window(minute_of_day, start, end):
+            if _window_applies(slot_start, window):
                 return True
         return False
 
@@ -1082,18 +1079,24 @@ class MILPBuilder:
             return [True] * horizon.num_intervals
         allowed: list[bool] = []
         for slot in horizon.slots:
-            minute_of_day = slot.start.hour * 60 + slot.start.minute
-            is_forbidden = False
-            for window in forbidden:
-                start = _parse_hhmm(window.start)
-                end = _parse_hhmm(window.end)
-                if _minute_in_window(minute_of_day, start, end):
-                    is_forbidden = True
-                    break
+            is_forbidden = self._within_time_windows(slot.start, forbidden)
             allowed.append(not is_forbidden)
         if len(allowed) != horizon.num_intervals:
             raise ValueError("import_allowed series length mismatch")
         return allowed
+
+
+def _month_abbr(value: datetime) -> str:
+    return MONTH_ABBRS[value.month - 1]
+
+
+def _window_applies(slot_start: datetime, window: TimeWindow) -> bool:
+    if window.months is not None and _month_abbr(slot_start) not in window.months:
+        return False
+    minute_of_day = slot_start.hour * 60 + slot_start.minute
+    start = _parse_hhmm(window.start)
+    end = _parse_hhmm(window.end)
+    return _minute_in_window(minute_of_day, start, end)
 
 
 def _parse_hhmm(value: str) -> int:

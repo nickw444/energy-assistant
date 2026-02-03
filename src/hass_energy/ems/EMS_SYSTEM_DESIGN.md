@@ -97,7 +97,7 @@ Fields used by EMS:
 - `realtime_price_import`, `realtime_price_export`
 - `price_import_forecast`, `price_export_forecast`
 - `grid_price_bias_pct` (premium on import, discount on export)
-- `import_forbidden_periods` (list of `TimeWindow`)
+- `import_forbidden_periods` (list of `TimeWindow`, optional `months`)
 
 Note: `realtime_grid_power` exists in config but is **not used** by the EMS solver.
 
@@ -169,6 +169,8 @@ slots used by the MILP.
   - `import_allowed[t]` is computed in the builder per slot by comparing the slot
     start time against `grid.import_forbidden_periods` and stored on `GridBuild`.
   - Time windows use local time-of-day and can wrap midnight.
+  - `months` (optional) scopes a window to specific months using 3-letter
+    abbreviations (`jan`..`dec`), case-insensitive.
 
 Key types:
 

@@ -12,12 +12,55 @@ from hass_energy.lib.source_resolver.hass_source import (
     HomeAssistantSolcastForecastSource,
 )
 
+MONTH_ABBRS = (
+    "jan",
+    "feb",
+    "mar",
+    "apr",
+    "may",
+    "jun",
+    "jul",
+    "aug",
+    "sep",
+    "oct",
+    "nov",
+    "dec",
+)
+
 
 class TimeWindow(BaseModel):
     start: str = Field(pattern=r"^\d{2}:\d{2}$")
     end: str = Field(pattern=r"^\d{2}:\d{2}$")
+    months: list[str] | None = None
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    @field_validator("months", mode="before")
+    @classmethod
+    def _normalize_months(cls, value: object) -> list[str] | None:
+        if value is None:
+            return None
+        if not isinstance(value, list):
+            raise ValueError("months must be a list of 3-letter month abbreviations")
+        normalized: list[str] = []
+        for item in value:
+            if not isinstance(item, str):
+                raise ValueError("months must be 3-letter month abbreviations (jan..dec)")
+            month = item.strip().lower()
+            if len(month) != 3 or month not in MONTH_ABBRS:
+                raise ValueError("months must be 3-letter month abbreviations (jan..dec)")
+            normalized.append(month)
+        return normalized
+
+    @field_validator("months")
+    @classmethod
+    def _validate_months(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        if not value:
+            raise ValueError("months must not be empty")
+        month_set = set(value)
+        return [abbr for abbr in MONTH_ABBRS if abbr in month_set]
 
 
 def _default_import_forbidden_periods() -> list[TimeWindow]:
