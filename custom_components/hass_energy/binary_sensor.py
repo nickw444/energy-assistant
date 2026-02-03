@@ -43,7 +43,7 @@ class HassEnergyCurtailmentSensor(  # type: ignore[misc]
     BinarySensorEntity,
 ):
     _attr_has_entity_name = True
-    _attr_name = "Plan Curtailment"
+    _attr_name = "Curtailment"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _unrecorded_attributes = frozenset({"plan"})
 
