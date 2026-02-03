@@ -4,6 +4,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+import calendar
 import pulp
 
 from hass_energy.ems.forecast_alignment import (
@@ -17,7 +18,7 @@ from hass_energy.lib.source_resolver.models import PowerForecastInterval
 from hass_energy.lib.source_resolver.resolver import ValueResolver
 from hass_energy.models.config import EmsConfig
 from hass_energy.models.loads import ControlledEvLoad, LoadConfig, NonVariableLoad
-from hass_energy.models.plant import MONTH_ABBRS, PlantConfig, TimeWindow
+from hass_energy.models.plant import PlantConfig, TimeWindow
 
 _EV_SWITCH_ON_THRESHOLD_KW = 0.1
 _TERMINAL_SOC_REFERENCE_MINUTES = 1440.0
@@ -1087,7 +1088,7 @@ class MILPBuilder:
 
 
 def _month_abbr(value: datetime) -> str:
-    return MONTH_ABBRS[value.month - 1]
+    return calendar.month_abbr[value.month].lower()
 
 
 def _window_applies(slot_start: datetime, window: TimeWindow) -> bool:
