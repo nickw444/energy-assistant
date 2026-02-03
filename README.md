@@ -14,6 +14,9 @@ Home energy management that connects to your sensors, builds a plan, and exposes
 ### Home Assistant integration
 Energy Assistant includes a Home Assistant integration (early POC) that surfaces plans as entities so you can automate with HA. It lets you view plan outputs and trigger new plans directly from your HA dashboard.
 
+### Similar projects
+- [EMHASS](https://github.com/davidusb-geek/emhass) – Home Assistant-focused energy management and optimization.
+
 ### Status
 This is early, unreleased software. The planner is wired but still evolving, so outputs should be treated as experimental.
 
