@@ -1,5 +1,5 @@
 import re
-from typing import Literal, Self
+from typing import Literal, Self, cast
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -42,8 +42,9 @@ class TimeWindow(BaseModel):
             return None
         if not isinstance(value, list):
             raise ValueError("months must be a list of 3-letter month abbreviations")
+        items = cast(list[object], value)
         normalized: list[str] = []
-        for item in value:
+        for item in items:
             if not isinstance(item, str):
                 raise ValueError("months must be 3-letter month abbreviations (jan..dec)")
             month = item.strip().lower()

@@ -349,14 +349,14 @@ def test_import_forbidden_month_scoping() -> None:
         timestep_minutes=60,
         num_intervals=1,
     )
-    assert builder._resolve_import_allowed(horizon_jan) == [False]
+    assert builder._resolve_import_allowed(horizon_jan) == [False]  # type: ignore[reportPrivateUsage]
 
     horizon_mar = build_horizon(
         now=datetime(2025, 3, 15, 8, 0, tzinfo=UTC),
         timestep_minutes=60,
         num_intervals=1,
     )
-    assert builder._resolve_import_allowed(horizon_mar) == [True]
+    assert builder._resolve_import_allowed(horizon_mar) == [True]  # type: ignore[reportPrivateUsage]
 
 
 def test_solver_exports_with_positive_price() -> None:

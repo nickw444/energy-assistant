@@ -25,4 +25,4 @@ def test_time_window_months_normalizes_abbreviations() -> None:
 )
 def test_time_window_months_rejects_invalid_values(months: object) -> None:
     with pytest.raises(ValueError, match="months"):
-        TimeWindow(start="08:00", end="10:00", months=months)
+        TimeWindow.model_validate({"start": "08:00", "end": "10:00", "months": months})
