@@ -15,7 +15,7 @@ def root_device_identifier(base_url: str) -> str:
 def root_device_info(base_url: str) -> DeviceInfo:
     return DeviceInfo(
         identifiers={(DOMAIN, root_device_identifier(base_url))},
-        name="HASS Energy",
+        name="Plant",
     )
 
 

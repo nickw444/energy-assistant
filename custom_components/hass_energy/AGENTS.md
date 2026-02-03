@@ -5,6 +5,7 @@
 - Device identifiers include the server URL so multiple config entries stay distinct.
 - Inverter/battery sensors attach to per-inverter subdevices keyed by inverter ID.
 - Load sensors (for EVs) attach to per-load subdevices keyed by load ID.
+- Root device is named "Plant" to represent the site-level controller.
 - Curtailment is exposed as a binary sensor and includes plan series attributes.
 - Shared device registry helpers live in `custom_components/hass_energy/device.py`.
 - Shared plan helpers (timestep lookup, plan series) live in `custom_components/hass_energy/coordinator.py`.
