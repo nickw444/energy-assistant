@@ -50,7 +50,7 @@ automation:
         {%- if battery_full -%}
         Self Use
         {%- else -%}
-        Export Priority
+        Feed-in First
         {%- endif -%}
         {%- else -%}
         Self Use
