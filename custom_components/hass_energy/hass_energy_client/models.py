@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -118,9 +119,41 @@ class EmsPlanOutput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class PlanIntentMode(StrEnum):
+    BACKUP = "Back-up"
+    FORCE_CHARGE = "Force Charge"
+    FORCE_DISCHARGE = "Force Discharge"
+    EXPORT_PRIORITY = "Export Priority"
+    SELF_USE = "Self Use"
+
+
+class InverterPlanIntent(BaseModel):
+    mode: PlanIntentMode
+    export_limit_kw: float
+    force_charge_kw: float
+    force_discharge_kw: float
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class LoadPlanIntent(BaseModel):
+    charge_kw: float
+    charge_on: bool
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class PlanIntent(BaseModel):
+    inverters: dict[str, InverterPlanIntent]
+    loads: dict[str, LoadPlanIntent]
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class PlanLatestResponse(BaseModel):
     run: PlanRunState
     plan: EmsPlanOutput
+    intent: PlanIntent
 
     model_config = ConfigDict(extra="forbid")
 
@@ -128,6 +161,7 @@ class PlanLatestResponse(BaseModel):
 class PlanAwaitResponse(BaseModel):
     run: PlanRunState
     plan: EmsPlanOutput
+    intent: PlanIntent
 
     model_config = ConfigDict(extra="forbid")
 

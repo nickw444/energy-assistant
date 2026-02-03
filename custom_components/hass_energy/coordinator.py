@@ -119,6 +119,7 @@ class HassEnergyCoordinator(DataUpdateCoordinator[PlanPayload | None]):
         response = PlanLatestResponse(
             run=await_response.run,
             plan=await_response.plan,
+            intent=await_response.intent,
         )
         self._last_generated_at = response.plan.generated_at.isoformat()
         _LOGGER.debug("Long-poll received new plan (generated_at=%s)", self._last_generated_at)
@@ -214,5 +215,31 @@ def ev_step_getter(
         if ev is None:
             return None
         return getattr(ev, attribute, None)
+
+    return _get
+
+
+def intent_inverter_value_getter(
+    inverter_name: str,
+    attribute: str,
+) -> Callable[[PlanLatestResponse], Any]:
+    def _get(response: PlanLatestResponse) -> Any:
+        inverter = response.intent.inverters.get(inverter_name)
+        if inverter is None:
+            return None
+        return getattr(inverter, attribute, None)
+
+    return _get
+
+
+def intent_load_value_getter(
+    load_name: str,
+    attribute: str,
+) -> Callable[[PlanLatestResponse], Any]:
+    def _get(response: PlanLatestResponse) -> Any:
+        load = response.intent.loads.get(load_name)
+        if load is None:
+            return None
+        return getattr(load, attribute, None)
 
     return _get
