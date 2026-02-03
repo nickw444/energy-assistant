@@ -9,73 +9,14 @@
 - Frontend: not yet built; the repository root is kept flat so a `frontend/` or similar can be added later.
 
 ### Configuration
-A single YAML file (default `config.yaml`) holds server settings, Home Assistant settings, plant definition, and energy settings. It is read once at startup; the API does not write config—edit the YAML directly.
-
-Example:
-```yaml
-server:
-  host: 0.0.0.0
-  port: 6070
-  data_dir: ./data
-homeassistant:
-  base_url: ""
-  token: null
-  verify_tls: true
-  timeout_seconds: 30
-ems:
-  timestep_minutes: 60
-  min_horizon_minutes: 1440
-plant:
-  grid:
-    max_import_kw: 0.0
-    max_export_kw: 0.0
-    realtime_grid_power:
-      type: home_assistant
-      entity: sensor.grid_power
-    realtime_price_import:
-      type: home_assistant
-      entity: sensor.price_import
-    realtime_price_export:
-      type: home_assistant
-      entity: sensor.price_export
-    price_import_forecast:
-      type: home_assistant
-      platform: amberelectric
-      entity: sensor.price_import_forecast
-    price_export_forecast:
-      type: home_assistant
-      platform: amberelectric
-      entity: sensor.price_export_forecast
-  load:
-    realtime_load_power:
-      type: home_assistant
-      entity: sensor.load_power
-    forecast:
-      type: home_assistant
-      platform: historical_average
-      entity: sensor.load_power_15m
-      history_days: 3
-      interval_duration: 60
-      unit: W
-  inverters: []
-loads: []
-```
-
-Optional multi-resolution horizon:
-```yaml
-ems:
-  min_horizon_minutes: 120
-  timestep_minutes: 30
-  high_res_timestep_minutes: 5
-  high_res_horizon_minutes: 120
-```
-
-Plans are written to `<data_dir>/plans/latest.json` from the config file.
+A single YAML file (default `config.yaml`) holds server settings, Home Assistant settings, plant definition, and energy settings. It is read once at startup; the API does not write config—edit the YAML directly. See `QUICK_START.md` for a complete configuration example and setup notes.
 
 ### API surface (initial)
 - `GET /health` – readiness probe.
 - `GET /settings` – retrieve runtime energy settings (read-only; edit YAML to change).
-- `POST /plan/trigger` – run a one-shot plan; returns stub payload while MILP solver is not yet wired.
+- `POST /plan/run` – trigger a plan run.
+- `GET /plan/latest` – fetch the latest plan (404 if none available).
+- `GET /plan/await` – wait for a plan newer than a timestamp.
 
 ### Docker notes
 - Ensure `server.host` is `0.0.0.0` in `config.yaml` so the API binds inside the container.
