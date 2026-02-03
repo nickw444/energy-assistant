@@ -10,6 +10,7 @@ import pytest
 from hass_energy.ems.builder import MILPBuilder
 from hass_energy.ems.horizon import build_horizon
 from hass_energy.ems.planner import EmsMilpPlanner
+from hass_energy.ems.time_windows import TimeWindowMatcher
 from hass_energy.lib.home_assistant import HomeAssistantConfig
 from hass_energy.lib.source_resolver.hass_source import (
     HomeAssistantAmberElectricForecastSource,
@@ -301,7 +302,13 @@ def _solve_ev_switch_t0(
             "ev_connected": True,
         },
     )
-    builder = MILPBuilder(config.plant, config.loads, resolver, config.ems)
+    builder = MILPBuilder(
+        config.plant,
+        config.loads,
+        resolver,
+        config.ems,
+        time_window_matcher=TimeWindowMatcher(),
+    )
     forecasts = builder.resolve_forecasts(now=now, interval_minutes=horizon.interval_minutes)
     model = builder.build(horizon=horizon, forecasts=forecasts)
     model.problem.solve(pulp.PULP_CBC_CMD(msg=False))
@@ -331,8 +338,7 @@ def test_ev_switch_t0_seed_when_turning_off() -> None:
     assert abs(switch_on - 1.0) < 1e-6
     assert abs(switch_off) < 1e-6
 
-
-def test_import_forbidden_month_scoping() -> None:
+def test_builder_import_forbidden_periods_apply_via_model() -> None:
     config = _make_config(timestep_minutes=60, min_horizon_minutes=60)
     config.plant.grid.import_forbidden_periods = [
         TimeWindow(start="00:00", end="23:59", months=["jan"])
@@ -379,7 +385,13 @@ def test_import_forbidden_month_scoping() -> None:
                 "grid": 0.0,
             },
         )
-        builder = MILPBuilder(config.plant, config.loads, resolver, config.ems)
+        builder = MILPBuilder(
+            config.plant,
+            config.loads,
+            resolver,
+            config.ems,
+            time_window_matcher=TimeWindowMatcher(),
+        )
         forecasts = builder.resolve_forecasts(now=now, interval_minutes=horizon.interval_minutes)
         model = builder.build(horizon=horizon, forecasts=forecasts)
         return model.grid.import_allowed

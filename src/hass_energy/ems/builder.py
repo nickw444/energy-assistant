@@ -4,7 +4,6 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-import calendar
 import pulp
 
 from hass_energy.ems.forecast_alignment import (
@@ -14,6 +13,7 @@ from hass_energy.ems.forecast_alignment import (
 )
 from hass_energy.ems.horizon import Horizon, floor_to_interval_boundary
 from hass_energy.ems.models import ResolvedForecasts
+from hass_energy.ems.time_windows import TimeWindowMatcher
 from hass_energy.lib.source_resolver.models import PowerForecastInterval
 from hass_energy.lib.source_resolver.resolver import ValueResolver
 from hass_energy.models.config import EmsConfig
@@ -113,6 +113,7 @@ class MILPBuilder:
         loads: list[LoadConfig],
         resolver: ValueResolver,
         ems_config: EmsConfig,
+        time_window_matcher: TimeWindowMatcher,
     ):
         self._plant = plant
         self._loads = loads
@@ -120,6 +121,7 @@ class MILPBuilder:
         self._ems_config = ems_config
         self._power_aligner = PowerForecastAligner()
         self._price_aligner = PriceForecastAligner()
+        self._time_window_matcher = time_window_matcher
 
     def resolve_forecasts(
         self,
@@ -1004,25 +1006,17 @@ class MILPBuilder:
             return [0.0] * horizon.num_intervals
 
         grace_end = horizon.now + timedelta(minutes=grace_minutes)
+        matcher = self._time_window_matcher
         allowed: list[float] = []
         for slot in horizon.slots:
             if slot.start < grace_end:
                 allowed.append(0.0)
                 continue
-            if self._within_time_windows(slot.start, connect_times):
+            if matcher.allows(connect_times, slot.start):
                 allowed.append(1.0)
             else:
                 allowed.append(0.0)
         return allowed
-
-    @staticmethod
-    def _within_time_windows(slot_start: datetime, windows: list[TimeWindow]) -> bool:
-        if not windows:
-            return True
-        for window in windows:
-            if _window_applies(slot_start, window):
-                return True
-        return False
 
     def _build_ev_soc_incentives(
         self,
@@ -1078,39 +1072,13 @@ class MILPBuilder:
         forbidden = self._plant.grid.import_forbidden_periods
         if not forbidden:
             return [True] * horizon.num_intervals
+        matcher = self._time_window_matcher
         allowed: list[bool] = []
         for slot in horizon.slots:
-            is_forbidden = self._within_time_windows(slot.start, forbidden)
-            allowed.append(not is_forbidden)
+            allowed.append(not matcher.matches(forbidden, slot.start))
         if len(allowed) != horizon.num_intervals:
             raise ValueError("import_allowed series length mismatch")
         return allowed
-
-
-def _month_abbr(value: datetime) -> str:
-    return calendar.month_abbr[value.month].lower()
-
-
-def _window_applies(slot_start: datetime, window: TimeWindow) -> bool:
-    if window.months is not None and _month_abbr(slot_start) not in window.months:
-        return False
-    minute_of_day = slot_start.hour * 60 + slot_start.minute
-    start = _parse_hhmm(window.start)
-    end = _parse_hhmm(window.end)
-    return _minute_in_window(minute_of_day, start, end)
-
-
-def _parse_hhmm(value: str) -> int:
-    hour, minute = value.split(":", maxsplit=1)
-    return int(hour) * 60 + int(minute)
-
-
-def _minute_in_window(minute_of_day: int, start: int, end: int) -> bool:
-    if start == end:
-        return False
-    if start < end:
-        return start <= minute_of_day < end
-    return minute_of_day >= start or minute_of_day < end
 
 
 def _horizon_duration_minutes(horizon: Horizon) -> float:
