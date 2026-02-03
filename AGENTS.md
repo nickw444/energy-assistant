@@ -5,6 +5,7 @@
 - Reactive replanning: `Worker` internally subscribes to price entity state changes via Home Assistant WebSocket API and triggers replanning with a short debounce (0.75s) to coalesce simultaneous import/export price updates. The 1-minute schedule remains as a safety net.
 - `HomeAssistantWebSocketClient` (`hass_energy/lib/home_assistant_ws.py`) provides async WebSocket subscriptions for entity state changes with automatic reconnection and exponential backoff.
 - Persist config and runtime artifacts to the filesystem (`data_dir` from YAML config). The single YAML file (default `config.yaml`) stores server + Home Assistant + plant + energy settings; it is read once at startup and the API is read-only for config (no writes). Avoid destructive commands that would drop user data.
+- `TimeWindow` month scoping uses 3-letter abbreviations only (`jan`..`dec`); numeric months are not supported.
 - Shared helpers (e.g., Home Assistant client) live under `hass_energy/lib/` to keep worker/API code lean.
 - CLI accepts a YAML config (`--config`, default `config.yaml`) for static settings like host, port, and data_dir. Config is validated with Pydantic. Worker is always on; host/port flags were removed.
 - Systemd units should use an absolute path to `uv` in `ExecStart` when `uv` is installed under a user-local path (e.g., `/root/.local/bin/uv`), because systemd only searches a limited set of system paths.

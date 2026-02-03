@@ -1,5 +1,6 @@
+import calendar
 import re
-from typing import Literal, Self
+from typing import Literal, Self, cast
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -16,8 +17,39 @@ from hass_energy.lib.source_resolver.hass_source import (
 class TimeWindow(BaseModel):
     start: str = Field(pattern=r"^\d{2}:\d{2}$")
     end: str = Field(pattern=r"^\d{2}:\d{2}$")
+    months: list[str] | None = None
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    @field_validator("months", mode="before")
+    @classmethod
+    def _normalize_months(cls, value: object) -> list[str] | None:
+        if value is None:
+            return None
+        if not isinstance(value, list):
+            raise ValueError("months must be a list of 3-letter month abbreviations")
+        allowed = {abbr.lower() for abbr in calendar.month_abbr[1:]}
+        items = cast(list[object], value)
+        normalized: list[str] = []
+        for item in items:
+            if not isinstance(item, str):
+                raise ValueError("months must be 3-letter month abbreviations (jan..dec)")
+            month = item.strip().lower()
+            if len(month) != 3 or month not in allowed:
+                raise ValueError("months must be 3-letter month abbreviations (jan..dec)")
+            normalized.append(month)
+        return normalized
+
+    @field_validator("months")
+    @classmethod
+    def _validate_months(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        if not value:
+            raise ValueError("months must not be empty")
+        month_set = set(value)
+        month_order = [abbr.lower() for abbr in calendar.month_abbr[1:]]
+        return [abbr for abbr in month_order if abbr in month_set]
 
 
 def _default_import_forbidden_periods() -> list[TimeWindow]:
