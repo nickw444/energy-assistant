@@ -31,6 +31,7 @@ from hass_energy.models.plant import (
     PlantConfig,
     PlantLoadConfig,
     PvConfig,
+    TimeWindow,
 )
 
 Q = TypeVar("Q")
@@ -329,6 +330,33 @@ def test_ev_switch_t0_seed_when_turning_off() -> None:
     assert abs(charge_off) < 1e-6
     assert abs(switch_on - 1.0) < 1e-6
     assert abs(switch_off) < 1e-6
+
+
+def test_import_forbidden_month_scoping() -> None:
+    config = _make_config(timestep_minutes=60, min_horizon_minutes=60)
+    config.plant.grid.import_forbidden_periods = [
+        TimeWindow(start="00:00", end="23:59", months=["jan"])
+    ]
+    builder = MILPBuilder(
+        config.plant,
+        config.loads,
+        DummyResolver(price_forecasts={}, pv_forecasts={}, realtime_values={}),
+        config.ems,
+    )
+
+    horizon_jan = build_horizon(
+        now=datetime(2025, 1, 15, 8, 0, tzinfo=UTC),
+        timestep_minutes=60,
+        num_intervals=1,
+    )
+    assert builder._resolve_import_allowed(horizon_jan) == [False]
+
+    horizon_mar = build_horizon(
+        now=datetime(2025, 3, 15, 8, 0, tzinfo=UTC),
+        timestep_minutes=60,
+        num_intervals=1,
+    )
+    assert builder._resolve_import_allowed(horizon_mar) == [True]
 
 
 def test_solver_exports_with_positive_price() -> None:
