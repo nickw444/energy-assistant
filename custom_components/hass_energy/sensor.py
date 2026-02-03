@@ -48,7 +48,7 @@ class HassEnergyPlanSensor(  # type: ignore[misc]
     SensorEntity,
 ):
     _attr_has_entity_name = True
-    _attr_name = "Plan Status"
+    _attr_name = "Status"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _unrecorded_attributes = frozenset({"plan"})
 
@@ -88,7 +88,7 @@ class HassEnergyPlanUpdatedSensor(  # type: ignore[misc]
     SensorEntity,
 ):
     _attr_has_entity_name = True
-    _attr_name = "Plan Updated"
+    _attr_name = "Updated"
     _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_icon = "mdi:clock-outline"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
@@ -310,7 +310,7 @@ def _build_intent_entities_for_response(
                         name,
                         "force_charge_power",
                     ),
-                    name="Intent Force Charge Power",
+                    name="Intent Charge Power",
                     value_getter=intent_inverter_value_getter(
                         name,
                         "force_charge_kw",
@@ -336,7 +336,7 @@ def _build_intent_entities_for_response(
                         name,
                         "force_discharge_power",
                     ),
-                    name="Intent Force Discharge Power",
+                    name="Intent Discharge Power",
                     value_getter=intent_inverter_value_getter(
                         name,
                         "force_discharge_kw",
@@ -390,7 +390,7 @@ def _build_mpc_entities_for_plan(
             coordinator,
             unique_id=entity_unique_id(base_url, "grid", "net_power"),
             suggested_object_id=None,
-            name="Plan Grid Net Power",
+            name="Grid Net Power",
             value_getter=_timestep0_getter(lambda step: step.grid.net_kw),
             series_getter=lambda step: step.grid.net_kw,
             device_info=base_device,
@@ -401,7 +401,7 @@ def _build_mpc_entities_for_plan(
             coordinator,
             unique_id=entity_unique_id(base_url, "load", "base_power"),
             suggested_object_id=None,
-            name="Plan Load Base Power",
+            name="Load Base Power",
             value_getter=_timestep0_getter(lambda step: step.loads.base_kw),
             series_getter=lambda step: step.loads.base_kw,
             device_info=base_device,
@@ -412,7 +412,7 @@ def _build_mpc_entities_for_plan(
             coordinator,
             unique_id=entity_unique_id(base_url, "load", "total_power"),
             suggested_object_id=None,
-            name="Plan Load Total Power",
+            name="Load Total Power",
             value_getter=_timestep0_getter(lambda step: step.loads.total_kw),
             series_getter=lambda step: step.loads.total_kw,
             device_info=base_device,
@@ -423,7 +423,7 @@ def _build_mpc_entities_for_plan(
             coordinator,
             unique_id=entity_unique_id(base_url, "price", "import"),
             suggested_object_id=None,
-            name="Plan Price Import",
+            name="Price Import",
             value_getter=_timestep0_getter(lambda step: step.economics.price_import),
             series_getter=lambda step: step.economics.price_import,
             device_info=base_device,
@@ -434,7 +434,7 @@ def _build_mpc_entities_for_plan(
             coordinator,
             unique_id=entity_unique_id(base_url, "price", "export"),
             suggested_object_id=None,
-            name="Plan Price Export",
+            name="Price Export",
             value_getter=_timestep0_getter(lambda step: step.economics.price_export),
             series_getter=lambda step: step.economics.price_export,
             device_info=base_device,
@@ -445,7 +445,7 @@ def _build_mpc_entities_for_plan(
             coordinator,
             unique_id=entity_unique_id(base_url, "cost", "segment"),
             suggested_object_id=None,
-            name="Plan Segment Cost",
+            name="Segment Cost",
             value_getter=_timestep0_getter(lambda step: step.economics.segment_cost),
             series_getter=lambda step: step.economics.segment_cost,
             device_info=base_device,
@@ -456,7 +456,7 @@ def _build_mpc_entities_for_plan(
             coordinator,
             unique_id=entity_unique_id(base_url, "cost", "forecast"),
             suggested_object_id=None,
-            name="Plan Cost Forecast",
+            name="Cost Forecast",
             value_getter=_plan_getter(_plan_last_cumulative_cost),
             series_getter=lambda step: step.economics.cumulative_cost,
             device_info=base_device,
@@ -467,7 +467,7 @@ def _build_mpc_entities_for_plan(
             coordinator,
             unique_id=entity_unique_id(base_url, "horizon", "length"),
             suggested_object_id=None,
-            name="Plan Horizon Length",
+            name="Horizon Length",
             value_getter=_plan_getter(_plan_horizon_hours),
             series_getter=None,
             device_info=base_device,
@@ -488,7 +488,7 @@ def _build_mpc_entities_for_plan(
                         name,
                         "pv_power",
                     ),
-                    name="Plan PV Power",
+                    name="PV Power",
                     value_getter=inverter_value_getter(name, "pv_kw"),
                     series_getter=inverter_step_getter(name, "pv_kw"),
                     device_info=inverter_device,
@@ -505,7 +505,7 @@ def _build_mpc_entities_for_plan(
                     name,
                     "net_power",
                 ),
-                name="Plan Inverter Net Power",
+                name="Inverter Net Power",
                 value_getter=inverter_value_getter(name, "ac_net_kw"),
                 series_getter=inverter_step_getter(name, "ac_net_kw"),
                 device_info=inverter_device,
@@ -528,7 +528,7 @@ def _build_mpc_entities_for_plan(
                         name,
                         "battery_charge_power",
                     ),
-                    name="Plan Battery Charge Power",
+                    name="Battery Charge Power",
                     value_getter=inverter_value_getter(name, "battery_charge_kw"),
                     series_getter=inverter_step_getter(name, "battery_charge_kw"),
                     device_info=inverter_device,
@@ -551,7 +551,7 @@ def _build_mpc_entities_for_plan(
                         name,
                         "battery_discharge_power",
                     ),
-                    name="Plan Battery Discharge Power",
+                    name="Battery Discharge Power",
                     value_getter=inverter_value_getter(name, "battery_discharge_kw"),
                     series_getter=inverter_step_getter(name, "battery_discharge_kw"),
                     device_info=inverter_device,
@@ -569,7 +569,7 @@ def _build_mpc_entities_for_plan(
                         name,
                         "battery_soc",
                     ),
-                    name="Plan Battery Stored Energy",
+                    name="Battery Stored Energy",
                     value_getter=inverter_value_getter(name, "battery_soc_kwh"),
                     series_getter=inverter_step_getter(name, "battery_soc_kwh"),
                     device_info=inverter_device,
@@ -592,7 +592,7 @@ def _build_mpc_entities_for_plan(
                         name,
                         "battery_soc_pct",
                     ),
-                    name="Plan Battery SoC",
+                    name="Battery SoC",
                     value_getter=inverter_value_getter(name, "battery_soc_pct"),
                     series_getter=inverter_step_getter(name, "battery_soc_pct"),
                     device_info=inverter_device,
@@ -612,7 +612,7 @@ def _build_mpc_entities_for_plan(
                     name,
                     "charge_power",
                 ),
-                name="Plan Charge Power",
+                name="Charge Power",
                 value_getter=ev_value_getter(name, "charge_kw"),
                 series_getter=ev_step_getter(name, "charge_kw"),
                 device_info=load_device,
@@ -625,7 +625,7 @@ def _build_mpc_entities_for_plan(
                 coordinator,
                 unique_id=entity_unique_id(base_url, "ev", name, "soc"),
                 suggested_object_id=suggested_object_id("ev", name, "soc"),
-                name="Plan Stored Energy",
+                name="Stored Energy",
                 value_getter=ev_value_getter(name, "soc_kwh"),
                 series_getter=ev_step_getter(name, "soc_kwh"),
                 device_info=load_device,
@@ -639,7 +639,7 @@ def _build_mpc_entities_for_plan(
                     coordinator,
                     unique_id=entity_unique_id(base_url, "ev", name, "soc_pct"),
                     suggested_object_id=suggested_object_id("ev", name, "soc_pct"),
-                    name="Plan SoC",
+                    name="SoC",
                     value_getter=ev_value_getter(name, "soc_pct"),
                     series_getter=ev_step_getter(name, "soc_pct"),
                     device_info=load_device,
