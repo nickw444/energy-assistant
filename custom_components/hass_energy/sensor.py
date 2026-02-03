@@ -242,12 +242,12 @@ def _build_intent_entities_for_response(
                         "grid",
                         "import_power",
                     ),
-                    name="Intent Grid Import Power",
+                    name="Grid Import Power",
                     value_getter=_timestep0_getter(lambda step: step.grid.import_kw),
                     series_getter=lambda step: step.grid.import_kw,
                     device_info=base_device,
                     unit="kW",
-                    icon="mdi:transmission-tower",
+                    icon="mdi:transmission-tower-import",
                     entity_category=None,
                 ),
                 HassEnergyPlanValueSensor(
@@ -258,12 +258,12 @@ def _build_intent_entities_for_response(
                         "grid",
                         "export_power",
                     ),
-                    name="Intent Grid Export Power",
+                    name="Grid Export Power",
                     value_getter=_timestep0_getter(lambda step: step.grid.export_kw),
                     series_getter=lambda step: step.grid.export_kw,
                     device_info=base_device,
                     unit="kW",
-                    icon="mdi:transmission-tower",
+                    icon="mdi:transmission-tower-export",
                     entity_category=None,
                 ),
             ]
@@ -287,7 +287,7 @@ def _build_intent_entities_for_response(
                         name,
                         "mode",
                     ),
-                    name="Intent Inverter Mode",
+                    name="Inverter Mode",
                     value_getter=intent_inverter_value_getter(name, "mode"),
                     series_getter=None,
                     device_info=inverter_device,
@@ -310,7 +310,7 @@ def _build_intent_entities_for_response(
                         name,
                         "force_charge_power",
                     ),
-                    name="Intent Charge Power",
+                    name="Battery Charge Power",
                     value_getter=intent_inverter_value_getter(
                         name,
                         "force_charge_kw",
@@ -336,7 +336,7 @@ def _build_intent_entities_for_response(
                         name,
                         "force_discharge_power",
                     ),
-                    name="Intent Discharge Power",
+                    name="Battery Discharge Power",
                     value_getter=intent_inverter_value_getter(
                         name,
                         "force_discharge_kw",
@@ -362,7 +362,7 @@ def _build_intent_entities_for_response(
                     name,
                     "charge_power",
                 ),
-                name="Intent Charge Power",
+                name="Charge Power",
                 value_getter=intent_load_value_getter(name, "charge_kw"),
                 series_getter=None,
                 device_info=load_device,
@@ -513,52 +513,6 @@ def _build_mpc_entities_for_plan(
                 icon="mdi:current-ac",
             )
         )
-        if inverter.battery_charge_kw is not None:
-            entities.append(
-                HassEnergyPlanValueSensor(
-                    coordinator,
-                    unique_id=entity_unique_id(
-                        base_url,
-                        "inverter",
-                        name,
-                        "battery_charge_power",
-                    ),
-                    suggested_object_id=suggested_object_id(
-                        "inverter",
-                        name,
-                        "battery_charge_power",
-                    ),
-                    name="Battery Charge Power",
-                    value_getter=inverter_value_getter(name, "battery_charge_kw"),
-                    series_getter=inverter_step_getter(name, "battery_charge_kw"),
-                    device_info=inverter_device,
-                    unit="kW",
-                    icon="mdi:battery-charging",
-                )
-            )
-        if inverter.battery_discharge_kw is not None:
-            entities.append(
-                HassEnergyPlanValueSensor(
-                    coordinator,
-                    unique_id=entity_unique_id(
-                        base_url,
-                        "inverter",
-                        name,
-                        "battery_discharge_power",
-                    ),
-                    suggested_object_id=suggested_object_id(
-                        "inverter",
-                        name,
-                        "battery_discharge_power",
-                    ),
-                    name="Battery Discharge Power",
-                    value_getter=inverter_value_getter(name, "battery_discharge_kw"),
-                    series_getter=inverter_step_getter(name, "battery_discharge_kw"),
-                    device_info=inverter_device,
-                    unit="kW",
-                    icon="mdi:battery-minus",
-                )
-            )
         if inverter.battery_soc_kwh is not None:
             entities.append(
                 HassEnergyPlanValueSensor(
