@@ -11,9 +11,10 @@ from hass_energy.ems.models import (
 )
 from hass_energy.models.config import AppConfig
 from hass_energy.models.loads import ControlledEvLoad, LoadConfig
-from hass_energy.models.plant import InverterConfig
+from hass_energy.models.plant import BatteryConfig, InverterConfig
 
 EPSILON_KW = 0.15
+BATTERY_FULL_TOLERANCE_PCT = 1.0
 
 # TODO: This intent layer is a step toward shifting control from HA automations to Hass Energy
 # Ideally this takes the plan, then sends commands to HA depending on what integration the
@@ -50,6 +51,7 @@ def build_plan_intent(
         ac_net_kw = float(inverter.ac_net_kw)
         charge_kw = _safe_kw(inverter.battery_charge_kw)
         discharge_kw = _safe_kw(inverter.battery_discharge_kw)
+        battery_full = _battery_full(inverter.battery_soc_pct, battery)
 
         mode = _inverter_mode(
             ac_net_kw=ac_net_kw,
@@ -58,6 +60,7 @@ def build_plan_intent(
             grid_import_kw=grid_import_kw,
             grid_export_kw=grid_export_kw,
             no_export=no_export,
+            battery_full=battery_full,
             near_zero_tolerence_kw=near_zero_tolerence_kw,
         )
 
@@ -98,6 +101,7 @@ def _inverter_mode(
     grid_import_kw: float,
     grid_export_kw: float,
     no_export: bool,
+    battery_full: bool,
     near_zero_tolerence_kw: float,
 ) -> PlanIntentMode:
     if (
@@ -117,7 +121,7 @@ def _inverter_mode(
     if discharge_kw > near_zero_tolerence_kw and grid_export_kw > near_zero_tolerence_kw:
         return PlanIntentMode.FORCE_DISCHARGE
     if grid_export_kw > near_zero_tolerence_kw and discharge_kw <= near_zero_tolerence_kw:
-        return PlanIntentMode.EXPORT_PRIORITY
+        return PlanIntentMode.SELF_USE if battery_full else PlanIntentMode.EXPORT_PRIORITY
     return PlanIntentMode.SELF_USE
 
 
@@ -153,6 +157,16 @@ def _clamp_kw(value: float, max_kw: float | None) -> float:
 
 def _safe_kw(value: float | None) -> float:
     return 0.0 if value is None else float(value)
+
+
+def _battery_full(
+    battery_soc_pct: float | None,
+    battery: BatteryConfig | None,
+) -> bool:
+    if battery_soc_pct is None or battery is None:
+        return False
+    full_threshold = max(0.0, float(battery.max_soc_pct) - BATTERY_FULL_TOLERANCE_PCT)
+    return float(battery_soc_pct) >= full_threshold
 
 
 def _inverter_config_map(
