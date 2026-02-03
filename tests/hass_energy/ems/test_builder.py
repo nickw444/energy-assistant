@@ -10,6 +10,7 @@ import pytest
 from hass_energy.ems.builder import MILPBuilder
 from hass_energy.ems.horizon import build_horizon
 from hass_energy.ems.planner import EmsMilpPlanner
+from hass_energy.ems.time_windows import TimeWindowMatcher
 from hass_energy.lib.home_assistant import HomeAssistantConfig
 from hass_energy.lib.source_resolver.hass_source import (
     HomeAssistantAmberElectricForecastSource,
@@ -31,6 +32,7 @@ from hass_energy.models.plant import (
     PlantConfig,
     PlantLoadConfig,
     PvConfig,
+    TimeWindow,
 )
 
 Q = TypeVar("Q")
@@ -300,7 +302,13 @@ def _solve_ev_switch_t0(
             "ev_connected": True,
         },
     )
-    builder = MILPBuilder(config.plant, config.loads, resolver, config.ems)
+    builder = MILPBuilder(
+        config.plant,
+        config.loads,
+        resolver,
+        config.ems,
+        time_window_matcher=TimeWindowMatcher(),
+    )
     forecasts = builder.resolve_forecasts(now=now, interval_minutes=horizon.interval_minutes)
     model = builder.build(horizon=horizon, forecasts=forecasts)
     model.problem.solve(pulp.PULP_CBC_CMD(msg=False))
@@ -329,6 +337,67 @@ def test_ev_switch_t0_seed_when_turning_off() -> None:
     assert abs(charge_off) < 1e-6
     assert abs(switch_on - 1.0) < 1e-6
     assert abs(switch_off) < 1e-6
+
+def test_builder_import_forbidden_periods_apply_via_model() -> None:
+    config = _make_config(timestep_minutes=60, min_horizon_minutes=60)
+    config.plant.grid.import_forbidden_periods = [
+        TimeWindow(start="00:00", end="23:59", months=["jan"])
+    ]
+
+    def _import_allowed_for(now: datetime) -> list[bool]:
+        horizon = build_horizon(now=now, timestep_minutes=60, num_intervals=1)
+        slot_start = horizon.start
+        resolver = DummyResolver(
+            price_forecasts={
+                "price_import_forecast": _price_intervals(
+                    slot_start,
+                    interval_minutes=60,
+                    num_intervals=1,
+                    value=0.0,
+                ),
+                "price_export_forecast": _price_intervals(
+                    slot_start,
+                    interval_minutes=60,
+                    num_intervals=1,
+                    value=0.0,
+                ),
+            },
+            pv_forecasts={
+                "pv_forecast": _power_intervals(
+                    slot_start,
+                    interval_minutes=60,
+                    num_intervals=1,
+                    value=0.0,
+                )
+            },
+            load_forecasts={
+                "load_forecast": _power_intervals(
+                    slot_start,
+                    interval_minutes=60,
+                    num_intervals=1,
+                    value=0.0,
+                )
+            },
+            realtime_values={
+                "load": 0.0,
+                "price_import": 0.0,
+                "price_export": 0.0,
+                "grid": 0.0,
+            },
+        )
+        builder = MILPBuilder(
+            config.plant,
+            config.loads,
+            resolver,
+            config.ems,
+            time_window_matcher=TimeWindowMatcher(),
+        )
+        forecasts = builder.resolve_forecasts(now=now, interval_minutes=horizon.interval_minutes)
+        model = builder.build(horizon=horizon, forecasts=forecasts)
+        return model.grid.import_allowed
+
+    assert _import_allowed_for(datetime(2025, 1, 15, 8, 0, tzinfo=UTC)) == [False]
+    assert _import_allowed_for(datetime(2025, 3, 15, 8, 0, tzinfo=UTC)) == [True]
 
 
 def test_solver_exports_with_positive_price() -> None:

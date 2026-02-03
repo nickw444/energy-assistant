@@ -43,6 +43,15 @@ plant:
     import_forbidden_periods:
     - start: '14:55'
       end: '21:05'
+      months:
+      - jan
+      - feb
+      - mar
+      - jun
+      - jul
+      - aug
+      - nov
+      - dec
   load:
     realtime_load_power:
       type: home_assistant

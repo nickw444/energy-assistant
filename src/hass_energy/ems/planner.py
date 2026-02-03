@@ -21,6 +21,7 @@ from hass_energy.ems.models import (
     LoadsTimestepPlan,
     TimestepPlan,
 )
+from hass_energy.ems.time_windows import TimeWindowMatcher
 from hass_energy.lib.source_resolver.resolver import ValueResolver
 from hass_energy.models.config import AppConfig
 
@@ -48,6 +49,7 @@ class EmsMilpPlanner:
             loads=self._app_config.loads,
             resolver=self._resolver,
             ems_config=self._app_config.ems,
+            time_window_matcher=TimeWindowMatcher(),
         )
         high_res_timestep = self._app_config.ems.high_res_timestep_minutes
         high_res_horizon = self._app_config.ems.high_res_horizon_minutes
