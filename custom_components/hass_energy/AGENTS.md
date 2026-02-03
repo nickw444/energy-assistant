@@ -7,7 +7,6 @@
 - Load sensors (for EVs) attach to per-load subdevices keyed by load ID.
 - Root device is named "Plant" to represent the site-level controller.
 - Curtailment is exposed as a binary sensor and includes plan series attributes.
-- Intent entities use the "Intent" prefix and are not diagnostic; grid import/export intent sensors attach to the root device.
 - Shared device registry helpers live in `custom_components/hass_energy/device.py`.
 - Shared plan helpers (timestep lookup, plan series) live in `custom_components/hass_energy/coordinator.py`.
 - Coordinator uses long-polling (`/plan/await`) to receive plan updates immediately when prices change; falls back to `get_latest_plan()` on timeout or error.
