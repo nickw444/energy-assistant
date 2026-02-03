@@ -16,7 +16,8 @@ from hass_energy.models.plant import InverterConfig
 EPSILON_KW = 0.15
 
 # TODO: This intent layer is a step toward shifting control from HA automations to Hass Energy
-# Ideally this takes the plan, then sends commands to HA depending on what integration the user has configured.
+# Ideally this takes the plan, then sends commands to HA depending on what integration the
+# user has configured.
 # Plan -> Quantize -> Command
 # but for now it instead gets picked up by the HA integration and an automation actions it
 
