@@ -337,26 +337,55 @@ def test_import_forbidden_month_scoping() -> None:
     config.plant.grid.import_forbidden_periods = [
         TimeWindow(start="00:00", end="23:59", months=["jan"])
     ]
-    builder = MILPBuilder(
-        config.plant,
-        config.loads,
-        DummyResolver(price_forecasts={}, pv_forecasts={}, realtime_values={}),
-        config.ems,
-    )
 
-    horizon_jan = build_horizon(
-        now=datetime(2025, 1, 15, 8, 0, tzinfo=UTC),
-        timestep_minutes=60,
-        num_intervals=1,
-    )
-    assert builder._resolve_import_allowed(horizon_jan) == [False]  # type: ignore[reportPrivateUsage]
+    def _import_allowed_for(now: datetime) -> list[bool]:
+        horizon = build_horizon(now=now, timestep_minutes=60, num_intervals=1)
+        slot_start = horizon.start
+        resolver = DummyResolver(
+            price_forecasts={
+                "price_import_forecast": _price_intervals(
+                    slot_start,
+                    interval_minutes=60,
+                    num_intervals=1,
+                    value=0.0,
+                ),
+                "price_export_forecast": _price_intervals(
+                    slot_start,
+                    interval_minutes=60,
+                    num_intervals=1,
+                    value=0.0,
+                ),
+            },
+            pv_forecasts={
+                "pv_forecast": _power_intervals(
+                    slot_start,
+                    interval_minutes=60,
+                    num_intervals=1,
+                    value=0.0,
+                )
+            },
+            load_forecasts={
+                "load_forecast": _power_intervals(
+                    slot_start,
+                    interval_minutes=60,
+                    num_intervals=1,
+                    value=0.0,
+                )
+            },
+            realtime_values={
+                "load": 0.0,
+                "price_import": 0.0,
+                "price_export": 0.0,
+                "grid": 0.0,
+            },
+        )
+        builder = MILPBuilder(config.plant, config.loads, resolver, config.ems)
+        forecasts = builder.resolve_forecasts(now=now, interval_minutes=horizon.interval_minutes)
+        model = builder.build(horizon=horizon, forecasts=forecasts)
+        return model.grid.import_allowed
 
-    horizon_mar = build_horizon(
-        now=datetime(2025, 3, 15, 8, 0, tzinfo=UTC),
-        timestep_minutes=60,
-        num_intervals=1,
-    )
-    assert builder._resolve_import_allowed(horizon_mar) == [True]  # type: ignore[reportPrivateUsage]
+    assert _import_allowed_for(datetime(2025, 1, 15, 8, 0, tzinfo=UTC)) == [False]
+    assert _import_allowed_for(datetime(2025, 3, 15, 8, 0, tzinfo=UTC)) == [True]
 
 
 def test_solver_exports_with_positive_price() -> None:
