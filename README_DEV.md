@@ -46,6 +46,12 @@ plant:
       type: home_assistant
       platform: amberelectric
       entity: sensor.price_export_forecast
+    grid_price_bias_pct: 0.0
+    grid_price_risk:
+      bias_pct: 0.0
+      ramp_start_after_minutes: 30
+      ramp_duration_minutes: 90
+      curve: linear
   load:
     realtime_load_power:
       type: home_assistant

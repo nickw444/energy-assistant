@@ -56,6 +56,21 @@ def _default_import_forbidden_periods() -> list[TimeWindow]:
     return []
 
 
+class GridPriceRiskConfig(BaseModel):
+    bias_pct: float = Field(default=0.0, ge=0, le=100)
+    ramp_start_after_minutes: int = Field(default=30, ge=0)
+    ramp_duration_minutes: int = Field(default=90, ge=0)
+    curve: Literal["linear"] = "linear"
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    @model_validator(mode="after")
+    def _validate_ramp_window(self) -> Self:
+        if self.ramp_duration_minutes < 0:
+            raise ValueError("ramp_duration_minutes must be >= 0")
+        return self
+
+
 class GridConfig(BaseModel):
     max_import_kw: float = Field(ge=0)
     max_export_kw: float = Field(ge=0)
@@ -64,9 +79,11 @@ class GridConfig(BaseModel):
     realtime_price_export: HomeAssistantCurrencyEntitySource
     price_import_forecast: HomeAssistantAmberElectricForecastSource
     price_export_forecast: HomeAssistantAmberElectricForecastSource
-    # Grid price bias: add a premium to import prices and discount to
-    # export revenue to make grid interaction less attractive.
+    # Grid price bias: sign-aware premium on positive imports and discount on
+    # positive exports (negative prices move toward/away from zero accordingly).
     grid_price_bias_pct: float = Field(default=0.0, ge=0, le=100)
+    # Forecast price risk bias (ramps from start after minutes over duration).
+    grid_price_risk: GridPriceRiskConfig | None = None
     import_forbidden_periods: list[TimeWindow] = Field(
         default_factory=_default_import_forbidden_periods
     )
