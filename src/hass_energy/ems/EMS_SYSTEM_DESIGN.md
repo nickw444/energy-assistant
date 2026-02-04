@@ -97,6 +97,7 @@ Fields used by EMS:
 - `realtime_price_import`, `realtime_price_export`
 - `price_import_forecast`, `price_export_forecast`
 - `grid_price_bias_pct` (premium on import, discount on export)
+- `zero_price_export` (optional; allow export when price is zero)
 - `import_forbidden_periods` (list of `TimeWindow`, optional `months`)
 
 Note: `realtime_grid_power` exists in config but is **not used** by the EMS solver.
@@ -307,6 +308,9 @@ Per inverter battery:
   - max bound uses `max_soc_pct`.
 - Export reserve:
   - Grid export is blocked unless SoC stays above `reserve_soc_pct` for the slot.
+- Zero-price export block:
+  - When `zero_price_export` is disabled, grid export is forced to 0 when
+    export price is exactly zero (within tolerance).
 - SoC dynamics:
   - `E[t+1] = E[t] + (P_charge * eta - P_discharge / eta) * dt`
   - `eta = storage_efficiency_pct / 100`.
@@ -360,8 +364,8 @@ The objective is a sum of:
 
 1. **Energy cost** (per slot):
    - `import_cost - export_revenue`.
-   - If export price is exactly zero, a tiny **export bonus** (1e-4) is used
-     to prefer export over curtailment.
+   - If export price is exactly zero and `zero_price_export` is enabled,
+     a tiny **export bonus** (1e-4) prefers export over curtailment.
 2. **Forbidden import penalty**:
    - Large penalty (`w_violation = 1e3`) on `P_grid_import_violation_kw`.
 3. **Early-flow tie-breaker**:
@@ -484,7 +488,7 @@ current EMS stack:
 - **EV departure targets & switching penalties**: no explicit departure-time
   constraints or on/off switching penalty.
 - **Improved curtailment behavior**: no explicit incentive to curtail when
-  export price is negative or zero beyond the small export bonus.
+  export price is negative beyond the direct cost term.
 - **Output hierarchy**: plan output is a flat per-slot dict; no structured
   plant hierarchy in the plan payload.
 - **Cost reporting clarity**: incentives are included in the objective, and
