@@ -1,0 +1,89 @@
+server:
+  host: 0.0.0.0
+  port: 6070
+  data_dir: ./data
+homeassistant:
+  base_url: http://example.invalid
+  token: fixture-token
+  verify_tls: true
+  timeout_seconds: 30.0
+ems:
+  timestep_minutes: 30
+  min_horizon_minutes: 720
+  high_res_timestep_minutes: null
+  high_res_horizon_minutes: null
+  terminal_soc:
+    mode: adaptive
+    penalty_per_kwh: median
+plant:
+  grid:
+    max_import_kw: 10.0
+    max_export_kw: 5.0
+    realtime_grid_power:
+      type: home_assistant
+      entity: sensor.sigen_plant_grid_active_power
+    realtime_price_import:
+      type: home_assistant
+      entity: sensor.amber_general_price
+    realtime_price_export:
+      type: home_assistant
+      entity: sensor.amber_feed_in_price
+    price_import_forecast:
+      type: home_assistant
+      entity: sensor.amber_general_forecast
+      platform: amberelectric
+      price_forecast_mode: spot
+    price_export_forecast:
+      type: home_assistant
+      entity: sensor.amber_feed_in_forecast
+      platform: amberelectric
+      price_forecast_mode: spot
+    grid_price_bias_pct: 0.0
+    import_forbidden_periods: []
+  load:
+    realtime_load_power:
+      type: home_assistant
+      entity: sensor.sigen_plant_consumed_power
+    forecast:
+      type: home_assistant
+      entity: sensor.sigen_plant_consumed_power
+      history_days: 3
+      platform: historical_average
+      unit: kW
+      interval_duration: 30
+      forecast_horizon_hours: 48
+      realtime_window_minutes: 180
+  inverters:
+  - id: primary
+    name: Primary
+    peak_power_kw: 10.0
+    curtailment: load-aware
+    pv:
+      realtime_power:
+        type: home_assistant
+        entity: sensor.sigen_plant_pv_power
+      forecast:
+        type: home_assistant
+        entities:
+        - sensor.solcast_pv_forecast_forecast_today
+        - sensor.solcast_pv_forecast_forecast_tomorrow
+        - sensor.solcast_pv_forecast_forecast_day_3
+        platform: solcast
+    battery:
+      capacity_kwh: 41.9
+      storage_efficiency_pct: 95.0
+      charge_cost_per_kwh: 0.0
+      discharge_cost_per_kwh: 0.02
+      soc_value_per_kwh: 0.0
+      min_soc_pct: 11.0
+      max_soc_pct: 100.0
+      reserve_soc_pct: 30.0
+      max_charge_kw: 10.0
+      max_discharge_kw: 10.0
+      state_of_charge_pct:
+        type: home_assistant
+        entity: sensor.sigen_plant_battery_state_of_charge
+      realtime_power:
+        type: home_assistant
+        entity: sensor.sigen_plant_plant_active_power
+loads: []
