@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from hass_energy.ems.horizon import Horizon
-from hass_energy.models.plant import GridConfig, GridPriceRiskConfig
+from hass_energy.models.plant import GridPriceRiskConfig
 
 
 @dataclass(slots=True)
