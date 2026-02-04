@@ -21,6 +21,7 @@ from hass_energy.ems.models import (
     LoadsTimestepPlan,
     TimestepPlan,
 )
+from hass_energy.ems.pricing import PriceSeriesBuilder
 from hass_energy.ems.time_windows import TimeWindowMatcher
 from hass_energy.lib.source_resolver.resolver import ValueResolver
 from hass_energy.models.config import AppConfig
@@ -50,6 +51,10 @@ class EmsMilpPlanner:
             resolver=self._resolver,
             ems_config=self._app_config.ems,
             time_window_matcher=TimeWindowMatcher(),
+            price_series_builder=PriceSeriesBuilder(
+                grid_price_bias_pct=self._app_config.plant.grid.grid_price_bias_pct,
+                grid_price_risk=self._app_config.plant.grid.grid_price_risk,
+            ),
         )
         high_res_timestep = self._app_config.ems.high_res_timestep_minutes
         high_res_horizon = self._app_config.ems.high_res_horizon_minutes
@@ -167,6 +172,8 @@ def _extract_plan(model: MILPModel, horizon: Horizon) -> tuple[EmsPlanStatus, li
 
         price_import_value = float(grid.price_import[t]) if t < len(grid.price_import) else 0.0
         price_export_value = float(grid.price_export[t]) if t < len(grid.price_export) else 0.0
+        price_import_effective = float(grid.price_import_effective[t])
+        price_export_effective = float(grid.price_export_effective[t])
         segment_cost = (
             import_kw * price_import_value - export_kw * price_export_value
         ) * slot.duration_h
@@ -246,6 +253,8 @@ def _extract_plan(model: MILPModel, horizon: Horizon) -> tuple[EmsPlanStatus, li
                 economics=EconomicsTimestepPlan(
                     price_import=price_import_value,
                     price_export=price_export_value,
+                    price_import_effective=price_import_effective,
+                    price_export_effective=price_export_effective,
                     segment_cost=segment_cost,
                     cumulative_cost=cumulative_cost,
                 ),
