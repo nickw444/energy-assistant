@@ -429,8 +429,12 @@ def test_zero_price_export_bonus_toggle_affects_objective() -> None:
         value=0.0,
     )
 
-    def _objective_coeff(objective: pulp.LpAffineExpression, var: pulp.LpVariable) -> float:
-        return next((coef for term, coef in objective.items() if term == var), 0.0)
+    def _objective_coeff(
+        objective: pulp.LpAffineExpression | None, var: pulp.LpVariable
+    ) -> float:
+        assert objective is not None
+        value = objective.get(var, 0.0)
+        return 0.0 if value is None else float(value)
 
     def _build_coeff(prefer_export: bool) -> float:
         config = _make_config(timestep_minutes=60, min_horizon_minutes=60)
