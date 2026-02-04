@@ -97,6 +97,7 @@ Fields used by EMS:
 - `realtime_price_import`, `realtime_price_export`
 - `price_import_forecast`, `price_export_forecast`
 - `grid_price_bias_pct` (premium on import, discount on export)
+- `prefer_export_at_zero_price` (apply tiny bonus or penalty when export price is 0)
 - `import_forbidden_periods` (list of `TimeWindow`, optional `months`)
 
 Note: `realtime_grid_power` exists in config but is **not used** by the EMS solver.
@@ -361,7 +362,8 @@ The objective is a sum of:
 1. **Energy cost** (per slot):
    - `import_cost - export_revenue`.
    - If export price is exactly zero, a tiny **export bonus** (1e-4) is used
-     to prefer export over curtailment.
+     to prefer export over curtailment (or a tiny penalty when
+     `plant.grid.prefer_export_at_zero_price` is false).
 2. **Forbidden import penalty**:
    - Large penalty (`w_violation = 1e3`) on `P_grid_import_violation_kw`.
 3. **Early-flow tie-breaker**:
@@ -484,7 +486,7 @@ current EMS stack:
 - **EV departure targets & switching penalties**: no explicit departure-time
   constraints or on/off switching penalty.
 - **Improved curtailment behavior**: no explicit incentive to curtail when
-  export price is negative or zero beyond the small export bonus.
+  export price is negative or zero beyond the tiny zero-price bonus/penalty.
 - **Output hierarchy**: plan output is a flat per-slot dict; no structured
   plant hierarchy in the plan payload.
 - **Cost reporting clarity**: incentives are included in the objective, and

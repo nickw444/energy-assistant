@@ -400,6 +400,72 @@ def test_builder_import_forbidden_periods_apply_via_model() -> None:
     assert _import_allowed_for(datetime(2025, 3, 15, 8, 0, tzinfo=UTC)) == [True]
 
 
+def test_zero_price_export_bonus_toggle_affects_objective() -> None:
+    now = datetime(2025, 12, 27, 8, 2, tzinfo=UTC)
+    horizon = build_horizon(now=now, timestep_minutes=60, num_intervals=1)
+    slot_start = horizon.start
+    price_import = _price_intervals(
+        slot_start,
+        interval_minutes=60,
+        num_intervals=1,
+        value=0.1,
+    )
+    price_export = _price_intervals(
+        slot_start,
+        interval_minutes=60,
+        num_intervals=1,
+        value=0.0,
+    )
+    pv_intervals = _power_intervals(
+        slot_start,
+        interval_minutes=60,
+        num_intervals=1,
+        value=0.0,
+    )
+    load_intervals = _power_intervals(
+        slot_start,
+        interval_minutes=60,
+        num_intervals=1,
+        value=0.0,
+    )
+
+    def _objective_coeff(objective: pulp.LpAffineExpression, var: pulp.LpVariable) -> float:
+        return next((coef for term, coef in objective.items() if term == var), 0.0)
+
+    def _build_coeff(prefer_export: bool) -> float:
+        config = _make_config(timestep_minutes=60, min_horizon_minutes=60)
+        config.plant.grid.prefer_export_at_zero_price = prefer_export
+        resolver = DummyResolver(
+            price_forecasts={
+                "price_import_forecast": price_import,
+                "price_export_forecast": price_export,
+            },
+            pv_forecasts={"pv_forecast": pv_intervals},
+            load_forecasts={"load_forecast": load_intervals},
+            realtime_values={
+                "load": 0.0,
+                "price_import": 0.1,
+                "price_export": 0.0,
+                "grid": 0.0,
+            },
+        )
+        builder = MILPBuilder(
+            config.plant,
+            config.loads,
+            resolver,
+            config.ems,
+            time_window_matcher=TimeWindowMatcher(),
+        )
+        forecasts = builder.resolve_forecasts(now=now, interval_minutes=horizon.interval_minutes)
+        model = builder.build(horizon=horizon, forecasts=forecasts)
+        return _objective_coeff(model.problem.objective, model.grid.P_export[0])
+
+    coeff_prefer = _build_coeff(True)
+    coeff_discourage = _build_coeff(False)
+    dt_hours = horizon.dt_hours(0)
+    assert coeff_prefer - coeff_discourage == pytest.approx(-2e-4 * dt_hours)
+
+
 def test_solver_exports_with_positive_price() -> None:
     now = datetime(2025, 12, 27, 8, 2, tzinfo=UTC)
     config = _make_config()
