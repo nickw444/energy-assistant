@@ -15,6 +15,7 @@ from hass_energy.models.plant import BatteryConfig, InverterConfig
 
 EPSILON_KW = 0.15
 BATTERY_FULL_TOLERANCE_PCT = 1.0
+ZERO_PRICE_EPS = 1e-9
 
 # TODO: This intent layer is a step toward shifting control from HA automations to Hass Energy
 # Ideally this takes the plan, then sends commands to HA depending on what integration the
@@ -36,7 +37,10 @@ def build_plan_intent(
     grid_import_kw = float(step.grid.import_kw)
     grid_export_kw = float(step.grid.export_kw)
     price_export = float(step.economics.price_export)
-    no_export = price_export < 0.0
+    zero_price_export = app_config.plant.grid.zero_price_export
+    no_export = price_export < 0.0 or (
+        (not zero_price_export) and abs(price_export) <= ZERO_PRICE_EPS
+    )
     export_limit_normal_kw = float(app_config.plant.grid.max_export_kw)
 
     inverter_configs = _inverter_config_map(app_config.plant.inverters)

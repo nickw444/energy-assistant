@@ -443,6 +443,65 @@ def test_solver_exports_with_positive_price() -> None:
         assert abs(step.grid.import_kw) < 1e-6
 
 
+def test_solver_blocks_export_with_zero_price() -> None:
+    now = datetime(2025, 12, 27, 8, 2, tzinfo=UTC)
+    inverter = InverterConfig(
+        id="inv",
+        name="Inv",
+        peak_power_kw=5.0,
+        curtailment="load-aware",
+        pv=PvConfig(
+            realtime_power=None,
+            forecast=HomeAssistantSolcastForecastSource(
+                type="home_assistant",
+                platform="solcast",
+                entities=["pv_forecast"],
+            ),
+        ),
+        battery=None,
+    )
+    config = _make_config(inverters=[inverter])
+    config.plant.grid.zero_price_export = False
+    slot0 = now.replace(minute=0, second=0, microsecond=0)
+    slot_end = slot0 + timedelta(minutes=config.ems.timestep_minutes)
+    slot1_start = slot_end
+    slot1_end = slot1_start + timedelta(minutes=config.ems.timestep_minutes)
+    intervals_import = [
+        PriceForecastInterval(start=slot0, end=slot_end, value=0.1),
+        PriceForecastInterval(start=slot1_start, end=slot1_end, value=0.1),
+    ]
+    intervals_export = [
+        PriceForecastInterval(start=slot0, end=slot_end, value=0.0),
+        PriceForecastInterval(start=slot1_start, end=slot1_end, value=0.0),
+    ]
+    pv_intervals = [
+        PowerForecastInterval(start=slot0, end=slot_end, value=2.0),
+        PowerForecastInterval(start=slot1_start, end=slot1_end, value=2.0),
+    ]
+
+    resolver = DummyResolver(
+        price_forecasts={
+            "price_import_forecast": intervals_import,
+            "price_export_forecast": intervals_export,
+        },
+        pv_forecasts={"pv_forecast": pv_intervals},
+        load_forecasts={"load_forecast": _load_intervals(now, config, value=1.0)},
+        realtime_values={
+            "load": 1.0,
+            "price_import": 0.1,
+            "price_export": 0.0,
+            "grid": 0.0,
+        },
+    )
+
+    plan = EmsMilpPlanner(config, resolver=resolver).generate_ems_plan(now=now)
+    timesteps = plan.timesteps
+    assert len(timesteps) == 2
+    for step in timesteps:
+        assert abs(step.grid.export_kw) < 1e-6
+        assert abs(step.grid.import_kw) < 1e-6
+
+
 def test_realtime_price_overrides_current_slot() -> None:
     now = datetime(2025, 12, 27, 8, 2, tzinfo=UTC)
     config = _make_config()

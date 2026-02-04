@@ -39,6 +39,7 @@ plant:
       platform: amberelectric
       price_forecast_mode: spot
     grid_price_bias_pct: 0.0
+    zero_price_export: true
     import_forbidden_periods: []
   load:
     realtime_load_power:

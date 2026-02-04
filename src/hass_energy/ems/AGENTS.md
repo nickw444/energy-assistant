@@ -41,6 +41,7 @@ time-stepped plan for plotting/inspection. The core code lives in:
 - Controlled EV loads can assume future connectivity using `connect_grace_minutes` plus optional `can_connect` and `allowed_connect_times` constraints.
 - Controlled EV loads charge at any rate within min/max bounds while connected; optional switch penalties can discourage on/off flapping.
 - Negative export prices are handled by the objective; export remains feasible and the solver decides whether to export or curtail.
+- When `plant.grid.zero_price_export` is disabled, grid export is blocked when export price is exactly zero (within tolerance).
 
 ### MPC anchoring behavior
 Slot 0 is used as the MPC decision window, but some realtime inputs anchor the
@@ -48,7 +49,7 @@ model at the start of the horizon:
 - Realtime load, PV, and prices override slot 0 via `first_slot_override` when
   forecasts are available. This constrains exogenous inputs for slot 0 but does
   not directly set decision variables.
-- Grid export remains feasible when export prices are negative; curtailment is left as a solver decision.
+- Grid export remains feasible when export prices are negative; export is blocked at zero when `plant.grid.zero_price_export` is disabled.
 - Battery/EV SoC initialize `E_*[0]` using realtime sensors, and EV
   connectivity gates charging. These are feasibility anchors across the horizon.
 - EV switch penalties (when enabled) use realtime charger state to seed the
@@ -94,7 +95,9 @@ model at the start of the horizon:
 
 ### Objective (current terms)
 - Energy cost:
-  - `import_cost - export_revenue` (with a tiny export bonus when price = 0).
+  - `import_cost - export_revenue`.
+  - If export price is exactly zero and `plant.grid.zero_price_export` is
+    enabled, a tiny export bonus (1e-4) prefers export over curtailment.
   - Grid price bias (`plant.grid.grid_price_bias_pct`) adds a premium to import prices and discount to export revenue, making grid interaction less attractive.
 - Forbidden import violations:
   - Large penalty on `P_grid_import_violation_kw`.

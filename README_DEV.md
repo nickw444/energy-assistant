@@ -46,6 +46,7 @@ plant:
       type: home_assistant
       platform: amberelectric
       entity: sensor.price_export_forecast
+    zero_price_export: true
   load:
     realtime_load_power:
       type: home_assistant

@@ -247,6 +247,8 @@ class MILPBuilder:
             first_slot_override=realtime_export,
         )
 
+        zero_export_eps = 1e-9
+        zero_price_export = cfg.zero_price_export
         for t in T:
             # Prevent simultaneous grid import/export by selecting an import or export mode.
             problem += (
@@ -266,6 +268,11 @@ class MILPBuilder:
                 <= cfg.max_import_kw * float(import_allowed[t]) + P_import_violation_kw[t],
                 f"grid_import_forbidden_or_violation_t{t}",
             )
+            if (not zero_price_export) and abs(float(price_export[t])) <= zero_export_eps:
+                problem += (
+                    P_export[t] == 0,
+                    f"grid_export_zero_price_t{t}",
+                )
 
         return GridBuild(
             P_import=P_import,
@@ -638,20 +645,22 @@ class MILPBuilder:
 
         # Grid price bias: add premium to import, discount export.
         grid_price_bias = self._plant.grid.grid_price_bias_pct / 100.0
+        zero_export_eps = 1e-9
+        zero_price_export = self._plant.grid.zero_price_export
 
         # Price-aware objective: minimize net cost (import cost minus export revenue).
-        # When export price is exactly zero, add a tiny bonus to prefer exporting over curtailment.
         # Grid price bias makes grid interaction slightly less attractive than local use.
+        # When export price is exactly zero and zero-price blocking is disabled, add a tiny
+        # bonus to prefer exporting over curtailment.
         export_bonus = 1e-4
         # Effective export price series used consistently for revenue and penalties.
-        export_price_eff = [
-            (
-                export_bonus
-                if abs(float(price_export[t])) <= 1e-9
-                else float(price_export[t]) * (1.0 - grid_price_bias)
-            )
-            for t in horizon.T
-        ]
+        export_price_eff: list[float] = []
+        for t in horizon.T:
+            raw_price = float(price_export[t])
+            if abs(raw_price) <= zero_export_eps:
+                export_price_eff.append(export_bonus if zero_price_export else 0.0)
+            else:
+                export_price_eff.append(raw_price * (1.0 - grid_price_bias))
         objective: pulp.LpAffineExpression = pulp.lpSum(
             (
                 P_import[t] * float(price_import[t]) * (1.0 + grid_price_bias)
