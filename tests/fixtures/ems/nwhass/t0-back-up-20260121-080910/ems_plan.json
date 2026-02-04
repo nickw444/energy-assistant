@@ -307,7 +307,7 @@
     "generated_at": "2026-01-20T21:09:15.120074+00:00",
     "horizon_end": "2026-01-22T05:00:00+11:00",
     "horizon_start": "2026-01-21T08:05:00+11:00",
-    "objective_value": -3.48,
+    "objective_value": -3.442,
     "status": "Optimal",
     "timestep_minutes": {
       "avg": 19.015,
