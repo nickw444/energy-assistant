@@ -22,4 +22,4 @@ USER app
 
 EXPOSE 6070
 
-CMD ["hass-energy", "--config", "/config/config.yaml"]
+CMD ["energy-assistant", "--config", "/config/config.yaml"]

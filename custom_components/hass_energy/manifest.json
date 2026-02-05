@@ -1,6 +1,6 @@
 {
   "domain": "hass_energy",
-  "name": "HASS Energy",
+  "name": "Energy Assistant",
   "version": "0.1.0",
   "documentation": "https://github.com/",
   "requirements": ["pydantic>=2.5.0,<3.0.0"],

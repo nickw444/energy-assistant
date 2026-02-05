@@ -1,4 +1,4 @@
-"""HASS Energy button entities."""
+"""Energy Assistant button entities."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Data update coordinator for the HASS Energy integration."""
+"""Data update coordinator for the Energy Assistant integration."""
 
 from __future__ import annotations
 

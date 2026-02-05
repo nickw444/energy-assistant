@@ -1,4 +1,4 @@
-![Hass Energy Logo](docs/assets/logo-text.png)
+![Energy Assistant Logo](docs/assets/logo-text.png)
 
 ## Energy Assistant
 

@@ -1,4 +1,4 @@
-"""Lightweight HASS Energy API client and response models."""
+"""Lightweight Energy Assistant API client and response models."""
 
 from .client import HassEnergyApiClient
 from .models import (

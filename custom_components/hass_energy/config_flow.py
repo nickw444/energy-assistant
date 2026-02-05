@@ -1,4 +1,4 @@
-"""Config flow for HASS Energy integration."""
+"""Config flow for Energy Assistant integration."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from .const import CONF_BASE_URL, DEFAULT_BASE_URL, DOMAIN
 
 
 class HassEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for HASS Energy."""
+    """Handle a config flow for Energy Assistant."""
 
     VERSION = 1
 

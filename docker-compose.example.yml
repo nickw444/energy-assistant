@@ -1,6 +1,6 @@
 services:
-  hass-energy:
-    image: hass-energy
+  energy-assistant:
+    image: energy-assistant
     ports:
       - "6070:6070"
     volumes:

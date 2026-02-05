@@ -1,11 +1,11 @@
 ## Architecture
 
 ### Repository layout
-- `src/hass_energy/api`: FastAPI app and routes to manage config plus trigger/retrieve plans.
-- `src/hass_energy/worker/`: Background loop package that fetches Home Assistant data and builds a plan.
-- `src/hass_energy/worker/milp/`: PuLP-backed planner and compiler placeholder for MILP constraints.
-- `src/hass_energy/config.py`: YAML-backed configuration models and store (server + energy settings).
-- `src/hass_energy/lib/home_assistant.py`: Thin HTTP client wrapper for Home Assistant APIs.
+- `src/energy_assistant/api`: FastAPI app and routes to manage config plus trigger/retrieve plans.
+- `src/energy_assistant/worker/`: Background loop package that fetches Home Assistant data and builds a plan.
+- `src/energy_assistant/worker/milp/`: PuLP-backed planner and compiler placeholder for MILP constraints.
+- `src/energy_assistant/config.py`: YAML-backed configuration models and store (server + energy settings).
+- `src/energy_assistant/lib/home_assistant.py`: Thin HTTP client wrapper for Home Assistant APIs.
 - Frontend: not yet built; the repository root is kept flat so a `frontend/` or similar can be added later.
 
 ### Configuration
@@ -25,10 +25,10 @@ See `QUICKSTART.md` for a full, current configuration example.
 ### Development
 - Format/lint: `uv run ruff check src custom_components tests`
 - Type check: `uv run pyright`
-- Entry point: `uv run hass-energy`
+- Entry point: `uv run energy-assistant`
 
 ### EMS fixture workflows
-- Capture a new scenario: `uv run hass-energy ems record-scenario --name <scenario-name>`
-- Replay a recorded fixture: `uv run hass-energy ems solve --scenario <name-or-path>`
-- Refresh fixture baselines: `uv run hass-energy ems refresh-baseline [--name <name-or-path>]`
-- Generate a single-page report of all fixtures: `uv run hass-energy ems scenario-report`
+- Capture a new scenario: `uv run energy-assistant ems record-scenario --name <scenario-name>`
+- Replay a recorded fixture: `uv run energy-assistant ems solve --scenario <name-or-path>`
+- Refresh fixture baselines: `uv run energy-assistant ems refresh-baseline [--name <name-or-path>]`
+- Generate a single-page report of all fixtures: `uv run energy-assistant ems scenario-report`

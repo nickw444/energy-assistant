@@ -1,4 +1,4 @@
-"""Async client for the HASS Energy API."""
+"""Async client for the Energy Assistant API."""
 
 from __future__ import annotations
 
