@@ -21,6 +21,7 @@ and stores energy.
 
 ### Similar projects
 - [EMHASS](https://github.com/davidusb-geek/emhass) – Home Assistant-focused energy management and optimization.
+- [HAEO](https://github.com/hass-energy/haeo/) - Home Assistant Energy Optimizer
 
 ### Status
 This is early, unreleased software. The planner is wired but still evolving, so outputs should be treated as experimental.
