@@ -140,6 +140,7 @@ Top-level output:
 Plotting (`src/hass_energy/plotting/plan.py`):
 - Main panel includes net grid, PV, net battery, inverter net AC, base load, and EV charge.
 - Price and cost panels render with hover tooltips.
+- Price traces include dotted risk-biased (effective) buy/sell lines alongside raw prices.
 - SoC panel displays percentages (0–100%+, with headroom if needed) for clarity.
 
 ### Testing guidance

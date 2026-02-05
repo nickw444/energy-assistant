@@ -35,6 +35,8 @@ COLORS = {
     "ev_soc": "rgba(139, 195, 74, 1.0)",
     "price_import": "rgba(63, 81, 181, 1.0)",
     "price_export": "rgba(233, 30, 99, 1.0)",
+    "price_import_risk": "rgba(63, 81, 181, 0.35)",
+    "price_export_risk": "rgba(233, 30, 99, 0.35)",
     "curtailment_fill": "rgba(255, 193, 7, 0.12)",
 }
 
@@ -90,6 +92,8 @@ def _build_plan_figure(
 
     price_import = [float(step.economics.price_import) for step in timesteps]
     price_export = [float(step.economics.price_export) for step in timesteps]
+    price_import_risk = [float(step.economics.price_import_effective) for step in timesteps]
+    price_export_risk = [float(step.economics.price_export_effective) for step in timesteps]
 
     curtailment_by_inverter = _collect_inverter_series(
         timesteps, lambda inv: inv.pv_curtail_kw
@@ -100,7 +104,12 @@ def _build_plan_figure(
     has_soc = any(_has_any(series) for series in batt_soc_pct.values()) or any(
         _has_any(series) for series in ev_soc_pct.values()
     )
-    has_price = _has_any(price_import) or _has_any(price_export)
+    has_price = (
+        _has_any(price_import)
+        or _has_any(price_export)
+        or _has_any(price_import_risk)
+        or _has_any(price_export_risk)
+    )
 
     fig = make_subplots(rows=1, cols=1, specs=[[{"secondary_y": True}]])
 
@@ -290,6 +299,34 @@ def _build_plan_figure(
                     legendgroup=legend_group_price,
                 ),
             )
+        if _has_any(price_import_risk):
+            current_price = price_import_risk[0] if price_import_risk else 0
+            name = (
+                f"Buy Price (Risk Bias): {current_price:.2f} $/kWh"
+                if include_hover
+                else "Buy Price (Risk Bias)"
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=time_labels,
+                    y=price_import_risk,
+                    name=name,
+                    mode="lines",
+                    line={
+                        "color": COLORS["price_import_risk"],
+                        "width": 1.5,
+                        "shape": "hv",
+                        "dash": "dot",
+                    },
+                    yaxis=price_y_axis,
+                    hovertemplate=(
+                        "%{y:.3f} $/kWh<extra>Buy Price (Risk Bias)</extra>"
+                        if include_hover
+                        else None
+                    ),
+                    legendgroup=legend_group_price,
+                ),
+            )
         if _has_any(price_export):
             current_price = price_export[0] if price_export else 0
             name = f"Sell Price: {current_price:.2f} $/kWh" if include_hover else "Sell Price"
@@ -307,6 +344,34 @@ def _build_plan_figure(
                     legendgroup=legend_group_price,
                 ),
             )
+        if _has_any(price_export_risk):
+            current_price = price_export_risk[0] if price_export_risk else 0
+            name = (
+                f"Sell Price (Risk Bias): {current_price:.2f} $/kWh"
+                if include_hover
+                else "Sell Price (Risk Bias)"
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=time_labels,
+                    y=price_export_risk,
+                    name=name,
+                    mode="lines",
+                    line={
+                        "color": COLORS["price_export_risk"],
+                        "width": 1.5,
+                        "shape": "hv",
+                        "dash": "dot",
+                    },
+                    yaxis=price_y_axis,
+                    hovertemplate=(
+                        "%{y:.3f} $/kWh<extra>Sell Price (Risk Bias)</extra>"
+                        if include_hover
+                        else None
+                    ),
+                    legendgroup=legend_group_price,
+                ),
+            )
 
     total_cost = sum(float(step.economics.segment_cost) for step in timesteps)
     total_import_kwh = sum(
@@ -319,6 +384,8 @@ def _build_plan_figure(
     price_max = max(
         max(abs(p) for p in price_import) if price_import else 0,
         max(abs(p) for p in price_export) if price_export else 0,
+        max(abs(p) for p in price_import_risk) if price_import_risk else 0,
+        max(abs(p) for p in price_export_risk) if price_export_risk else 0,
         0.01,
     )
     soc_values = [
@@ -811,4 +878,3 @@ def _aggregate_series(series_dict: dict[str, list[float]]) -> list[float]:
 
 def _has_any(values: list[float]) -> bool:
     return any(abs(value) > 1e-9 for value in values)
-
