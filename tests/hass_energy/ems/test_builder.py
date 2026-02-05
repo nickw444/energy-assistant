@@ -445,11 +445,8 @@ def test_zero_price_export_bonus_toggle_affects_objective() -> None:
         value = objective.get(var, 0.0)
         return 0.0 if value is None else float(value)
 
-    def _build_coeff(prefer_export: bool) -> float:
+    def _build_coeff() -> float:
         config = _make_config(timestep_minutes=60, min_horizon_minutes=60)
-        config.plant.grid.zero_price_export_preference = (
-            "export" if prefer_export else "curtail"
-        )
         resolver = DummyResolver(
             price_forecasts={
                 "price_import_forecast": price_import,
@@ -470,15 +467,19 @@ def test_zero_price_export_bonus_toggle_affects_objective() -> None:
             resolver,
             config.ems,
             time_window_matcher=TimeWindowMatcher(),
+            price_series_builder=PriceSeriesBuilder(
+                grid_price_bias_pct=config.plant.grid.grid_price_bias_pct,
+                grid_price_risk=config.plant.grid.grid_price_risk,
+            ),
         )
         forecasts = builder.resolve_forecasts(now=now, interval_minutes=horizon.interval_minutes)
         model = builder.build(horizon=horizon, forecasts=forecasts)
         return _objective_coeff(model.problem.objective, model.grid.P_export[0])
 
-    coeff_prefer = _build_coeff(True)
-    coeff_discourage = _build_coeff(False)
+    coeff = _build_coeff()
     dt_hours = horizon.dt_hours(0)
-    assert coeff_prefer - coeff_discourage == pytest.approx(-2e-4 * dt_hours)
+    # Export coeff includes both the zero-price export bonus and the early-flow bonus.
+    assert coeff == pytest.approx(-(1e-4 + 1e-4) * dt_hours)
 
 
 def test_solver_exports_with_positive_price() -> None:
