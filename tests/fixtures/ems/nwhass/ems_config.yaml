@@ -40,6 +40,11 @@ plant:
       platform: amberelectric
       price_forecast_mode: spot
     grid_price_bias_pct: 25.0
+    grid_price_risk:
+      bias_pct: 20.0
+      ramp_start_after_minutes: 30
+      ramp_duration_minutes: 90
+      curve: linear
     import_forbidden_periods:
     - start: '14:55'
       end: '21:05'

@@ -78,6 +78,8 @@ class LoadsTimestepPlan(BaseModel):
 class EconomicsTimestepPlan(BaseModel):
     price_import: float
     price_export: float
+    price_import_effective: float
+    price_export_effective: float
     segment_cost: Rounded3
     cumulative_cost: Rounded3
 
