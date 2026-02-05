@@ -45,6 +45,7 @@ plant:
       ramp_start_after_minutes: 30
       ramp_duration_minutes: 90
       curve: linear
+      export_price_ceiling: 5.0
     import_forbidden_periods:
     - start: '14:55'
       end: '21:05'
