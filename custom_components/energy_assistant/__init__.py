@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from homeassistant.config import ConfigType
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -46,12 +47,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         DEFAULT_SCAN_INTERVAL,
     )
     await coordinator.async_config_entry_first_refresh()
-    coordinator.start_long_poll_loop()
     entry.runtime_data = EnergyAssistantRuntimeData(
         client=client,
         coordinator=coordinator,
         base_url=base_url,
     )
+    # Start long-poll after HA is running; bootstrap waits on setup tasks, so a
+    # never-ending long-poll started during setup can stall startup.
+    if hass.is_running:
+        coordinator.start_long_poll_loop()
+    else:
+        remove_listener = hass.bus.async_listen_once(
+            EVENT_HOMEASSISTANT_STARTED,
+            lambda _event: coordinator.start_long_poll_loop(),
+        )
+        entry.async_on_unload(remove_listener)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
