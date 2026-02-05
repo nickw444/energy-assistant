@@ -1,4 +1,4 @@
-"""Pydantic models for the HASS Energy API."""
+"""Pydantic models for the Energy Assistant API."""
 
 from __future__ import annotations
 

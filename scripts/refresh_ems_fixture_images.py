@@ -5,7 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from hass_energy.ems.fixture_harness import (
+from energy_assistant.ems.fixture_harness import (
     EmsFixturePaths,
     compute_plan_hash,
     resolve_ems_fixture_paths,
@@ -44,7 +44,7 @@ def _refresh_scenario(name: str, *, force_image: bool) -> None:
     cmd = [
         sys.executable,
         "-m",
-        "hass_energy.cli",
+        "energy_assistant.cli",
         "ems",
         "refresh-baseline",
         "--name",

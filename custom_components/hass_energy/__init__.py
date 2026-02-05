@@ -1,4 +1,4 @@
-"""HASS Energy Home Assistant integration (proof of concept)."""
+"""Energy Assistant Home Assistant integration (proof of concept)."""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Hass Energy from a config entry."""
+    """Set up Energy Assistant from a config entry."""
     session = async_get_clientsession(hass)
     base_url = entry.data.get(CONF_BASE_URL, DEFAULT_BASE_URL).rstrip("/")
     timeout = entry.data.get(CONF_TIMEOUT, DEFAULT_TIMEOUT)

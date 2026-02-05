@@ -1,4 +1,4 @@
-"""HASS Energy binary sensors."""
+"""Energy Assistant binary sensors."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""HASS Energy sensors (proof of concept)."""
+"""Energy Assistant sensors (proof of concept)."""
 
 from __future__ import annotations
 

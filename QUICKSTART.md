@@ -147,7 +147,7 @@ loads:
 ```
 
 ## Run
-1. Start the API + worker: `uv run hass-energy --config config.yaml`
+1. Start the API + worker: `uv run energy-assistant --config config.yaml`
 2. Trigger a plan run: `curl -X POST http://localhost:6070/plan/run`
 3. Fetch the latest plan: `curl http://localhost:6070/plan/latest`
 
@@ -162,7 +162,7 @@ Notes:
 - `data_dir` is created automatically if it does not exist.
 
 ## Docker
-1. Build the image: `docker build -t hass-energy .`
+1. Build the image: `docker build -t energy-assistant .`
 2. Set `server.host: 0.0.0.0` and `server.data_dir: /data` in `config.yaml`.
 3. Run the container:
 
@@ -170,7 +170,7 @@ Notes:
 docker run --rm -p 6070:6070 \
   -v "$(pwd)/config.yaml:/config/config.yaml:ro" \
   -v "$(pwd)/data:/data" \
-  hass-energy
+  energy-assistant
 ```
 
 Or with compose:

@@ -1,5 +1,5 @@
 [project]
-name = "hass-energy"
+name = "energy-assistant"
 version = "0.1.0"
 description = "Energy management system integrating Home Assistant data with MILP planning"
 readme = "README.md"
@@ -21,7 +21,7 @@ dependencies = [
 ]
 
 [project.scripts]
-hass-energy = "hass_energy.cli:cli"
+energy-assistant = "energy_assistant.cli:cli"
 
 [dependency-groups]
 dev = [
@@ -47,7 +47,7 @@ src = ["src", "custom_components"]
 select = ["E", "F", "B", "I", "UP"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["hass_energy"]
+known-first-party = ["energy_assistant"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
