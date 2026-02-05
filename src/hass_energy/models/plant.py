@@ -61,6 +61,8 @@ class GridPriceRiskConfig(BaseModel):
     ramp_start_after_minutes: int = Field(default=30, ge=0)
     ramp_duration_minutes: int = Field(default=90, ge=0)
     curve: Literal["linear"] = "linear"
+    import_price_floor: float | None = None
+    export_price_ceiling: float | None = None
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 

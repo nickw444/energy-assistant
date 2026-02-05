@@ -97,7 +97,7 @@ Fields used by EMS:
 - `realtime_price_import`, `realtime_price_export`
 - `price_import_forecast`, `price_export_forecast`
 - `grid_price_bias_pct` (sign-aware: premium on positive import, discount on positive export)
-- `grid_price_risk` (ramp-based forecast price bias using `ramp_start_after_minutes` + `ramp_duration_minutes`)
+- `grid_price_risk` (ramp-based forecast price bias using `ramp_start_after_minutes` + `ramp_duration_minutes`, with optional `import_price_floor`/`export_price_ceiling` clamps applied before scaling from slot 1 onward)
 - `zero_price_export_preference` (apply tiny bonus or penalty when export price is 0)
 - `import_forbidden_periods` (list of `TimeWindow`, optional `months`)
 

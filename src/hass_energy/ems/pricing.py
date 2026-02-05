@@ -40,6 +40,11 @@ class PriceSeriesBuilder:
         for t, slot in enumerate(horizon.slots):
             raw_import = float(price_import[t])
             raw_export = float(price_export[t])
+            if self._risk_cfg is not None and t != 0:
+                if self._risk_cfg.import_price_floor is not None:
+                    raw_import = max(raw_import, self._risk_cfg.import_price_floor)
+                if self._risk_cfg.export_price_ceiling is not None:
+                    raw_export = min(raw_export, self._risk_cfg.export_price_ceiling)
             midpoint = slot.start + (slot.end - slot.start) / 2
             minutes_from_now = max(0.0, (midpoint - horizon.now).total_seconds() / 60.0)
             risk_factor = self._risk_factor_minutes(minutes_from_now)
