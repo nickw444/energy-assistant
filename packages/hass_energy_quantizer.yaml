@@ -37,9 +37,9 @@ automation:
       battery_full: "{{ battery_soc_pct >= battery_full_pct }}"
       backup_hold: >-
         {% if current_mode == 'Back-up' -%}
-        {{ discharge_kw <= eps and grid_import_kw > backup_import_kw_off }}
+        {{ ac_net_kw >= -eps and discharge_kw <= eps and grid_import_kw > backup_import_kw_off }}
         {%- else -%}
-        {{ discharge_kw <= eps and grid_import_kw > backup_import_kw_on }}
+        {{ ac_net_kw >= -eps and discharge_kw <= eps and grid_import_kw > backup_import_kw_on }}
         {%- endif %}
 
       mode_desired: >-
