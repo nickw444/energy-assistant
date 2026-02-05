@@ -67,6 +67,9 @@ class GridConfig(BaseModel):
     # Grid price bias: add a premium to import prices and discount to
     # export revenue to make grid interaction less attractive.
     grid_price_bias_pct: float = Field(default=0.0, ge=0, le=100)
+    # When export price is exactly zero, apply a tiny bonus or penalty to break ties
+    # between export and curtailment.
+    zero_price_export_preference: Literal["export", "curtail"] = "export"
     import_forbidden_periods: list[TimeWindow] = Field(
         default_factory=_default_import_forbidden_periods
     )
