@@ -10,6 +10,7 @@ import pytest
 from hass_energy.ems.builder import MILPBuilder
 from hass_energy.ems.horizon import build_horizon
 from hass_energy.ems.planner import EmsMilpPlanner
+from hass_energy.ems.pricing import PriceSeriesBuilder
 from hass_energy.ems.time_windows import TimeWindowMatcher
 from hass_energy.lib.home_assistant import HomeAssistantConfig
 from hass_energy.lib.source_resolver.hass_source import (
@@ -308,6 +309,10 @@ def _solve_ev_switch_t0(
         resolver,
         config.ems,
         time_window_matcher=TimeWindowMatcher(),
+        price_series_builder=PriceSeriesBuilder(
+            grid_price_bias_pct=config.plant.grid.grid_price_bias_pct,
+            grid_price_risk=config.plant.grid.grid_price_risk,
+        ),
     )
     forecasts = builder.resolve_forecasts(now=now, interval_minutes=horizon.interval_minutes)
     model = builder.build(horizon=horizon, forecasts=forecasts)
@@ -391,6 +396,10 @@ def test_builder_import_forbidden_periods_apply_via_model() -> None:
             resolver,
             config.ems,
             time_window_matcher=TimeWindowMatcher(),
+            price_series_builder=PriceSeriesBuilder(
+                grid_price_bias_pct=config.plant.grid.grid_price_bias_pct,
+                grid_price_risk=config.plant.grid.grid_price_risk,
+            ),
         )
         forecasts = builder.resolve_forecasts(now=now, interval_minutes=horizon.interval_minutes)
         model = builder.build(horizon=horizon, forecasts=forecasts)
@@ -461,6 +470,10 @@ def test_zero_price_export_bonus_toggle_affects_objective() -> None:
             resolver,
             config.ems,
             time_window_matcher=TimeWindowMatcher(),
+            price_series_builder=PriceSeriesBuilder(
+                grid_price_bias_pct=config.plant.grid.grid_price_bias_pct,
+                grid_price_risk=config.plant.grid.grid_price_risk,
+            ),
         )
         forecasts = builder.resolve_forecasts(now=now, interval_minutes=horizon.interval_minutes)
         model = builder.build(horizon=horizon, forecasts=forecasts)

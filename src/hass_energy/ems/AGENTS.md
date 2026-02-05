@@ -94,9 +94,10 @@ model at the start of the horizon:
 
 ### Objective (current terms)
 - Energy cost:
-  - `import_cost - export_revenue` (with a tiny export bonus or penalty when price = 0;
-    controlled by `plant.grid.zero_price_export_preference`).
-  - Grid price bias (`plant.grid.grid_price_bias_pct`) adds a premium to import prices and discount to export revenue, making grid interaction less attractive.
+  - `import_cost - export_revenue` (with a tiny export bonus when price = 0).
+  - Grid price bias (`plant.grid.grid_price_bias_pct`) is sign-aware: positive imports are penalized, positive exports discounted, and negative prices move toward/away from zero appropriately.
+  - Forecast price risk bias (`plant.grid.grid_price_risk`) scales import/export prices over the horizon using `ramp_start_after_minutes` + `ramp_duration_minutes`.
+  - `plant.grid.zero_price_export_preference` controls whether the zero-price bonus favors export or curtailment.
 - Forbidden import violations:
   - Large penalty on `P_grid_import_violation_kw`.
 - Battery wear:
@@ -112,7 +113,7 @@ model at the start of the horizon:
     the horizon ratio vs `terminal_soc.short_horizon_minutes`.
 - EV SoC incentives:
   - Piecewise per-kWh rewards for energy charged above the current SoC, based on the configured target bands.
-  - Incentives are scaled by `(1 - grid_price_bias)` so they compete fairly with export tariffs (an 8c incentive ties with an 8c export tariff).
+  - Incentives are scaled with the same sign-aware export bias so they compete fairly with export tariffs (an 8c incentive ties with an 8c export tariff).
 - EV switch penalty:
   - Optional per-switch cost to discourage rapid on/off cycling (not time-weighted).
   - The t0 switch indicator compares `charge_on[0]` to the realtime charger state.
@@ -131,7 +132,7 @@ model at the start of the horizon:
 - `battery_charge_kw`, `battery_discharge_kw`, `battery_soc_kwh`
 - `ev_charge_kw`, `ev_soc_kwh`
 - `inverter_ac_net_kw`
-- `price_import`, `price_export`, `segment_cost`, `cumulative_cost`
+- `price_import`, `price_export`, `price_import_effective`, `price_export_effective`, `segment_cost`, `cumulative_cost`
 
 Top-level output:
 - `objective_value` (solver objective value; may be `None` if no value is available)
