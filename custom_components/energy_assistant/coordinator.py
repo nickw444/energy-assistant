@@ -78,7 +78,10 @@ class EnergyAssistantCoordinator(DataUpdateCoordinator[PlanPayload | None]):
         """Start the background long-poll loop."""
         if self._long_poll_task is not None and not self._long_poll_task.done():
             return
-        self._long_poll_task = self.hass.async_create_task(self._run_long_poll_loop())
+        self._long_poll_task = self.hass.async_create_background_task(  # pyright: ignore[reportAttributeAccessIssue]
+            self._run_long_poll_loop(),
+            name="energy_assistant_long_poll",
+        )
         _LOGGER.debug("Long-poll loop started")
 
     def stop_long_poll_loop(self) -> None:

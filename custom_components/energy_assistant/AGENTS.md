@@ -10,5 +10,6 @@
 - Shared device registry helpers live in `custom_components/energy_assistant/device.py`.
 - Shared plan helpers (timestep lookup, plan series) live in `custom_components/energy_assistant/coordinator.py`.
 - Coordinator uses long-polling (`/plan/await`) to receive plan updates immediately when prices change; falls back to `get_latest_plan()` on timeout or error.
+- Long-poll loop starts after Home Assistant has finished booting and runs as a background task to avoid blocking bootstrap.
 - Prefer typed model access; avoid dynamic field traversal in sensors.
 - Use `_unrecorded_attributes` for large plan arrays to keep them out of the recorder DB.
