@@ -204,6 +204,39 @@ def test_combined_risk_and_grid_bias() -> None:
     assert series.export_effective[0] == pytest.approx(0.25)
 
 
+def test_export_effective_price_ceiling_full_risk_and_grid_bias() -> None:
+    # Mirrors a "future window" export spike:
+    # raw=19.95, export_price_ceiling=10.0, risk_bias=25% (full ramp), grid_bias=25%.
+    #
+    # Expected math (positive export prices are discounted):
+    # clamp:  min(19.95, 10.0) = 10.0
+    # risk:   10.0 * (1 - 0.25) = 7.5
+    # grid:   7.5  * (1 - 0.25) = 5.625  (often displayed as 5.63 after rounding)
+    now = datetime(2025, 1, 1, 0, 0, tzinfo=UTC)
+    horizon = _build_horizon(now=now, timestep_minutes=30, num_intervals=21)
+    grid = _make_grid_config(
+        grid_bias_pct=25.0,
+        risk_bias_pct=25.0,
+        ramp_start_after_minutes=30,
+        ramp_duration_minutes=120,
+        export_price_ceiling=10.0,
+    )
+    price_model = PriceSeriesBuilder(
+        grid_price_bias_pct=grid.grid_price_bias_pct,
+        grid_price_risk=grid.grid_price_risk,
+    )
+    raw_export = 19.95
+    series = price_model.build_series(
+        horizon=horizon,
+        price_import=[0.0] * horizon.num_intervals,
+        price_export=[raw_export] * horizon.num_intervals,
+    )
+
+    # Slot index 20 midpoint is 10h15m from `now`, well past the ramp end (150m),
+    # so the full risk bias is in effect.
+    assert series.export_effective[20] == pytest.approx(5.625)
+
+
 def test_price_series_length_mismatch_raises() -> None:
     now = datetime(2025, 1, 1, 0, 0, tzinfo=UTC)
     horizon = _build_horizon(now=now, timestep_minutes=60, num_intervals=2)
