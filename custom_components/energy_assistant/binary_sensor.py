@@ -13,9 +13,9 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from . import HassEnergyRuntimeData
+from . import EnergyAssistantRuntimeData
 from .coordinator import (
-    HassEnergyCoordinator,
+    EnergyAssistantCoordinator,
     build_plan_series,
     get_timestep0,
     intent_load_value_getter,
@@ -29,7 +29,7 @@ from .device import (
     load_device_info,
     suggested_object_id,
 )
-from .hass_energy_client import EmsPlanOutput, PlanLatestResponse, TimestepPlan
+from .energy_assistant_client import EmsPlanOutput, PlanLatestResponse, TimestepPlan
 
 
 # NOTE: homeassistant-stubs has several type conflicts that require ignores:
@@ -38,8 +38,8 @@ from .hass_energy_client import EmsPlanOutput, PlanLatestResponse, TimestepPlan
 # 2. pyright: ignore[reportIncompatibleVariableOverride] on properties - stubs define
 #    is_on/extra_state_attributes as cached_property but we override with property.
 # These are stubs issues, not runtime issues. Remove ignores when stubs are fixed.
-class HassEnergyCurtailmentSensor(  # type: ignore[misc]
-    CoordinatorEntity[HassEnergyCoordinator],
+class EnergyAssistantCurtailmentSensor(  # type: ignore[misc]
+    CoordinatorEntity[EnergyAssistantCoordinator],
     BinarySensorEntity,
 ):
     _attr_has_entity_name = True
@@ -49,7 +49,7 @@ class HassEnergyCurtailmentSensor(  # type: ignore[misc]
 
     def __init__(
         self,
-        coordinator: HassEnergyCoordinator,
+        coordinator: EnergyAssistantCoordinator,
         *,
         unique_id: str,
         suggested_object_id: str | None,
@@ -94,15 +94,15 @@ class HassEnergyCurtailmentSensor(  # type: ignore[misc]
 # 2. pyright: ignore[reportIncompatibleVariableOverride] on properties - stubs define
 #    is_on as cached_property but we override with property.
 # These are stubs issues, not runtime issues. Remove ignores when stubs are fixed.
-class HassEnergyPlanFlagSensor(  # type: ignore[misc]
-    CoordinatorEntity[HassEnergyCoordinator],
+class EnergyAssistantPlanFlagSensor(  # type: ignore[misc]
+    CoordinatorEntity[EnergyAssistantCoordinator],
     BinarySensorEntity,
 ):
     _attr_has_entity_name = True
 
     def __init__(
         self,
-        coordinator: HassEnergyCoordinator,
+        coordinator: EnergyAssistantCoordinator,
         *,
         unique_id: str,
         suggested_object_id: str | None,
@@ -135,7 +135,7 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    runtime: HassEnergyRuntimeData = entry.runtime_data
+    runtime: EnergyAssistantRuntimeData = entry.runtime_data
     coordinator = runtime.coordinator
     base_url = runtime.base_url
 
@@ -146,7 +146,7 @@ async def async_setup_entry(
 
 
 def _build_curtailment_entities(
-    coordinator: HassEnergyCoordinator,
+    coordinator: EnergyAssistantCoordinator,
     base_url: str,
 ) -> list[BinarySensorEntity]:
     payload = coordinator.data
@@ -156,7 +156,7 @@ def _build_curtailment_entities(
 
 
 def _build_intent_entities(
-    coordinator: HassEnergyCoordinator,
+    coordinator: EnergyAssistantCoordinator,
     base_url: str,
 ) -> list[BinarySensorEntity]:
     payload = coordinator.data
@@ -170,7 +170,7 @@ def _build_intent_entities(
     for name in sorted(intent.loads.keys()):
         load_device = load_device_info(base_url, name)
         entities.append(
-            HassEnergyPlanFlagSensor(
+            EnergyAssistantPlanFlagSensor(
                 coordinator,
                 unique_id=entity_unique_id(base_url, "plan", "ev", name, "charge_on"),
                 suggested_object_id=suggested_object_id(
@@ -189,7 +189,7 @@ def _build_intent_entities(
 
 
 def _build_curtailment_entities_for_plan(
-    coordinator: HassEnergyCoordinator,
+    coordinator: EnergyAssistantCoordinator,
     plan: EmsPlanOutput,
     base_url: str,
 ) -> list[BinarySensorEntity]:
@@ -203,7 +203,7 @@ def _build_curtailment_entities_for_plan(
             continue
         inverter_device = inverter_device_info(base_url, name)
         entities.append(
-            HassEnergyCurtailmentSensor(
+            EnergyAssistantCurtailmentSensor(
                 coordinator,
                 unique_id=entity_unique_id(base_url, "inverter", name, "curtailment"),
                 suggested_object_id=suggested_object_id(

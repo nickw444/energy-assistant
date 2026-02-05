@@ -42,4 +42,4 @@ def entity_unique_id(base_url: str, *parts: str) -> str:
 
 
 def suggested_object_id(*parts: str) -> str:
-    return f"hass_energy_{slugify('_'.join(parts))}"
+    return f"energy_assistant_{slugify('_'.join(parts))}"

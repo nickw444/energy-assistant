@@ -16,16 +16,16 @@ from .const import (
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_TIMEOUT,
 )
-from .coordinator import HassEnergyCoordinator
-from .hass_energy_client import HassEnergyApiClient
+from .coordinator import EnergyAssistantCoordinator
+from .energy_assistant_client import EnergyAssistantApiClient
 
 PLATFORMS = ["sensor", "binary_sensor", "button"]
 
 
 @dataclass(slots=True)
-class HassEnergyRuntimeData:
-    client: HassEnergyApiClient
-    coordinator: HassEnergyCoordinator
+class EnergyAssistantRuntimeData:
+    client: EnergyAssistantApiClient
+    coordinator: EnergyAssistantCoordinator
     base_url: str
 
 
@@ -39,15 +39,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     session = async_get_clientsession(hass)
     base_url = entry.data.get(CONF_BASE_URL, DEFAULT_BASE_URL).rstrip("/")
     timeout = entry.data.get(CONF_TIMEOUT, DEFAULT_TIMEOUT)
-    client = HassEnergyApiClient(session, base_url, timeout)
-    coordinator = HassEnergyCoordinator(
+    client = EnergyAssistantApiClient(session, base_url, timeout)
+    coordinator = EnergyAssistantCoordinator(
         hass,
         client,
         DEFAULT_SCAN_INTERVAL,
     )
     await coordinator.async_config_entry_first_refresh()
     coordinator.start_long_poll_loop()
-    entry.runtime_data = HassEnergyRuntimeData(
+    entry.runtime_data = EnergyAssistantRuntimeData(
         client=client,
         coordinator=coordinator,
         base_url=base_url,
@@ -58,7 +58,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    runtime_data: HassEnergyRuntimeData | None = entry.runtime_data
+    runtime_data: EnergyAssistantRuntimeData | None = entry.runtime_data
     if runtime_data is not None:
         runtime_data.coordinator.stop_long_poll_loop()
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

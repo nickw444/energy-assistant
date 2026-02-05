@@ -12,7 +12,7 @@
   },
   "entity": {
     "button": {
-      "hass_energy_run_button": {
+      "energy_assistant_run_button": {
         "name": "Trigger EMS Run"
       }
     }

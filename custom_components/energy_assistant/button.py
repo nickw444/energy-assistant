@@ -7,16 +7,16 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import HassEnergyRuntimeData
-from .hass_energy_client import HassEnergyApiClient
+from . import EnergyAssistantRuntimeData
+from .energy_assistant_client import EnergyAssistantApiClient
 
 
-class HassEnergyRunButton(ButtonEntity):
+class EnergyAssistantRunButton(ButtonEntity):
     _attr_has_entity_name = True
-    _attr_translation_key = "hass_energy_run_button"
-    _attr_unique_id = "hass_energy_trigger_run"
+    _attr_translation_key = "energy_assistant_run_button"
+    _attr_unique_id = "energy_assistant_trigger_run"
 
-    def __init__(self, client: HassEnergyApiClient) -> None:
+    def __init__(self, client: EnergyAssistantApiClient) -> None:
         self._client = client
 
     async def async_press(self) -> None:
@@ -28,6 +28,6 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    runtime: HassEnergyRuntimeData = entry.runtime_data
-    client: HassEnergyApiClient = runtime.client
-    async_add_entities([HassEnergyRunButton(client)])
+    runtime: EnergyAssistantRuntimeData = entry.runtime_data
+    client: EnergyAssistantApiClient = runtime.client
+    async_add_entities([EnergyAssistantRunButton(client)])

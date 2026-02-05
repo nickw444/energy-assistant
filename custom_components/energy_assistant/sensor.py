@@ -14,9 +14,9 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from . import HassEnergyRuntimeData
+from . import EnergyAssistantRuntimeData
 from .coordinator import (
-    HassEnergyCoordinator,
+    EnergyAssistantCoordinator,
     build_plan_series,
     ev_step_getter,
     ev_value_getter,
@@ -34,7 +34,7 @@ from .device import (
     root_device_info,
     suggested_object_id,
 )
-from .hass_energy_client import EmsPlanOutput, PlanLatestResponse, TimestepPlan
+from .energy_assistant_client import EmsPlanOutput, PlanLatestResponse, TimestepPlan
 
 
 # NOTE: homeassistant-stubs has several type conflicts that require ignores:
@@ -43,8 +43,8 @@ from .hass_energy_client import EmsPlanOutput, PlanLatestResponse, TimestepPlan
 # 2. pyright: ignore[reportIncompatibleVariableOverride] on properties - stubs define
 #    native_value/extra_state_attributes as cached_property but we override with property.
 # These are stubs issues, not runtime issues. Remove ignores when stubs are fixed.
-class HassEnergyPlanSensor(  # type: ignore[misc]
-    CoordinatorEntity[HassEnergyCoordinator],
+class EnergyAssistantPlanSensor(  # type: ignore[misc]
+    CoordinatorEntity[EnergyAssistantCoordinator],
     SensorEntity,
 ):
     _attr_has_entity_name = True
@@ -54,7 +54,7 @@ class HassEnergyPlanSensor(  # type: ignore[misc]
 
     def __init__(
         self,
-        coordinator: HassEnergyCoordinator,
+        coordinator: EnergyAssistantCoordinator,
         device_info: DeviceInfo,
         unique_id: str,
     ) -> None:
@@ -83,8 +83,8 @@ class HassEnergyPlanSensor(  # type: ignore[misc]
 # 2. pyright: ignore[reportIncompatibleVariableOverride] on properties - stubs define
 #    native_value as cached_property but we override with property.
 # These are stubs issues, not runtime issues. Remove ignores when stubs are fixed.
-class HassEnergyPlanUpdatedSensor(  # type: ignore[misc]
-    CoordinatorEntity[HassEnergyCoordinator],
+class EnergyAssistantPlanUpdatedSensor(  # type: ignore[misc]
+    CoordinatorEntity[EnergyAssistantCoordinator],
     SensorEntity,
 ):
     _attr_has_entity_name = True
@@ -95,7 +95,7 @@ class HassEnergyPlanUpdatedSensor(  # type: ignore[misc]
 
     def __init__(
         self,
-        coordinator: HassEnergyCoordinator,
+        coordinator: EnergyAssistantCoordinator,
         device_info: DeviceInfo,
         unique_id: str,
     ) -> None:
@@ -117,8 +117,8 @@ class HassEnergyPlanUpdatedSensor(  # type: ignore[misc]
 # 2. pyright: ignore[reportIncompatibleVariableOverride] on properties - stubs define
 #    native_value/extra_state_attributes as cached_property but we override with property.
 # These are stubs issues, not runtime issues. Remove ignores when stubs are fixed.
-class HassEnergyPlanValueSensor(  # type: ignore[misc]
-    CoordinatorEntity[HassEnergyCoordinator],
+class EnergyAssistantPlanValueSensor(  # type: ignore[misc]
+    CoordinatorEntity[EnergyAssistantCoordinator],
     SensorEntity,
 ):
     _attr_has_entity_name = True
@@ -126,7 +126,7 @@ class HassEnergyPlanValueSensor(  # type: ignore[misc]
 
     def __init__(
         self,
-        coordinator: HassEnergyCoordinator,
+        coordinator: EnergyAssistantCoordinator,
         *,
         unique_id: str,
         suggested_object_id: str | None,
@@ -180,18 +180,18 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    runtime: HassEnergyRuntimeData = entry.runtime_data
+    runtime: EnergyAssistantRuntimeData = entry.runtime_data
     coordinator = runtime.coordinator
     base_url = runtime.base_url
     root_device = root_device_info(base_url)
 
     entities: list[SensorEntity] = [
-        HassEnergyPlanSensor(
+        EnergyAssistantPlanSensor(
             coordinator,
             root_device,
             entity_unique_id(base_url, "plan", "status"),
         ),
-        HassEnergyPlanUpdatedSensor(
+        EnergyAssistantPlanUpdatedSensor(
             coordinator,
             root_device,
             entity_unique_id(base_url, "plan", "updated_at"),
@@ -203,7 +203,7 @@ async def async_setup_entry(
 
 
 def _build_mpc_entities(
-    coordinator: HassEnergyCoordinator,
+    coordinator: EnergyAssistantCoordinator,
     base_url: str,
 ) -> list[SensorEntity]:
     payload = coordinator.data
@@ -213,7 +213,7 @@ def _build_mpc_entities(
 
 
 def _build_intent_entities(
-    coordinator: HassEnergyCoordinator,
+    coordinator: EnergyAssistantCoordinator,
     base_url: str,
 ) -> list[SensorEntity]:
     payload = coordinator.data
@@ -223,7 +223,7 @@ def _build_intent_entities(
 
 
 def _build_intent_entities_for_response(
-    coordinator: HassEnergyCoordinator,
+    coordinator: EnergyAssistantCoordinator,
     response: PlanLatestResponse,
     base_url: str,
 ) -> list[SensorEntity]:
@@ -234,7 +234,7 @@ def _build_intent_entities_for_response(
         base_device = root_device_info(base_url)
         entities.extend(
             [
-                HassEnergyPlanValueSensor(
+                EnergyAssistantPlanValueSensor(
                     coordinator,
                     unique_id=entity_unique_id(base_url, "grid", "import_power"),
                     suggested_object_id=suggested_object_id(
@@ -250,7 +250,7 @@ def _build_intent_entities_for_response(
                     icon="mdi:transmission-tower-import",
                     entity_category=None,
                 ),
-                HassEnergyPlanValueSensor(
+                EnergyAssistantPlanValueSensor(
                     coordinator,
                     unique_id=entity_unique_id(base_url, "grid", "export_power"),
                     suggested_object_id=suggested_object_id(
@@ -272,7 +272,7 @@ def _build_intent_entities_for_response(
         inverter_device = inverter_device_info(base_url, name)
         entities.extend(
             [
-                HassEnergyPlanValueSensor(
+                EnergyAssistantPlanValueSensor(
                     coordinator,
                     unique_id=entity_unique_id(
                         base_url,
@@ -295,7 +295,7 @@ def _build_intent_entities_for_response(
                     icon="mdi:transition",
                     entity_category=None,
                 ),
-                HassEnergyPlanValueSensor(
+                EnergyAssistantPlanValueSensor(
                     coordinator,
                     unique_id=entity_unique_id(
                         base_url,
@@ -321,7 +321,7 @@ def _build_intent_entities_for_response(
                     icon="mdi:battery-charging",
                     entity_category=None,
                 ),
-                HassEnergyPlanValueSensor(
+                EnergyAssistantPlanValueSensor(
                     coordinator,
                     unique_id=entity_unique_id(
                         base_url,
@@ -353,7 +353,7 @@ def _build_intent_entities_for_response(
     for name in sorted(intent.loads.keys()):
         load_device = load_device_info(base_url, name)
         entities.append(
-            HassEnergyPlanValueSensor(
+            EnergyAssistantPlanValueSensor(
                 coordinator,
                 unique_id=entity_unique_id(base_url, "plan", "ev", name, "charge_power"),
                 suggested_object_id=suggested_object_id(
@@ -376,7 +376,7 @@ def _build_intent_entities_for_response(
 
 
 def _build_mpc_entities_for_plan(
-    coordinator: HassEnergyCoordinator,
+    coordinator: EnergyAssistantCoordinator,
     plan: EmsPlanOutput,
     base_url: str,
 ) -> list[SensorEntity]:
@@ -386,7 +386,7 @@ def _build_mpc_entities_for_plan(
 
     base_device = root_device_info(base_url)
     entities: list[SensorEntity] = [
-        HassEnergyPlanValueSensor(
+        EnergyAssistantPlanValueSensor(
             coordinator,
             unique_id=entity_unique_id(base_url, "grid", "net_power"),
             suggested_object_id=None,
@@ -397,7 +397,7 @@ def _build_mpc_entities_for_plan(
             unit="kW",
             icon="mdi:transmission-tower",
         ),
-        HassEnergyPlanValueSensor(
+        EnergyAssistantPlanValueSensor(
             coordinator,
             unique_id=entity_unique_id(base_url, "load", "base_power"),
             suggested_object_id=None,
@@ -408,7 +408,7 @@ def _build_mpc_entities_for_plan(
             unit="kW",
             icon="mdi:home-lightning-bolt",
         ),
-        HassEnergyPlanValueSensor(
+        EnergyAssistantPlanValueSensor(
             coordinator,
             unique_id=entity_unique_id(base_url, "load", "total_power"),
             suggested_object_id=None,
@@ -419,7 +419,7 @@ def _build_mpc_entities_for_plan(
             unit="kW",
             icon="mdi:home-lightning-bolt",
         ),
-        HassEnergyPlanValueSensor(
+        EnergyAssistantPlanValueSensor(
             coordinator,
             unique_id=entity_unique_id(base_url, "price", "import"),
             suggested_object_id=None,
@@ -430,7 +430,7 @@ def _build_mpc_entities_for_plan(
             unit=f"{CURRENCY_DOLLAR}/kWh",
             icon="mdi:cash",
         ),
-        HassEnergyPlanValueSensor(
+        EnergyAssistantPlanValueSensor(
             coordinator,
             unique_id=entity_unique_id(base_url, "price", "import_effective"),
             suggested_object_id=None,
@@ -442,7 +442,7 @@ def _build_mpc_entities_for_plan(
             icon="mdi:cash",
             entity_category=EntityCategory.DIAGNOSTIC,
         ),
-        HassEnergyPlanValueSensor(
+        EnergyAssistantPlanValueSensor(
             coordinator,
             unique_id=entity_unique_id(base_url, "price", "export"),
             suggested_object_id=None,
@@ -453,7 +453,7 @@ def _build_mpc_entities_for_plan(
             unit=f"{CURRENCY_DOLLAR}/kWh",
             icon="mdi:cash-minus",
         ),
-        HassEnergyPlanValueSensor(
+        EnergyAssistantPlanValueSensor(
             coordinator,
             unique_id=entity_unique_id(base_url, "price", "export_effective"),
             suggested_object_id=None,
@@ -465,7 +465,7 @@ def _build_mpc_entities_for_plan(
             icon="mdi:cash-minus",
             entity_category=EntityCategory.DIAGNOSTIC,
         ),
-        HassEnergyPlanValueSensor(
+        EnergyAssistantPlanValueSensor(
             coordinator,
             unique_id=entity_unique_id(base_url, "cost", "segment"),
             suggested_object_id=None,
@@ -476,7 +476,7 @@ def _build_mpc_entities_for_plan(
             unit=CURRENCY_DOLLAR,
             icon="mdi:cash",
         ),
-        HassEnergyPlanValueSensor(
+        EnergyAssistantPlanValueSensor(
             coordinator,
             unique_id=entity_unique_id(base_url, "cost", "forecast"),
             suggested_object_id=None,
@@ -487,7 +487,7 @@ def _build_mpc_entities_for_plan(
             unit=CURRENCY_DOLLAR,
             icon="mdi:cash-multiple",
         ),
-        HassEnergyPlanValueSensor(
+        EnergyAssistantPlanValueSensor(
             coordinator,
             unique_id=entity_unique_id(base_url, "horizon", "length"),
             suggested_object_id=None,
@@ -504,7 +504,7 @@ def _build_mpc_entities_for_plan(
         inverter_device = inverter_device_info(base_url, name)
         if inverter.pv_kw is not None:
             entities.append(
-                HassEnergyPlanValueSensor(
+                EnergyAssistantPlanValueSensor(
                     coordinator,
                     unique_id=entity_unique_id(base_url, "inverter", name, "pv_power"),
                     suggested_object_id=suggested_object_id(
@@ -521,7 +521,7 @@ def _build_mpc_entities_for_plan(
                 )
             )
         entities.append(
-            HassEnergyPlanValueSensor(
+            EnergyAssistantPlanValueSensor(
                 coordinator,
                 unique_id=entity_unique_id(base_url, "inverter", name, "net_power"),
                 suggested_object_id=suggested_object_id(
@@ -539,7 +539,7 @@ def _build_mpc_entities_for_plan(
         )
         if inverter.battery_soc_kwh is not None:
             entities.append(
-                HassEnergyPlanValueSensor(
+                EnergyAssistantPlanValueSensor(
                     coordinator,
                     unique_id=entity_unique_id(base_url, "inverter", name, "battery_soc"),
                     suggested_object_id=suggested_object_id(
@@ -557,7 +557,7 @@ def _build_mpc_entities_for_plan(
             )
         if inverter.battery_soc_pct is not None:
             entities.append(
-                HassEnergyPlanValueSensor(
+                EnergyAssistantPlanValueSensor(
                     coordinator,
                     unique_id=entity_unique_id(
                         base_url,
@@ -582,7 +582,7 @@ def _build_mpc_entities_for_plan(
     for name, ev in sorted_items(timestep0.loads.evs):
         load_device = load_device_info(base_url, name)
         entities.append(
-            HassEnergyPlanValueSensor(
+            EnergyAssistantPlanValueSensor(
                 coordinator,
                 unique_id=entity_unique_id(base_url, "ev", name, "charge_power"),
                 suggested_object_id=suggested_object_id(
@@ -599,7 +599,7 @@ def _build_mpc_entities_for_plan(
             )
         )
         entities.append(
-            HassEnergyPlanValueSensor(
+            EnergyAssistantPlanValueSensor(
                 coordinator,
                 unique_id=entity_unique_id(base_url, "ev", name, "soc"),
                 suggested_object_id=suggested_object_id("ev", name, "soc"),
@@ -613,7 +613,7 @@ def _build_mpc_entities_for_plan(
         )
         if ev.soc_pct is not None:
             entities.append(
-                HassEnergyPlanValueSensor(
+                EnergyAssistantPlanValueSensor(
                     coordinator,
                     unique_id=entity_unique_id(base_url, "ev", name, "soc_pct"),
                     suggested_object_id=suggested_object_id("ev", name, "soc_pct"),

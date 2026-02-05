@@ -180,5 +180,5 @@ docker compose up -d
 ```
 
 ## Optional Home Assistant integration
-A Home Assistant custom integration (early POC) lives in `custom_components/hass_energy` and can
+A Home Assistant custom integration (early POC) lives in `custom_components/energy_assistant` and can
 surface plans back into HA. It is optional and separate from the core service.
