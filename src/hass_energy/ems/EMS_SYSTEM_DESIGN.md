@@ -98,7 +98,7 @@ Fields used by EMS:
 - `price_import_forecast`, `price_export_forecast`
 - `grid_price_bias_pct` (sign-aware: premium on positive import, discount on positive export)
 - `grid_price_risk` (ramp-based forecast price bias using `ramp_start_after_minutes` + `ramp_duration_minutes`)
-- `zero_price_export_preference` (choose tiny bonus vs penalty when export price is 0)
+- `zero_price_export_preference` (apply tiny bonus or penalty when export price is 0)
 - `import_forbidden_periods` (list of `TimeWindow`, optional `months`)
 
 Note: `realtime_grid_power` exists in config but is **not used** by the EMS solver.
