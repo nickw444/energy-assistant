@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-DOMAIN = "hass_energy"
+DOMAIN = "energy_assistant"
 
 CONF_BASE_URL = "base_url"
 CONF_TIMEOUT = "timeout"

@@ -13,7 +13,7 @@ from .models import EmsConfig, PlanAwaitResponse, PlanLatestResponse, PlanRunRes
 T = TypeVar("T", bound=BaseModel)
 
 
-class HassEnergyApiClient:
+class EnergyAssistantApiClient:
     def __init__(self, session: aiohttp.ClientSession, base_url: str, timeout: int) -> None:
         self._session = session
         self._base_url = base_url.rstrip("/")

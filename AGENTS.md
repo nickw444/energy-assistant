@@ -41,11 +41,11 @@
 - EMS horizons can use `EmsConfig.timestep_minutes` plus `high_res_timestep_minutes` / `high_res_horizon_minutes` to run a higher-resolution window before switching to the default timestep; boundaries snap to the next interval boundary for aligned coarse slots and alignment uses time-weighted averages for variable slot sizes.
 - Historical-average load forecasts can repeat daily averages beyond 24h via `forecast_horizon_hours` (default 24).
 - `ConfigMapper` (`src/energy_assistant/lib/resolver/__init__.py`) offers a recursive walk utility that calls a visitor for side effects and allows halting recursion by returning `False`.
-- Home Assistant integration (POC) lives under `custom_components/hass_energy`.
-- Home Assistant integration guidance lives in `custom_components/hass_energy/AGENTS.md`.
-- Home Assistant integration uses `custom_components/hass_energy/hass_energy_client/` for the lightweight aiohttp + Pydantic API client aligned with the FastAPI OpenAPI responses.
+- Home Assistant integration (POC) lives under `custom_components/energy_assistant`.
+- Home Assistant integration guidance lives in `custom_components/energy_assistant/AGENTS.md`.
+- Home Assistant integration uses `custom_components/energy_assistant/energy_assistant_client/` for the lightweight aiohttp + Pydantic API client aligned with the FastAPI OpenAPI responses.
 - Home Assistant integration shares a single API client and data update coordinator via `entry.runtime_data`, and prefers typed model access over dynamic path traversal where possible.
-- Any FastAPI contract changes must be reflected in `custom_components/hass_energy/hass_energy_client/`, and the Home Assistant custom integration should be refactored as needed to keep it in sync.
+- Any FastAPI contract changes must be reflected in `custom_components/energy_assistant/energy_assistant_client/`, and the Home Assistant custom integration should be refactored as needed to keep it in sync.
 
 ## Continuous learning
 - When you learn new project knowledge, coding style, or preferences during a session, update `AGENTS.md` (and `README.md` if it affects users) before finishing so the next agent benefits.

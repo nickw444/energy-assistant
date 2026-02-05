@@ -13,9 +13,9 @@ import aiohttp
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .hass_energy_client import (
+from .energy_assistant_client import (
     EmsPlanOutput,
-    HassEnergyApiClient,
+    EnergyAssistantApiClient,
     PlanAwaitResponse,
     PlanLatestResponse,
     TimestepPlan,
@@ -34,7 +34,7 @@ class PlanPayload:
     plan_dump: dict[str, Any]
 
 
-class HassEnergyCoordinator(DataUpdateCoordinator[PlanPayload | None]):
+class EnergyAssistantCoordinator(DataUpdateCoordinator[PlanPayload | None]):
     """Coordinator that uses continuous long-polling to fetch plan updates.
 
     The coordinator runs a background long-poll loop that continuously waits for
@@ -46,13 +46,13 @@ class HassEnergyCoordinator(DataUpdateCoordinator[PlanPayload | None]):
     def __init__(
         self,
         hass: HomeAssistant,
-        client: HassEnergyApiClient,
+        client: EnergyAssistantApiClient,
         interval: timedelta,
     ) -> None:
         super().__init__(
             hass,
             _LOGGER,
-            name="hass_energy_plan",
+            name="energy_assistant_plan",
             update_interval=interval,
         )
         self._client = client

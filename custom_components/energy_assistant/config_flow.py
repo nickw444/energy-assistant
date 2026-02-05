@@ -9,7 +9,7 @@ from homeassistant.config_entries import ConfigFlowResult
 from .const import CONF_BASE_URL, DEFAULT_BASE_URL, DOMAIN
 
 
-class HassEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class EnergyAssistantConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Energy Assistant."""
 
     VERSION = 1

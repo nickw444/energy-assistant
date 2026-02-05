@@ -1,6 +1,6 @@
 """Lightweight Energy Assistant API client and response models."""
 
-from .client import HassEnergyApiClient
+from .client import EnergyAssistantApiClient
 from .models import (
     EconomicsTimestepPlan,
     EmsConfig,
@@ -27,7 +27,7 @@ __all__ = [
     "EconomicsTimestepPlan",
     "EvTimestepPlan",
     "GridTimestepPlan",
-    "HassEnergyApiClient",
+    "EnergyAssistantApiClient",
     "InverterPlanIntent",
     "InverterTimestepPlan",
     "LoadPlanIntent",
