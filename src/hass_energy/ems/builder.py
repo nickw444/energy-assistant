@@ -13,6 +13,7 @@ from hass_energy.ems.forecast_alignment import (
 )
 from hass_energy.ems.horizon import Horizon, floor_to_interval_boundary
 from hass_energy.ems.models import ResolvedForecasts
+from hass_energy.ems.pricing import PriceSeriesBuilder
 from hass_energy.ems.time_windows import TimeWindowMatcher
 from hass_energy.lib.source_resolver.models import PowerForecastInterval
 from hass_energy.lib.source_resolver.resolver import ValueResolver
@@ -38,6 +39,10 @@ class GridBuild:
     price_import: list[float]
     # Export price series aligned to Horizon.T (slot 0 may be realtime override).
     price_export: list[float]
+    # Import price series aligned to Horizon.T after risk adjustment + grid bias.
+    price_import_effective: list[float]
+    # Export price series aligned to Horizon.T after risk adjustment + grid bias.
+    price_export_effective: list[float]
     # Import permission flags aligned to Horizon.T from forbidden time windows.
     import_allowed: list[bool]
 
@@ -114,6 +119,7 @@ class MILPBuilder:
         resolver: ValueResolver,
         ems_config: EmsConfig,
         time_window_matcher: TimeWindowMatcher,
+        price_series_builder: PriceSeriesBuilder,
     ):
         self._plant = plant
         self._loads = loads
@@ -122,6 +128,7 @@ class MILPBuilder:
         self._power_aligner = PowerForecastAligner()
         self._price_aligner = PriceForecastAligner()
         self._time_window_matcher = time_window_matcher
+        self._price_series_builder = price_series_builder
 
     def resolve_forecasts(
         self,
@@ -246,6 +253,11 @@ class MILPBuilder:
             forecasts.grid_price_export,
             first_slot_override=realtime_export,
         )
+        price_series = self._price_series_builder.build_series(
+            horizon=horizon,
+            price_import=price_import,
+            price_export=price_export,
+        )
 
         for t in T:
             # Prevent simultaneous grid import/export by selecting an import or export mode.
@@ -273,6 +285,8 @@ class MILPBuilder:
             P_import_violation_kw=P_import_violation_kw,
             price_import=price_import,
             price_export=price_export,
+            price_import_effective=price_series.import_effective,
+            price_export_effective=price_series.export_effective,
             import_allowed=import_allowed,
         )
 
@@ -633,15 +647,15 @@ class MILPBuilder:
         P_export = grid.P_export
         P_import_violation = grid.P_import_violation_kw
         price_import = grid.price_import
-        price_export = grid.price_export
+        price_import_effective = grid.price_import_effective
+        price_export_effective = grid.price_export_effective
         inverter_by_id = inverters.inverters
 
-        # Grid price bias: add premium to import, discount export.
+        # Grid price bias used for sign-aware incentive scaling.
         grid_price_bias = self._plant.grid.grid_price_bias_pct / 100.0
 
         # Price-aware objective: minimize net cost (import cost minus export revenue).
         # When export price is exactly zero, apply a tiny bonus or penalty to break ties.
-        # Grid price bias makes grid interaction slightly less attractive than local use.
         export_bonus = (
             1e-4 if self._plant.grid.zero_price_export_preference == "export" else -1e-4
         )
@@ -649,14 +663,14 @@ class MILPBuilder:
         export_price_eff = [
             (
                 export_bonus
-                if abs(float(price_export[t])) <= 1e-9
-                else float(price_export[t]) * (1.0 - grid_price_bias)
+                if abs(float(price_export_effective[t])) <= 1e-9
+                else float(price_export_effective[t])
             )
             for t in horizon.T
         ]
         objective: pulp.LpAffineExpression = pulp.lpSum(
             (
-                P_import[t] * float(price_import[t]) * (1.0 + grid_price_bias)
+                P_import[t] * float(price_import_effective[t])
                 - P_export[t] * export_price_eff[t]
             )
             * horizon.dt_hours(t)
@@ -741,11 +755,18 @@ class MILPBuilder:
         # EV terminal SoC incentives (piecewise per-kWh rewards).
         # Apply the same bias as export revenue so incentives compete fairly with export tariffs.
         # e.g., an 8c incentive should tie with an 8c export tariff after both are biased.
+        def _apply_export_bias(value: float) -> float:
+            if grid_price_bias == 0:
+                return value
+            if value >= 0:
+                return value * (1.0 - grid_price_bias)
+            return value * (1.0 + grid_price_bias)
+
         for ev_vars in loads.evs.values():
             for segment_var, incentive in ev_vars.Ev_incentive_segments:
                 if abs(float(incentive)) <= 1e-12:
                     continue
-                biased_incentive = float(incentive) * (1.0 - grid_price_bias)
+                biased_incentive = _apply_export_bias(float(incentive))
                 objective += -biased_incentive * segment_var
         # EV on/off switch penalty (per transition, not time-weighted).
         for load in self._loads:
