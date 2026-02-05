@@ -31,3 +31,6 @@ See `QUICKSTART.md` for setup steps, a full config example, and Docker instructi
 
 ### Documentation
 Getting started: `QUICKSTART.md`. Architecture and developer workflows: `README_DEV.md`.
+
+### Project tracking
+We track work items in GitHub Issues (instead of a checked-in TODO list).
