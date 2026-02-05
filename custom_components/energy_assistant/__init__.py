@@ -57,7 +57,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if hass.is_running:
         coordinator.start_long_poll_loop()
     else:
-        def _start_long_poll(_event: Event) -> None:
+        async def _start_long_poll(_event: Event) -> None:
             coordinator.start_long_poll_loop()
 
         remove_listener = hass.bus.async_listen_once(
