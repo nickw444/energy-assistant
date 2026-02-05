@@ -20,6 +20,8 @@ def _make_grid_config(
     risk_bias_pct: float = 0.0,
     ramp_start_after_minutes: int = 0,
     ramp_duration_minutes: int = 0,
+    import_price_floor: float | None = None,
+    export_price_ceiling: float | None = None,
 ) -> GridConfig:
     return GridConfig(
         max_import_kw=10.0,
@@ -42,6 +44,8 @@ def _make_grid_config(
             bias_pct=risk_bias_pct,
             ramp_start_after_minutes=ramp_start_after_minutes,
             ramp_duration_minutes=ramp_duration_minutes,
+            import_price_floor=import_price_floor,
+            export_price_ceiling=export_price_ceiling,
         ),
         import_forbidden_periods=[],
     )
@@ -81,6 +85,54 @@ def test_price_risk_ramp_start_duration() -> None:
         2.0,
     ]
     assert series.import_effective == expected
+
+
+def test_price_risk_floor_ceiling_applied_before_bias() -> None:
+    now = datetime(2025, 1, 1, 0, 0, tzinfo=UTC)
+    horizon = _build_horizon(now=now, timestep_minutes=60, num_intervals=1)
+    grid = _make_grid_config(
+        risk_bias_pct=50.0,
+        ramp_start_after_minutes=0,
+        ramp_duration_minutes=0,
+        import_price_floor=0.3,
+        export_price_ceiling=0.6,
+    )
+    price_model = PriceSeriesBuilder(
+        grid_price_bias_pct=grid.grid_price_bias_pct,
+        grid_price_risk=grid.grid_price_risk,
+    )
+    series = price_model.build_series(
+        horizon=horizon,
+        price_import=[0.1],
+        price_export=[1.0],
+    )
+
+    assert series.import_effective[0] == pytest.approx(0.45)
+    assert series.export_effective[0] == pytest.approx(0.3)
+
+
+def test_price_risk_floor_ceiling_applied_without_bias() -> None:
+    now = datetime(2025, 1, 1, 0, 0, tzinfo=UTC)
+    horizon = _build_horizon(now=now, timestep_minutes=60, num_intervals=1)
+    grid = _make_grid_config(
+        risk_bias_pct=0.0,
+        ramp_start_after_minutes=0,
+        ramp_duration_minutes=0,
+        import_price_floor=0.2,
+        export_price_ceiling=0.5,
+    )
+    price_model = PriceSeriesBuilder(
+        grid_price_bias_pct=grid.grid_price_bias_pct,
+        grid_price_risk=grid.grid_price_risk,
+    )
+    series = price_model.build_series(
+        horizon=horizon,
+        price_import=[0.1],
+        price_export=[0.8],
+    )
+
+    assert series.import_effective[0] == pytest.approx(0.2)
+    assert series.export_effective[0] == pytest.approx(0.5)
 
 
 def test_sign_aware_bias_negative_prices() -> None:
