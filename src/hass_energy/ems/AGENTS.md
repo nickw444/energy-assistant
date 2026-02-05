@@ -96,7 +96,7 @@ model at the start of the horizon:
 - Energy cost:
   - `import_cost - export_revenue` (with a tiny export bonus when price = 0).
   - Grid price bias (`plant.grid.grid_price_bias_pct`) is sign-aware: positive imports are penalized, positive exports discounted, and negative prices move toward/away from zero appropriately.
-  - Forecast price risk bias (`plant.grid.grid_price_risk`) scales import/export prices over the horizon using `ramp_start_after_minutes` + `ramp_duration_minutes`.
+  - Forecast price risk bias (`plant.grid.grid_price_risk`) scales import/export prices over the horizon using `ramp_start_after_minutes` + `ramp_duration_minutes`; optional `import_price_floor`/`export_price_ceiling` clamp raw prices before scaling (applies from slot 1 onward, not t0 realtime override).
   - `plant.grid.zero_price_export_preference` controls whether the zero-price bonus favors export or curtailment.
 - Forbidden import violations:
   - Large penalty on `P_grid_import_violation_kw`.
