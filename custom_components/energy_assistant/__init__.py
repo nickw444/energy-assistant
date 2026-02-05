@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from homeassistant.config import ConfigType
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Event, HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
@@ -57,9 +57,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if hass.is_running:
         coordinator.start_long_poll_loop()
     else:
+        def _start_long_poll(_event: Event) -> None:
+            coordinator.start_long_poll_loop()
+
         remove_listener = hass.bus.async_listen_once(
             EVENT_HOMEASSISTANT_STARTED,
-            lambda _event: coordinator.start_long_poll_loop(),
+            _start_long_poll,
         )
         entry.async_on_unload(remove_listener)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
