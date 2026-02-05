@@ -438,7 +438,9 @@ def test_zero_price_export_bonus_toggle_affects_objective() -> None:
 
     def _build_coeff(prefer_export: bool) -> float:
         config = _make_config(timestep_minutes=60, min_horizon_minutes=60)
-        config.plant.grid.prefer_export_at_zero_price = prefer_export
+        config.plant.grid.zero_price_export_preference = (
+            "export" if prefer_export else "curtail"
+        )
         resolver = DummyResolver(
             price_forecasts={
                 "price_import_forecast": price_import,

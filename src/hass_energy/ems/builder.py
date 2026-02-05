@@ -642,7 +642,9 @@ class MILPBuilder:
         # Price-aware objective: minimize net cost (import cost minus export revenue).
         # When export price is exactly zero, apply a tiny bonus or penalty to break ties.
         # Grid price bias makes grid interaction slightly less attractive than local use.
-        export_bonus = 1e-4 if self._plant.grid.prefer_export_at_zero_price else -1e-4
+        export_bonus = (
+            1e-4 if self._plant.grid.zero_price_export_preference == "export" else -1e-4
+        )
         # Effective export price series used consistently for revenue and penalties.
         export_price_eff = [
             (
