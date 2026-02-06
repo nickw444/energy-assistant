@@ -174,6 +174,10 @@ plant:
         realtime_power:
           type: home_assistant
           entity: sensor.energy_assistant_pv_power_smoothed_1m
+        # Optional provider-agnostic scaling applied to PV forecast kW values (pessimism factor).
+        # Default: 1.0 (unchanged). Example: 0.90 = 10% derate.
+        # Applies to forecast only (slot-0 realtime override not scaled).
+        # forecast_multiplier: 0.90
         forecast:
           type: home_assistant
           platform: solcast

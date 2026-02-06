@@ -11,6 +11,7 @@ from energy_assistant.ems.forecast_alignment import (
     PriceForecastAligner,
     forecast_coverage_slots,
 )
+from energy_assistant.ems.forecast_tuning import ForecastMultiplier
 from energy_assistant.ems.horizon import Horizon, floor_to_interval_boundary
 from energy_assistant.ems.models import ResolvedForecasts
 from energy_assistant.ems.pricing import PriceSeriesBuilder
@@ -337,6 +338,10 @@ class MILPBuilder:
                 max(0.0, min(float(value), inverter.peak_power_kw))
                 for value in pv_available_kw_series
             ]
+            pv_available_kw_series = ForecastMultiplier(inverter.pv.forecast_multiplier).apply(
+                pv_available_kw_series,
+                skip_first_slot=realtime_pv is not None,
+            )
 
             curtailment = inverter.curtailment
             curtail_kw: dict[int, pulp.LpVariable] | None = None

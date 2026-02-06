@@ -105,6 +105,9 @@ class PlantLoadConfig(BaseModel):
 
 class PvConfig(BaseModel):
     realtime_power: HomeAssistantPowerKwEntitySource | None = None
+    # Provider-agnostic scaling applied to PV forecast kW values (pessimism factor).
+    # Applies to forecast only; realtime overrides are handled separately.
+    forecast_multiplier: float = Field(default=1.0, ge=0.0, le=1.0)
     forecast: HomeAssistantSolcastForecastSource
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
