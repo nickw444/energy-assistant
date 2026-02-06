@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
-from dataclasses import dataclass
 
 
-@dataclass(slots=True, frozen=True)
 class ForecastMultiplier:
     """Apply a multiplier to an aligned forecast series.
 
@@ -15,13 +13,13 @@ class ForecastMultiplier:
 
     multiplier: float
 
-    def __post_init__(self) -> None:
-        value = float(self.multiplier)
+    def __init__(self, multiplier: float) -> None:
+        value = float(multiplier)
         if not math.isfinite(value):
             raise ValueError("multiplier must be finite")
         if value < 0.0:
             raise ValueError("multiplier must be >= 0")
-        object.__setattr__(self, "multiplier", value)
+        self.multiplier = value
 
     def apply(self, series: Sequence[float], *, skip_first_slot: bool = False) -> list[float]:
         if not series:
