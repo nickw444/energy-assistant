@@ -11,7 +11,7 @@ from energy_assistant.ems.forecast_alignment import (
     PriceForecastAligner,
     forecast_coverage_slots,
 )
-from energy_assistant.ems.forecast_tuning import ForecastMultiplier
+from energy_assistant.ems.forecast_multiplier import ForecastMultiplier
 from energy_assistant.ems.horizon import Horizon, floor_to_interval_boundary
 from energy_assistant.ems.models import ResolvedForecasts
 from energy_assistant.ems.pricing import PriceSeriesBuilder

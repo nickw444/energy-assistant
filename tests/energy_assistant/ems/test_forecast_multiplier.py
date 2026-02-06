@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from energy_assistant.ems.forecast_tuning import ForecastMultiplier
+from energy_assistant.ems.forecast_multiplier import ForecastMultiplier
 
 
 def test_forecast_multiplier_apply_empty_series() -> None:
@@ -48,4 +48,3 @@ def test_forecast_multiplier_rejects_negative_multiplier() -> None:
 def test_forecast_multiplier_rejects_nonfinite_multiplier(value: float) -> None:
     with pytest.raises(ValueError, match="multiplier must be finite"):
         ForecastMultiplier(value)
-
