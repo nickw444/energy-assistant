@@ -2,26 +2,17 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
+from energy_assistant.api.dependencies import get_config
 from energy_assistant.models.config import AppConfig, EmsConfig
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
 
-def get_app_config(request: Request) -> AppConfig:
-    config: AppConfig | None = getattr(request.app.state, "app_config", None)
-    if config is None:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Config missing",
-        )
-    return config
-
-
 @router.get("", response_model=EmsConfig)
 def read_settings(
-    app_config: Annotated[AppConfig, Depends(get_app_config)],
+    app_config: Annotated[AppConfig, Depends(get_config)],
 ) -> EmsConfig:
     return app_config.ems
 

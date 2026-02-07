@@ -15,7 +15,7 @@ Key files:
 
 Design rules:
 - Keep dependencies explicit. The CLI constructs `Worker(app_config=..., resolver=..., ha_ws_client=...)` and passes it into the API.
-- Do not couple worker code to FastAPI. The API reads worker state via `request.app.state.worker`.
+- Do not couple worker code to FastAPI. The API reads worker state via `energy_assistant.api.dependencies.get_worker` (backed by `app.state.dependencies`).
 - Be careful with concurrency and superseding runs. Price-change triggers may start a new run while another is in progress; stale results must not publish as the latest plan.
 
 Testing:
