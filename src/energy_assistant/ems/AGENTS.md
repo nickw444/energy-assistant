@@ -24,10 +24,6 @@ Testing workflow:
 - Refresh baselines: `uv run energy-assistant ems refresh-baseline [--fixture ...] [--scenario ...]`
 - Render a report: `uv run energy-assistant ems scenario-report [--fixture ...]`
 
-Schema changes:
-- This is unreleased software; breaking schema changes are acceptable.
-- If you change config schemas in a breaking way, update fixture configs and baselines in the same PR so CI stays green.
-
 ## Continuous learning
 - Update this file when EMS developer workflows or the high-level mental model changes.
 - Update `src/energy_assistant/ems/EMS_SYSTEM_DESIGN.md` when you change the modeled problem (variables, constraints, objective terms).
