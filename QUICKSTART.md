@@ -100,11 +100,11 @@ plant:
     # amber-express example:
     # realtime_price_import:
     #   type: home_assistant
-    #   entity: sensor.amber_express_price_import
+    #   entity: sensor.price_import
     # price_import_forecast:
     #   type: home_assistant
     #   platform: amber_express
-    #   entity: sensor.amber_express_price_import
+    #   entity: sensor.price_import
     price_export_forecast:
       type: home_assistant
       platform: amberelectric
@@ -115,11 +115,11 @@ plant:
     # amber-express example:
     # realtime_price_export:
     #   type: home_assistant
-    #   entity: sensor.amber_express_price_export
+    #   entity: sensor.price_export
     # price_export_forecast:
     #   type: home_assistant
     #   platform: amber_express
-    #   entity: sensor.amber_express_price_export
+    #   entity: sensor.price_export
     # Bias grid prices to prefer self-sufficiency by making imports more expensive
     # and exports less attractive by the same margin (e.g. 25% turns $0.20 import
     # into $0.25 and $0.10 export into $0.075).
