@@ -97,6 +97,11 @@ plant:
       # Forecast post-processing mode options:
       # - spot, advanced, blend_min, blend_max, blend_mean (or omit for provider default).
       price_forecast_mode: spot
+    # amber-express example:
+    # price_import_forecast:
+    #   type: home_assistant
+    #   platform: amber_express
+    #   entity: sensor.amber_express_price_import_forecast
     price_export_forecast:
       type: home_assistant
       platform: amberelectric
@@ -104,6 +109,11 @@ plant:
       # Forecast post-processing mode options:
       # - spot, advanced, blend_min, blend_max, blend_mean (or omit for provider default).
       price_forecast_mode: spot
+    # amber-express example:
+    # price_export_forecast:
+    #   type: home_assistant
+    #   platform: amber_express
+    #   entity: sensor.amber_express_price_export_forecast
     # Bias grid prices to prefer self-sufficiency by making imports more expensive
     # and exports less attractive by the same margin (e.g. 25% turns $0.20 import
     # into $0.25 and $0.10 export into $0.075).

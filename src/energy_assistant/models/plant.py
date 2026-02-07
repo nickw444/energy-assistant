@@ -6,11 +6,16 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from energy_assistant.lib.source_resolver.hass_source import (
     HomeAssistantAmberElectricForecastSource,
+    HomeAssistantAmberExpressForecastSource,
     HomeAssistantCurrencyEntitySource,
     HomeAssistantHistoricalAverageForecastSource,
     HomeAssistantPercentageEntitySource,
     HomeAssistantPowerKwEntitySource,
     HomeAssistantSolcastForecastSource,
+)
+
+PriceForecastSource = (
+    HomeAssistantAmberElectricForecastSource | HomeAssistantAmberExpressForecastSource
 )
 
 
@@ -79,8 +84,8 @@ class GridConfig(BaseModel):
     realtime_grid_power: HomeAssistantPowerKwEntitySource
     realtime_price_import: HomeAssistantCurrencyEntitySource
     realtime_price_export: HomeAssistantCurrencyEntitySource
-    price_import_forecast: HomeAssistantAmberElectricForecastSource
-    price_export_forecast: HomeAssistantAmberElectricForecastSource
+    price_import_forecast: PriceForecastSource
+    price_export_forecast: PriceForecastSource
     # Grid price bias: sign-aware premium on positive imports and discount on
     # positive exports (negative prices move toward/away from zero accordingly).
     grid_price_bias_pct: float = Field(default=0.0, ge=0, le=100)

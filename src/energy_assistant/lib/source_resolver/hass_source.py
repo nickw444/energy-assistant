@@ -208,6 +208,72 @@ class HomeAssistantAmberElectricForecastSource(
         return intervals
 
 
+class HomeAssistantAmberExpressForecastSource(
+    HomeAssistantEntitySource[list[PriceForecastInterval]]
+):
+    """Parse price forecasts from the experimental amber-express schema.
+
+    Schema reference: https://github.com/hass-energy/amber-express
+    """
+
+    type: Literal["home_assistant"]
+    platform: Literal["amber_express"]
+    entity: str = Field(min_length=1)
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    def mapper(self, state: HomeAssistantStateDict) -> list[PriceForecastInterval]:
+        attributes = state["attributes"]
+        forecasts_raw = attributes.get("forecast")
+        if not isinstance(forecasts_raw, list):
+            return []
+        forecasts_raw = cast(list[object], forecasts_raw)
+
+        points: list[tuple[datetime.datetime, float]] = []
+        for item in forecasts_raw:
+            if not isinstance(item, dict):
+                continue
+            forecast = cast(dict[str, object], item)
+            start = _parse_timestamp(forecast.get("time"))
+            if start is None:
+                continue
+            if start.tzinfo is None:
+                start = start.replace(tzinfo=datetime.UTC)
+            try:
+                value = required_float(forecast.get("value"))
+            except (TypeError, ValueError):
+                continue
+            points.append((start, value))
+
+        if not points:
+            return []
+
+        points.sort(key=lambda item: item[0])
+
+        # amber-express can provide mixed-resolution points (e.g. 5-minute points
+        # near-term and 30-minute points later) along with an interpolation hint.
+        # The common "previous" mode means each point holds until the next point.
+        # Model this as contiguous piecewise-constant intervals to avoid gaps at
+        # high-res horizons.
+        if len(points) >= 2:
+            fallback_duration = points[-1][0] - points[-2][0]
+            if fallback_duration.total_seconds() <= 0:
+                fallback_duration = datetime.timedelta(minutes=5)
+        else:
+            fallback_duration = datetime.timedelta(minutes=5)
+
+        intervals: list[PriceForecastInterval] = []
+        for idx, (start, value) in enumerate(points):
+            if idx + 1 < len(points):
+                end = points[idx + 1][0]
+            else:
+                end = start + fallback_duration
+            if end <= start:
+                end = start + datetime.timedelta(minutes=5)
+            intervals.append(PriceForecastInterval(start=start, end=end, value=value))
+        return intervals
+
+
 class HomeAssistantSolcastForecastSource(
     HomeAssistantMultiEntitySource[list[PowerForecastInterval]]
 ):

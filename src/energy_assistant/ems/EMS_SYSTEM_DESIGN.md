@@ -193,7 +193,7 @@ Supported source types:
 
 Forecast sources map HA data into interval lists:
 
-- **Price forecasts**: `HomeAssistantAmberElectricForecastSource` →
+- **Price forecasts**: `HomeAssistantAmberElectricForecastSource` (official Amber HA schema) or `HomeAssistantAmberExpressForecastSource` (experimental [amber-express](https://github.com/hass-energy/amber-express) schema; `attributes.forecast`) →
   list[`PriceForecastInterval`]
 - **PV forecasts**: `HomeAssistantSolcastForecastSource` →
   list[`PowerForecastInterval`]
