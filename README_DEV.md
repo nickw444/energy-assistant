@@ -3,9 +3,12 @@
 ### Repository layout
 - `src/energy_assistant/api`: FastAPI app and routes to manage config plus trigger/retrieve plans.
 - `src/energy_assistant/worker/`: Background loop package that fetches Home Assistant data and builds a plan.
-- `src/energy_assistant/worker/milp/`: PuLP-backed planner and compiler placeholder for MILP constraints.
-- `src/energy_assistant/config.py`: YAML-backed configuration models and store (server + energy settings).
+- `src/energy_assistant/ems/`: PuLP-backed EMS MILP solver (horizon, forecast alignment, constraints, objective, plan extraction).
+- `src/energy_assistant/models/`: Pydantic config models (server + Home Assistant + plant + EMS settings).
+- `src/energy_assistant/config.py`: YAML config loader (reads once at startup).
 - `src/energy_assistant/lib/home_assistant.py`: Thin HTTP client wrapper for Home Assistant APIs.
+- `src/energy_assistant/lib/source_resolver/`: Hydration + mapping layer for Home Assistant sources and forecast intervals.
+- `custom_components/energy_assistant`: Home Assistant custom integration (POC) for surfacing plans as entities.
 - Frontend: not yet built; the repository root is kept flat so a `frontend/` or similar can be added later.
 
 ### Configuration
