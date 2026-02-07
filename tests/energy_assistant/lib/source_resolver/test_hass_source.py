@@ -13,6 +13,7 @@ from energy_assistant.lib.home_assistant import (
 from energy_assistant.lib.source_resolver.hass_provider import HomeAssistantHistoryPayload
 from energy_assistant.lib.source_resolver.hass_source import (
     HomeAssistantAmberElectricForecastSource,
+    HomeAssistantAmberExpressForecastSource,
     HomeAssistantHistoricalAverageForecastSource,
 )
 
@@ -281,3 +282,64 @@ def test_amber_forecast_spot_requires_spot_price() -> None:
 
     with pytest.raises(ValueError, match="Spot price is required"):
         source.mapper(state)
+
+
+def test_amber_express_forecast_parses_intervals() -> None:
+    source = HomeAssistantAmberExpressForecastSource(
+        type="home_assistant",
+        platform="amber_express",
+        entity="price_forecast",
+    )
+    state: HomeAssistantStateDict = {
+        "entity_id": "sensor.price_forecast",
+        "state": "ok",
+        "attributes": {
+            "forecast": [
+                {"time": "2026-02-07T14:30:00+11:00", "value": 0.1286},
+                {"time": "2026-02-07T14:35:00+11:00", "value": 0.1314},
+                {"time": "2026-02-07T14:40:00+11:00", "value": 0.1275},
+            ]
+        },
+        "last_changed": "2026-02-07T14:30:00+11:00",
+        "last_reported": "2026-02-07T14:30:00+11:00",
+        "last_updated": "2026-02-07T14:30:00+11:00",
+    }
+
+    intervals = source.mapper(state)
+
+    assert len(intervals) == 3
+    assert intervals[0].start == datetime.fromisoformat("2026-02-07T14:30:00+11:00")
+    assert intervals[0].end == datetime.fromisoformat("2026-02-07T14:35:00+11:00")
+    assert intervals[0].value == pytest.approx(0.1286)  # type: ignore[reportUnknownMemberType]
+
+
+def test_amber_express_forecast_extends_each_point_to_next_point() -> None:
+    source = HomeAssistantAmberExpressForecastSource(
+        type="home_assistant",
+        platform="amber_express",
+        entity="price_forecast",
+    )
+    # Mixed-resolution points: a few 5-minute steps then a 30-minute step.
+    state: HomeAssistantStateDict = {
+        "entity_id": "sensor.price_forecast",
+        "state": "ok",
+        "attributes": {
+            "interpolation_mode": "previous",
+            "forecast": [
+                {"time": "2026-02-07T14:30:00+11:00", "value": 0.10},
+                {"time": "2026-02-07T14:35:00+11:00", "value": 0.11},
+                {"time": "2026-02-07T15:05:00+11:00", "value": 0.12},
+            ]
+        },
+        "last_changed": "2026-02-07T14:30:00+11:00",
+        "last_reported": "2026-02-07T14:30:00+11:00",
+        "last_updated": "2026-02-07T14:30:00+11:00",
+    }
+
+    intervals = source.mapper(state)
+
+    assert len(intervals) == 3
+    assert intervals[0].start == datetime.fromisoformat("2026-02-07T14:30:00+11:00")
+    assert intervals[0].end == datetime.fromisoformat("2026-02-07T14:35:00+11:00")
+    assert intervals[1].start == datetime.fromisoformat("2026-02-07T14:35:00+11:00")
+    assert intervals[1].end == datetime.fromisoformat("2026-02-07T15:05:00+11:00")
