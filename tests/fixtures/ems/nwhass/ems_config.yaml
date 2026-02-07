@@ -80,6 +80,8 @@ plant:
       realtime_power:
         type: home_assistant
         entity: sensor.hass_energy_pv_power_smoothed_1m
+      # Pessimism factor applied to PV forecast kW values.
+      forecast_multiplier: 0.95
       forecast:
         type: home_assistant
         entities:
