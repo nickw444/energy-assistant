@@ -726,6 +726,146 @@ def test_pv_forecast_reused_per_inverter() -> None:
     assert abs(step.grid.export_kw - 3.0) < 1e-6
 
 
+def test_pv_forecast_multiplier_scales_pv_forecast() -> None:
+    now = datetime(2025, 12, 27, 8, 2, tzinfo=UTC)
+    inverter = InverterConfig(
+        id="inv",
+        name="Inv",
+        peak_power_kw=5.0,
+        curtailment=None,
+        pv=PvConfig(
+            realtime_power=None,
+            forecast_multiplier=0.5,
+            forecast=HomeAssistantSolcastForecastSource(
+                type="home_assistant",
+                platform="solcast",
+                entities=["pv_forecast"],
+            ),
+        ),
+        battery=None,
+    )
+    config = _make_config(
+        inverters=[inverter],
+        timestep_minutes=60,
+        min_horizon_minutes=60,
+    )
+    start = now.replace(minute=0, second=0, microsecond=0)
+    pv_intervals = _power_intervals(
+        start,
+        interval_minutes=60,
+        num_intervals=1,
+        value=2.0,
+    )
+    price_import = _price_intervals(
+        start,
+        interval_minutes=60,
+        num_intervals=1,
+        value=0.1,
+    )
+    price_export = _price_intervals(
+        start,
+        interval_minutes=60,
+        num_intervals=1,
+        value=0.0,
+    )
+    load_intervals = _power_intervals(
+        start,
+        interval_minutes=60,
+        num_intervals=1,
+        value=0.0,
+    )
+    resolver = DummyResolver(
+        price_forecasts={
+            "price_import_forecast": price_import,
+            "price_export_forecast": price_export,
+        },
+        pv_forecasts={"pv_forecast": pv_intervals},
+        load_forecasts={"load_forecast": load_intervals},
+        realtime_values={
+            "load": 0.0,
+            "price_import": 0.1,
+            "price_export": 0.0,
+            "grid": 0.0,
+        },
+    )
+
+    plan = EmsMilpPlanner(config, resolver=resolver).generate_ems_plan(now=now)
+    assert plan.timesteps[0].inverters["inv"].pv_kw == pytest.approx(1.0)  # type: ignore[reportUnknownMemberType]
+
+
+def test_pv_forecast_multiplier_does_not_scale_realtime_override_slot0() -> None:
+    now = datetime(2025, 12, 27, 8, 2, tzinfo=UTC)
+    inverter = InverterConfig(
+        id="inv",
+        name="Inv",
+        peak_power_kw=5.0,
+        curtailment=None,
+        pv=PvConfig(
+            realtime_power=HomeAssistantPowerKwEntitySource(
+                type="home_assistant",
+                entity="pv_realtime",
+            ),
+            forecast_multiplier=0.5,
+            forecast=HomeAssistantSolcastForecastSource(
+                type="home_assistant",
+                platform="solcast",
+                entities=["pv_forecast"],
+            ),
+        ),
+        battery=None,
+    )
+    config = _make_config(
+        inverters=[inverter],
+        timestep_minutes=60,
+        min_horizon_minutes=120,
+    )
+    start = now.replace(minute=0, second=0, microsecond=0)
+    pv_intervals = _power_intervals(
+        start,
+        interval_minutes=60,
+        num_intervals=2,
+        value=2.0,
+    )
+    price_import = _price_intervals(
+        start,
+        interval_minutes=60,
+        num_intervals=2,
+        value=0.1,
+    )
+    price_export = _price_intervals(
+        start,
+        interval_minutes=60,
+        num_intervals=2,
+        value=0.0,
+    )
+    load_intervals = _power_intervals(
+        start,
+        interval_minutes=60,
+        num_intervals=2,
+        value=0.0,
+    )
+    resolver = DummyResolver(
+        price_forecasts={
+            "price_import_forecast": price_import,
+            "price_export_forecast": price_export,
+        },
+        pv_forecasts={"pv_forecast": pv_intervals},
+        load_forecasts={"load_forecast": load_intervals},
+        realtime_values={
+            "load": 0.0,
+            "price_import": 0.1,
+            "price_export": 0.0,
+            "grid": 0.0,
+            "pv_realtime": 1.5,
+        },
+    )
+
+    plan = EmsMilpPlanner(config, resolver=resolver).generate_ems_plan(now=now)
+    assert len(plan.timesteps) == 2
+    assert plan.timesteps[0].inverters["inv"].pv_kw == pytest.approx(1.5)  # type: ignore[reportUnknownMemberType]
+    assert plan.timesteps[1].inverters["inv"].pv_kw == pytest.approx(1.0)  # type: ignore[reportUnknownMemberType]
+
+
 def test_load_aware_curtailment_blocks_export() -> None:
     now = datetime(2025, 12, 27, 9, 2, tzinfo=UTC)
     inverter = InverterConfig(

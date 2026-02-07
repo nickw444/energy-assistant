@@ -25,6 +25,7 @@ This file covers repo-wide conventions for coding agents. For domain-specific gu
 
 ## Configuration and persistence
 - Config is a single YAML file (`--config`, defaults to `config.yaml`, then `config.dev.yaml`) parsed into Pydantic models.
+- When adding/renaming/changing YAML config fields, update `QUICKSTART.md` with field-level documentation (inline YAML comments near the field) and keep it in sync with the Pydantic schema.
 - Persist runtime artifacts to the filesystem under `server.data_dir` (plans, plots, reports). Avoid destructive changes that would drop user data.
 
 ## Schema changes
