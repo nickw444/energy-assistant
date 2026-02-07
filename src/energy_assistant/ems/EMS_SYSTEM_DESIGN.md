@@ -2,7 +2,7 @@
 
 This document describes the **current implementation** under `src/energy_assistant/ems/`.
 It is intended to mirror the shipped code (builder, solver, horizon, forecast
-alignment, resolver inputs). Keep it in sync with `src/energy_assistant/ems/AGENTS.md`.
+alignment, resolver inputs). For coding-agent workflow notes, see `src/energy_assistant/ems/AGENTS.md`.
 
 ---
 
@@ -14,11 +14,8 @@ It does **not** currently apply control actions to devices; it only solves and
 emits a plan for inspection/plotting. The plan is used by:
 
 - CLI (`energy-assistant ems solve`) for ad-hoc solves + plotting.
-- Background worker (`energy_assistant/worker/`) for scheduled solves every minute.
-- API (`energy_assistant/api/routes/plan.py`) for fetching/awaiting plan output.
-
-The EMS implementation here is independent from the MILP v2 scaffolding under
-`src/energy_assistant/milp_v2/`.
+- Background worker (`src/energy_assistant/worker/`) for scheduled solves every minute.
+- API (`src/energy_assistant/api/routes/plan.py`) for fetching/awaiting plan output.
 
 ---
 
@@ -65,7 +62,7 @@ Supporting runtime pieces:
 
 ### 3.2 Worker + API
 
-- The worker (`energy_assistant/worker/service.py`) schedules a solve every minute.
+- The worker (`src/energy_assistant/worker/service.py`) schedules a solve every minute.
 - Each run hydrates HA data, solves the MILP, and stores the latest plan in memory.
 - API endpoints allow:
   - Triggering a run (`POST /plan/run`).
@@ -210,8 +207,10 @@ Forecast sources map HA data into interval lists:
 - Convert forecast intervals into a per-slot series.
 - Require the forecast to **cover the full horizon**.
 - Allow a **missing slot 0** only when `first_slot_override` is provided.
-- For each slot, the aligner selects the first interval that overlaps the slot
-  (no interpolation or duration weighting).
+- For each slot, the aligner computes a time-weighted average across all forecast intervals
+  that overlap the slot.
+- Coverage is strict: small sub-second gaps are tolerated, but larger gaps fail alignment
+  (except slot 0 when `first_slot_override` is provided).
 
 ### 6.3 Realtime overrides
 
@@ -220,10 +219,6 @@ The builder uses:
 - Load forecast + realtime load override for **slot 0**.
 - PV forecast + realtime PV override for **slot 0** (if realtime exists).
 - Price forecast + realtime price override for **slot 0**.
-
-If a forecast is missing and a realtime source exists, the series is filled with
-that realtime value for all slots (currently used only when a forecast is
-configured as optional, which is rare in EMS configs).
 
 ---
 

@@ -1,51 +1,42 @@
-## Ways of working
-- Use uv for dependency management and scripts. Keep tooling config in `pyproject.toml` and `pyrightconfig.json`.
+## Agent Guide (Repository)
+
+This file covers repo-wide conventions for coding agents. For domain-specific guidance, see:
+- `src/energy_assistant/api/AGENTS.md` (FastAPI API)
+- `src/energy_assistant/worker/AGENTS.md` (background planning loop)
+- `src/energy_assistant/ems/AGENTS.md` (EMS MILP solver)
+- `src/energy_assistant/lib/source_resolver/AGENTS.md` (Home Assistant data hydration + sources)
+- `custom_components/energy_assistant/AGENTS.md` (Home Assistant custom integration)
+
+## Work Like A Human (Scope First)
+- Start by identifying the task scope (which subsystem/package owns the change). Do not try to understand the entire repo up front.
+- Default to working in the most relevant subtree first, then expand outward only as needed (follow imports, call sites, and tests). If the task is cross-cutting (sweeps, refactors, consistency changes), a deliberate top-down scan is appropriate before drilling into specific modules.
+- Use the filesystem hierarchy of `AGENTS.md`: start with the closest one to the code you are changing, then read parent `AGENTS.md` files as needed. Follow any links they provide to the relevant deeper docs.
+
+## Tooling and quality gates
+- Use `uv` for dependency management and running scripts. Keep tooling config in `pyproject.toml` and `pyrightconfig.json`.
+- Lint: `uv run ruff check src custom_components tests`
+- Type check: `uv run pyright`
+- Tests: `uv run pytest`
+- Tests should mirror the `src/energy_assistant` package structure under `tests/energy_assistant/`.
+
+## Architecture boundaries
+- Keep API and worker logic modular and loosely coupled. Dependencies are wired explicitly in `src/energy_assistant/cli.py`.
+- Shared helpers (Home Assistant clients, WebSocket subscriptions, source resolver) live under `src/energy_assistant/lib/`.
+
+## Configuration and persistence
+- Config is a single YAML file (`--config`, defaults to `config.yaml`, then `config.dev.yaml`) parsed into Pydantic models.
+- Persist runtime artifacts to the filesystem under `server.data_dir` (plans, plots, reports). Avoid destructive changes that would drop user data.
+
+## Schema changes
+- This is unreleased software; breaking schema changes can be made without backward-compatibility shims.
+- When you make a breaking change to a public schema or contract (YAML config models, API DTOs, integration-facing models), update fixtures/tests and any downstream clients in the same PR so CI and integrations stay in sync.
+
+## Repo hygiene
 - Default to built-in exceptions unless a distinct custom type is justified.
-- Keep backend and worker logic modular; API is FastAPI, worker runs background planning tasks (scheduled every minute) and is wired from `cli` with explicit dependencies. Worker code lives in `energy_assistant/worker/` so it can grow into multiple modules. Avoid tight coupling so the future frontend can live alongside the backend at the repo root.
-- Reactive replanning: `Worker` internally subscribes to price entity state changes via Home Assistant WebSocket API and triggers replanning with a short debounce (0.75s) to coalesce simultaneous import/export price updates. The 1-minute schedule remains as a safety net.
-- `HomeAssistantWebSocketClient` (`energy_assistant/lib/home_assistant_ws.py`) provides async WebSocket subscriptions for entity state changes with automatic reconnection and exponential backoff.
-- Persist config and runtime artifacts to the filesystem (`data_dir` from YAML config). The single YAML file (default `config.yaml`) stores server + Home Assistant + plant + energy settings; it is read once at startup and the API is read-only for config (no writes). Avoid destructive commands that would drop user data.
-- `TimeWindow` month scoping uses 3-letter abbreviations only (`jan`..`dec`); numeric months are not supported.
-- Shared helpers (e.g., Home Assistant client) live under `energy_assistant/lib/` to keep worker/API code lean.
-- CLI accepts a YAML config (`--config`, default `config.yaml`) for static settings like host, port, and data_dir. Config is validated with Pydantic. Worker is always on; host/port flags were removed.
-- Systemd units should use an absolute path to `uv` in `ExecStart` when `uv` is installed under a user-local path (e.g., `/root/.local/bin/uv`), because systemd only searches a limited set of system paths.
-- For self-contained tasks when requested, create a git worktree under `.worktrees/<meaningful-name>`, copy `config.dev.yaml` into the worktree root, and run `uv sync` there before starting work.
-- GitHub uses squash merges; when cleaning up worktrees, rely on PR merged status or deleted remote branches rather than `git branch --merged`.
+- Track work items in GitHub Issues (avoid a checked-in TODO list).
+- GitHub uses squash merges; when cleaning up worktrees, rely on merged PR status or deleted remote branches rather than `git branch --merged`.
 - When updating PR descriptions via `gh`, prefer `gh pr edit --body-file <path>` to preserve markdown formatting.
-- Track work items in GitHub Issues instead of a checked-in TODO list.
-- Routes are split by domain under `energy_assistant/api/routes/` (e.g., `plan`, `settings`). Settings endpoint surfaces runtime energy settings (read-only; user edits YAML).
-- MILP logic lives under `energy_assistant/worker/milp/` using PuLP; planner/compiler are placeholders awaiting real constraints.
-- MILP v2 scaffolding lives under `src/energy_assistant/milp_v2/` with a compile phase (config + `ValueResolver` -> `CompiledModel`) and an execute phase (solve -> `PlanResult`).
-- CLI `energy-assistant milp` now wires the MILP v2 planner (compiler + executor); it currently fails until those phases are implemented.
-- Keep local lint commands aligned with CI; ruff checks `src`, `custom_components`, and `tests`.
-- Keep type checking aligned with CI; pyright runs against `src`, `custom_components`, and `tests`.
-- MILP v2 slotting uses `EmsConfig.timestep_minutes` with a horizon length derived from the shortest forecast, bounded by `EmsConfig.min_horizon_minutes`, to align forecast slots to the current block start.
-- Plotting helpers live in `src/energy_assistant/plotting/` and are shared by CLI.
-- A lightweight plan checker lives at `energy_assistant/worker/milp/checker.py` with pytest coverage in `tests/`.
-- `energy_assistant/worker/milp/ha_dump.py` now emits a single-battery stub in realtime inputs when `battery_soc` is available (capacity/limits are currently constants).
-- `energy_assistant/worker/milp/ha_dump.py` emits a simple EV stub when `ev_connected` is true (defaults for capacity, target SOC, max power, value-per-kWh, min power, and switch penalty).
-- Tests should mirror the `src/energy_assistant` package structure under `tests/` (e.g., `tests/energy_assistant/ems/`).
-- EMS fixtures use a hierarchical structure: `tests/fixtures/ems/<fixture>/<scenario>/`. The `<fixture>/ems_config.yaml` is shared across all scenarios in that fixture, enabling config tuning across multiple scenarios at once.
-- Record new scenarios with `energy-assistant ems record-scenario --fixture <fixture> --name <scenario>`. Refresh baselines with `energy-assistant ems refresh-baseline` (use `--fixture` and `--scenario` to target specific ones, or omit to refresh all). Use `--force-image` when the plan hash is unchanged but you still need to regenerate plot images (e.g., plotting-only tweaks).
-- Use `energy-assistant ems scenario-report` to render a single HTML page of every fixture plot. Use `--fixture <fixture>` to filter to one fixture.
-- Planner now consumes a resolved payload (no source models). Resolved schemas live in `src/energy_assistant/models/resolved.py`; resolution scaffolding/registry is under `src/energy_assistant/lib/resolution/` for two-pass fetch→transform in the future.
-- This is unreleased software; schema changes can be breaking without backward-compatibility shims.
-- When config schemas change in backward-incompatible ways, the shared `tests/fixtures/ems/<fixture>/ems_config.yaml` must be updated to keep fixture tests passing.
-- EMS-specific guidance lives in `src/energy_assistant/ems/AGENTS.md`.
-- EMS plan `EconomicsTimestepPlan` costs are grid import/export only and exclude other objective terms (EV incentives, penalties, curtailment tie-breaks, violation penalties, battery wear).
-- EMS objective applies a sign-aware grid price bias via `plant.grid.grid_price_bias_pct` (premium on positive imports, discount on positive exports; negative prices move toward/away from zero appropriately). Battery wear cost (`charge_cost_per_kwh`, `discharge_cost_per_kwh`) allows separate cost per kWh for charge and discharge.
-- `plant.grid.zero_price_export_preference` controls whether the zero-price export bonus favors export or curtailment.
-- Forecast price risk bias is configured under `plant.grid.grid_price_risk` with `ramp_start_after_minutes` + `ramp_duration_minutes`, scaling the grid prices used in the objective over the horizon.
-- `EmsPlanOutput` now includes `objective_value` with the solver objective (may be negative/None).
-- Load-aware curtailment is forced on whenever export price is negative, enabling PV to follow load and blocking export for those slots.
-- EMS horizons can use `EmsConfig.timestep_minutes` plus `high_res_timestep_minutes` / `high_res_horizon_minutes` to run a higher-resolution window before switching to the default timestep; boundaries snap to the next interval boundary for aligned coarse slots and alignment uses time-weighted averages for variable slot sizes.
-- Historical-average load forecasts can repeat daily averages beyond 24h via `forecast_horizon_hours` (default 24).
-- `ConfigMapper` (`src/energy_assistant/lib/resolver/__init__.py`) offers a recursive walk utility that calls a visitor for side effects and allows halting recursion by returning `False`.
-- Home Assistant integration (POC) lives under `custom_components/energy_assistant`.
-- Home Assistant integration guidance lives in `custom_components/energy_assistant/AGENTS.md`.
-- Home Assistant integration uses `custom_components/energy_assistant/energy_assistant_client/` for the lightweight aiohttp + Pydantic API client aligned with the FastAPI OpenAPI responses.
-- Home Assistant integration shares a single API client and data update coordinator via `entry.runtime_data`, and prefers typed model access over dynamic path traversal where possible.
-- Any FastAPI contract changes must be reflected in `custom_components/energy_assistant/energy_assistant_client/`, and the Home Assistant custom integration should be refactored as needed to keep it in sync.
 
 ## Continuous learning
-- When you learn new project knowledge, coding style, or preferences during a session, update `AGENTS.md` (and `README.md` if it affects users) before finishing so the next agent benefits.
+- When you learn or change repo-level concepts (architecture boundaries, workflows, coding style), update this file and the relevant domain `AGENTS.md` (and `README*` if it affects users).
+- Keep `AGENTS.md` focused on concepts and agent workflows. Document implementation quirks and edge-cases as comments next to the relevant code instead of expanding these files.
