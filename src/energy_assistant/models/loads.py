@@ -1,4 +1,5 @@
 import re
+from datetime import datetime
 from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -26,6 +27,23 @@ def _default_soc_incentives() -> list[SocIncentive]:
     return []
 
 
+class EvDeadlineTarget(BaseModel):
+    """Soft EV SoC target at a deadline time.
+
+    This is intentionally static (config-only) in the first iteration. Future work
+    can expand this to allow Home Assistant helper entities.
+    """
+
+    at: datetime
+    target_soc_pct: float = Field(ge=0, le=100)
+    # Willingness-to-pay (WTP) cap expressed as a penalty per kWh of shortfall at the deadline.
+    # When set, the solver will generally avoid paying more than this (in objective terms)
+    # to reduce shortfall, preferring to accept shortfall instead.
+    max_cost_per_kwh: float | None = Field(default=None, ge=0)
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+
 class ControlledEvLoad(BaseModel):
     id: str = Field(min_length=1)
     name: str = Field(min_length=1)
@@ -44,6 +62,7 @@ class ControlledEvLoad(BaseModel):
     state_of_charge_pct: HomeAssistantPercentageEntitySource
     soc_incentives: list[SocIncentive] = Field(default_factory=_default_soc_incentives)
     switch_penalty: float = Field(default=0.0, ge=0)
+    deadline_target: EvDeadlineTarget | None = None
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 

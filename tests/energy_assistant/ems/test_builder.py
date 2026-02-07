@@ -26,7 +26,7 @@ from energy_assistant.lib.source_resolver.models import PowerForecastInterval, P
 from energy_assistant.lib.source_resolver.resolver import ValueResolver
 from energy_assistant.lib.source_resolver.sources import EntitySource
 from energy_assistant.models.config import AppConfig, EmsConfig, ServerConfig
-from energy_assistant.models.loads import ControlledEvLoad, LoadConfig
+from energy_assistant.models.loads import ControlledEvLoad, EvDeadlineTarget, LoadConfig
 from energy_assistant.models.plant import (
     GridConfig,
     InverterConfig,
@@ -407,6 +407,144 @@ def test_builder_import_forbidden_periods_apply_via_model() -> None:
 
     assert _import_allowed_for(datetime(2025, 1, 15, 8, 0, tzinfo=UTC)) == [False]
     assert _import_allowed_for(datetime(2025, 3, 15, 8, 0, tzinfo=UTC)) == [True]
+
+
+def _solve_ev_deadline_target(
+    *,
+    deadline_at: datetime,
+    target_soc_pct: float,
+    max_cost_per_kwh: float,
+    price_import: float,
+    max_power_kw: float,
+) -> tuple[float, float]:
+    now = datetime(2025, 12, 27, 8, 2, tzinfo=UTC)
+    ev_load = ControlledEvLoad(
+        id="ev",
+        name="EV",
+        load_type="controlled_ev",
+        min_power_kw=0.0,
+        max_power_kw=max_power_kw,
+        energy_kwh=10.0,
+        connected=HomeAssistantBinarySensorEntitySource(
+            type="home_assistant",
+            entity="ev_connected",
+        ),
+        can_connect=None,
+        allowed_connect_times=[],
+        connect_grace_minutes=0,
+        realtime_power=HomeAssistantPowerKwEntitySource(
+            type="home_assistant",
+            entity="ev_power",
+        ),
+        state_of_charge_pct=HomeAssistantPercentageEntitySource(
+            type="home_assistant",
+            entity="ev_soc",
+        ),
+        soc_incentives=[],
+        switch_penalty=0.0,
+        deadline_target=EvDeadlineTarget(
+            at=deadline_at,
+            target_soc_pct=target_soc_pct,
+            max_cost_per_kwh=max_cost_per_kwh,
+        ),
+    )
+    config = _make_config(
+        timestep_minutes=60,
+        min_horizon_minutes=60,
+        loads=[ev_load],
+    )
+    horizon = build_horizon(now=now, timestep_minutes=60, num_intervals=1)
+    slot_start = horizon.start
+    resolver = DummyResolver(
+        price_forecasts={
+            "price_import_forecast": _price_intervals(
+                slot_start,
+                interval_minutes=60,
+                num_intervals=1,
+                value=price_import,
+            ),
+            "price_export_forecast": _price_intervals(
+                slot_start,
+                interval_minutes=60,
+                num_intervals=1,
+                value=0.0,
+            ),
+        },
+        pv_forecasts={
+            "pv_forecast": _power_intervals(
+                slot_start,
+                interval_minutes=60,
+                num_intervals=1,
+                value=0.0,
+            ),
+        },
+        load_forecasts={
+            "load_forecast": _power_intervals(
+                slot_start,
+                interval_minutes=60,
+                num_intervals=1,
+                value=0.0,
+            ),
+        },
+        realtime_values={
+            "load": 0.0,
+            "price_import": price_import,
+            "price_export": 0.0,
+            "grid": 0.0,
+            "ev_power": 0.0,
+            "ev_soc": 50.0,
+            "ev_connected": True,
+        },
+    )
+    builder = MILPBuilder(
+        config.plant,
+        config.loads,
+        resolver,
+        config.ems,
+        time_window_matcher=TimeWindowMatcher(),
+        price_series_builder=PriceSeriesBuilder(
+            grid_price_bias_pct=config.plant.grid.grid_price_bias_pct,
+            grid_price_risk=config.plant.grid.grid_price_risk,
+        ),
+    )
+    forecasts = builder.resolve_forecasts(now=now, interval_minutes=horizon.interval_minutes)
+    model = builder.build(horizon=horizon, forecasts=forecasts)
+    model.problem.solve(pulp.PULP_CBC_CMD(msg=False))
+    ev_vars = model.loads.evs["ev"]
+    shortfall_var = ev_vars.E_ev_deadline_shortfall_kwh
+    assert shortfall_var is not None
+    return (
+        _require_value(pulp.value(ev_vars.P_ev_charge_kw[0])),
+        _require_value(pulp.value(shortfall_var)),
+    )
+
+
+def test_ev_deadline_target_uses_wtp_to_charge_when_worth_it() -> None:
+    # Need +1kWh by the deadline (50% -> 60% of 10kWh). Deadline is 30 minutes into a 60m slot,
+    # so we must charge at 2kW to deliver 1kWh.
+    deadline_at = datetime(2025, 12, 27, 8, 30, tzinfo=UTC)
+    charge_kw, shortfall_kwh = _solve_ev_deadline_target(
+        deadline_at=deadline_at,
+        target_soc_pct=60.0,
+        max_cost_per_kwh=0.20,
+        price_import=0.10,
+        max_power_kw=2.0,
+    )
+    assert abs(charge_kw - 2.0) < 1e-6
+    assert abs(shortfall_kwh) < 1e-6
+
+
+def test_ev_deadline_target_accepts_shortfall_when_price_above_wtp() -> None:
+    deadline_at = datetime(2025, 12, 27, 8, 30, tzinfo=UTC)
+    charge_kw, shortfall_kwh = _solve_ev_deadline_target(
+        deadline_at=deadline_at,
+        target_soc_pct=60.0,
+        max_cost_per_kwh=0.20,
+        price_import=1.00,
+        max_power_kw=2.0,
+    )
+    assert abs(charge_kw) < 1e-6
+    assert abs(shortfall_kwh - 1.0) < 1e-6
 
 
 def test_zero_price_export_bonus_toggle_affects_objective() -> None:

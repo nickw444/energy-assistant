@@ -92,6 +92,10 @@ class EvVars:
     Ev_charge_switch: dict[int, pulp.LpVariable]
     # EV SoC incentive segments (per-kWh rewards).
     Ev_incentive_segments: list[tuple[pulp.LpVariable, float]]
+    # EV deadline target shortfall slack (kWh) for soft deadline target (optional).
+    E_ev_deadline_shortfall_kwh: pulp.LpVariable | None
+    # Max cost per kWh cap (WTP) for reducing deadline shortfall (optional).
+    deadline_max_cost_per_kwh: float | None
 
 
 @dataclass(slots=True)
@@ -773,6 +777,25 @@ class MILPBuilder:
                     continue
                 biased_incentive = _apply_export_bias(float(incentive))
                 objective += -biased_incentive * segment_var
+
+        # EV deadline target shortfall penalty (per kWh).
+        # When max_cost_per_kwh is set on the load, treat it as willingness-to-pay (WTP)
+        # for reducing deadline shortfall. Otherwise, use a conservative default tied to
+        # the effective import prices so the solver generally tries to meet the target.
+        default_deadline_penalty = max(0.0, max(float(v) for v in price_import_effective)) + 0.01
+        for ev_vars in loads.evs.values():
+            shortfall = ev_vars.E_ev_deadline_shortfall_kwh
+            if shortfall is None:
+                continue
+            penalty = (
+                float(ev_vars.deadline_max_cost_per_kwh)
+                if ev_vars.deadline_max_cost_per_kwh is not None
+                else default_deadline_penalty
+            )
+            if penalty <= 0:
+                continue
+            objective += penalty * shortfall
+
         # EV on/off switch penalty (per transition, not time-weighted).
         for load in self._loads:
             if not isinstance(load, ControlledEvLoad):
@@ -1007,6 +1030,16 @@ class MILPBuilder:
             initial_soc_kwh,
         )
 
+        deadline_shortfall, deadline_max_cost = self._build_ev_deadline_target(
+            problem=problem,
+            horizon=horizon,
+            load=load,
+            ev_id=ev_id,
+            capacity_kwh=capacity_kwh,
+            E_ev_kwh=E_ev_kwh,
+            P_ev_charge=P_ev_charge,
+        )
+
         ev_vars = EvVars(
             name=ev_name,
             capacity_kwh=capacity_kwh,
@@ -1015,8 +1048,105 @@ class MILPBuilder:
             E_ev_kwh=E_ev_kwh,
             Ev_charge_switch=switch_vars,
             Ev_incentive_segments=segments,
+            E_ev_deadline_shortfall_kwh=deadline_shortfall,
+            deadline_max_cost_per_kwh=deadline_max_cost,
         )
         return ev_vars
+
+    def _build_ev_deadline_target(
+        self,
+        *,
+        problem: pulp.LpProblem,
+        horizon: Horizon,
+        load: ControlledEvLoad,
+        ev_id: str,
+        capacity_kwh: float,
+        E_ev_kwh: dict[int, pulp.LpVariable],
+        P_ev_charge: dict[int, pulp.LpVariable],
+    ) -> tuple[pulp.LpVariable | None, float | None]:
+        cfg = load.deadline_target
+        if cfg is None:
+            return None, None
+
+        deadline_at = cfg.at
+        # Treat naive datetimes as local time (same tz as the planner).
+        if deadline_at.tzinfo is None:
+            deadline_at = deadline_at.replace(tzinfo=horizon.now.tzinfo)
+        elif horizon.now.tzinfo is not None:
+            deadline_at = deadline_at.astimezone(horizon.now.tzinfo)
+
+        # If the deadline is already in the past, do not apply a target.
+        if deadline_at <= horizon.now:
+            logger.info(
+                "EV deadline target ignored (past deadline): ev=%s deadline=%s now=%s",
+                ev_id,
+                deadline_at.isoformat(),
+                horizon.now.isoformat(),
+            )
+            return None, None
+
+        if not horizon.slots or deadline_at > horizon.slots[-1].end:
+            logger.info(
+                "EV deadline target ignored (beyond horizon): ev=%s deadline=%s horizon_end=%s",
+                ev_id,
+                deadline_at.isoformat(),
+                (horizon.slots[-1].end.isoformat() if horizon.slots else "none"),
+            )
+            return None, None
+
+        target_soc_pct = float(cfg.target_soc_pct)
+        target_soc_pct = max(0.0, min(100.0, target_soc_pct))
+        target_kwh = capacity_kwh * target_soc_pct / 100.0
+
+        # Find the slot that contains the deadline instant.
+        deadline_slot_idx: int | None = None
+        for slot in horizon.slots:
+            if deadline_at <= slot.end:
+                deadline_slot_idx = slot.index
+                break
+        if deadline_slot_idx is None:
+            return None, None
+
+        slot = horizon.slots[deadline_slot_idx]
+        partial_h = (deadline_at - slot.start).total_seconds() / 3600.0
+        partial_h = max(0.0, min(slot.duration_h, partial_h))
+
+        # Explicit SoC at the deadline instant (inside a slot).
+        E_deadline_kwh = pulp.LpVariable(
+            f"E_ev_{ev_id}_deadline_kwh",
+            lowBound=0,
+            upBound=capacity_kwh,
+        )
+        problem += (
+            E_deadline_kwh
+            == E_ev_kwh[deadline_slot_idx] + P_ev_charge[deadline_slot_idx] * partial_h,
+            f"ev_deadline_soc_{ev_id}",
+        )
+
+        shortfall_kwh = pulp.LpVariable(
+            f"E_ev_{ev_id}_deadline_shortfall_kwh",
+            lowBound=0,
+        )
+        problem += (
+            E_deadline_kwh + shortfall_kwh >= target_kwh,
+            f"ev_deadline_target_{ev_id}",
+        )
+
+        max_cost = cfg.max_cost_per_kwh
+        if max_cost is not None:
+            max_cost = max(0.0, float(max_cost))
+
+        logger.info(
+            "EV deadline target active: ev=%s deadline=%s target_soc_pct=%.1f "
+            "target_kwh=%.3f max_cost_per_kwh=%s",
+            ev_id,
+            deadline_at.isoformat(),
+            target_soc_pct,
+            target_kwh,
+            (f"{max_cost:.4f}" if max_cost is not None else "<default>"),
+        )
+
+        return shortfall_kwh, max_cost
 
     def _ev_connected_allowance(
         self,

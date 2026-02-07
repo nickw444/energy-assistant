@@ -275,6 +275,17 @@ loads:
         incentive: 0.0
     # Penalty for switching the load on/off.
     switch_penalty: 0.02
+    # Optional: soft SoC target by a specific deadline datetime.
+    # If the deadline is not reachable, the solver will do its best (it will not
+    # fail the plan).
+    #
+    # `max_cost_per_kwh` is a willingness-to-pay cap expressed as a penalty per
+    # kWh of shortfall at the deadline. When set, the solver will generally
+    # avoid paying more than this (in objective terms) to reduce shortfall.
+    deadline_target:
+      at: "2026-02-07T07:30:00-08:00"
+      target_soc_pct: 80
+      max_cost_per_kwh: 0.25
   # Non-variable loads are not fully supported yet; placeholder:
   # - id: always_on
   #   name: Always-on Base Load
