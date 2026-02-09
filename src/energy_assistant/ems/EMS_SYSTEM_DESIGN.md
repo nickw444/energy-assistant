@@ -1,495 +1,179 @@
-# EMS MILP System Design (Implemented)
+# EMS MILP System Design (v4 Implementation)
 
-This document describes the **current implementation** under `src/energy_assistant/ems/`.
-It is intended to mirror the shipped code (builder, solver, horizon, forecast
-alignment, resolver inputs). For coding-agent workflow notes, see `src/energy_assistant/ems/AGENTS.md`.
+This document describes the **current implementation** under `src/energy_assistant/ems/` and
+mirrors the shipped code. For developer workflow notes, see `src/energy_assistant/ems/AGENTS.md`.
 
----
+The defining design choice in v4 is a **reusable topology template** that is bound per-solve
+into a **query-only** set of MILP fragments (vars/constraints/objective terms). Domain logic is
+owned by the fragments themselves; the solve pipeline only assembles and solves the returned
+constraints and objective expression.
 
 ## 1. Scope and status
 
-The EMS package builds and solves a PuLP MILP that produces a **time-stepped plan**
-for grid import/export, PV utilization, battery usage, and controllable EV charging.
-It does **not** currently apply control actions to devices; it only solves and
-emits a plan for inspection/plotting. The plan is used by:
+The EMS package builds and solves a PuLP MILP that produces a **time-stepped plan** for:
 
-- CLI (`energy-assistant ems solve`) for ad-hoc solves + plotting.
-- Background worker (`src/energy_assistant/worker/`) for scheduled solves every minute.
-- API (`src/energy_assistant/api/routes/plan.py`) for fetching/awaiting plan output.
+- Grid import/export
+- PV utilization + curtailment
+- Battery charge/discharge + SoC tracking
+- Controllable EV charging + SoC tracking
 
----
+The EMS does not directly apply control actions to devices; it only emits a plan for inspection
+and for higher-level intent mapping.
 
-## 2. Code map (actual modules)
+## 2. Code Map (Actual Modules)
 
-Core EMS code lives in:
+Top-level orchestration:
 
-- `src/energy_assistant/ems/builder.py`
-  - Builds variables, constraints, and objective.
 - `src/energy_assistant/ems/planner.py`
-  - Orchestrates build + solve and extracts a plan.
-- `src/energy_assistant/ems/horizon.py`
-  - Time slotting, timezone resolution, import-forbidden evaluation.
-- `src/energy_assistant/ems/forecast_alignment.py`
-  - Aligns forecast intervals to horizon slots with optional slot-0 overrides.
+  - Orchestrates horizon selection, input alignment, solve, and plan extraction.
+- `src/energy_assistant/ems/system/factory.py`
+  - Builds the persistent `EmsSystem` template and produces per-run `EmsInputs`.
+- `src/energy_assistant/ems/system/system.py`
+  - Binds the template per-run, assembles the PuLP problem, and merges per-component plan outputs.
 
-Supporting runtime pieces:
+Layer 0: topology + generic link components:
 
-- `src/energy_assistant/lib/source_resolver/`
-  - `ValueResolver`, HA sources, and forecast interval models.
-- `src/energy_assistant/worker/`
-  - Background scheduler that runs EMS every minute.
-- `src/energy_assistant/api/routes/plan.py`
-  - Plan run/await endpoints.
-- `src/energy_assistant/plotting/plan.py`
-  - Plotting helpers used by the CLI.
+- `src/energy_assistant/ems/topology/graph.py`
+- `src/energy_assistant/ems/topology/nodes.py`
+- `src/energy_assistant/ems/topology/connection.py`
+- `src/energy_assistant/ems/topology/link_components.py`
 
----
+Layer 1: logical components (compose Layer 0):
 
-## 3. Runtime flow (what actually happens)
+- `src/energy_assistant/ems/components/*`
 
-### 3.1 CLI solve (`energy-assistant ems solve`)
+Supporting modules (unchanged from earlier versions):
 
-1. `load_app_config()` parses YAML into `AppConfig`.
-2. `ValueResolver` is created, config is marked for hydration, and HA data is fetched.
-3. `EmsMilpPlanner.generate_ems_plan()`:
-   - Resolves forecast inputs via `MILPBuilder.resolve_forecasts(...)`.
-   - Builds horizon via `build_horizon()` (interval duration + shortest coverage length).
-   - Builds MILP via `MILPBuilder.build(...)` using the resolved forecasts.
-   - Solves with CBC (`pulp.PULP_CBC_CMD`).
-   - Extracts a plan dictionary.
-4. Plan JSON is written to `data_dir/ems_plan.json` by default.
-5. `plot_plan()` renders a chart (optional).
+- `src/energy_assistant/ems/horizon.py` (time slotting; single and multi-resolution horizons)
+- `src/energy_assistant/ems/forecast_alignment.py` (aligns forecasts to horizon slots)
+- `src/energy_assistant/ems/pricing.py` (price transforms: bias/risk/zero-export preference)
+- `src/energy_assistant/ems/fixture_harness.py` (fixture capture/replay/baselines)
+
+## 3. Runtime Flow (What Actually Happens)
+
+### 3.1 Planner solve (`EmsMilpPlanner.generate_ems_plan`)
+
+1. Resolve and hydrate Home Assistant inputs via `ValueResolver`.
+2. `EmsSystemFactory.resolve_forecasts(...)` loads forecast intervals (load, PV per inverter, import/export prices)
+   and determines the shortest coverage horizon.
+3. `build_horizon(...)` constructs a time horizon (single-resolution or multi-resolution).
+4. `EmsSystemFactory.build_inputs(...)` aligns forecasts into slot series and emits an `EmsInputs` bundle:
+   load series, PV availability series, pricing series, import-allowed series, EV gating series, and scalars
+   (initial SoC, realtime power, etc).
+5. `EmsSystem.bind(ModelContext(...))` creates a `ModelSnapshot`:
+   - Binds the hidden topology template into a per-run topology model
+   - Collects all fragment constraints/objective terms
+   - Assembles a PuLP `LpProblem` (generic assembly; no domain logic)
+6. Solve with CBC (`pulp.PULP_CBC_CMD`).
+7. Extract per-component timestep plans via `EmsSystem.build_timestep_plans(snapshot)` and return `EmsPlanOutput`.
 
 ### 3.2 Worker + API
 
-- The worker (`src/energy_assistant/worker/service.py`) schedules a solve every minute.
-- Each run hydrates HA data, solves the MILP, and stores the latest plan in memory.
-- API endpoints allow:
-  - Triggering a run (`POST /plan/run`).
-  - Fetching latest (`GET /plan/latest`).
-  - Waiting for a fresh plan (`GET /plan/await`).
+The worker schedules the solve loop. Each run hydrates HA data, solves the MILP, and stores the
+latest `EmsPlanOutput` for API consumers.
 
----
+## 4. Layered Architecture
 
-## 4. Configuration model (what the solver expects)
+### 4.1 Layer 0 (Hidden): Topology primitives + LinkComponents
 
-The EMS consumes `AppConfig` from `src/energy_assistant/models/config.py`:
-
-- `ems`: `EmsConfig`
-  - `timestep_minutes` (default slot size)
-  - `high_res_timestep_minutes`, `high_res_horizon_minutes` (optional; run a higher-resolution window before switching to the default timestep)
-  - `min_horizon_minutes` (minimum forecast horizon; solver uses the shortest forecast length)
-  - `timezone` (optional)
-- `plant`: `PlantConfig`
-  - `grid`: `GridConfig`
-  - `load`: `PlantLoadConfig`
-  - `inverters`: list[`InverterConfig`]
-- `loads`: list[`LoadConfig`] (currently `controlled_ev` and `nonvariable_load`)
-
-### 4.1 Grid (`GridConfig`)
-
-Fields used by EMS:
-
-- `max_import_kw`, `max_export_kw`
-- `realtime_price_import`, `realtime_price_export`
-- `price_import_forecast`, `price_export_forecast`
-- `grid_price_bias_pct` (sign-aware: premium on positive import, discount on positive export)
-- `grid_price_risk` (ramp-based forecast price bias using `ramp_start_after_minutes` + `ramp_duration_minutes`, with optional `import_price_floor`/`export_price_ceiling` clamps applied before scaling from slot 1 onward)
-- `zero_price_export_preference` (apply tiny bonus or penalty when export price is 0)
-- `import_forbidden_periods` (list of `TimeWindow`, optional `months`)
-
-Note: `realtime_grid_power` exists in config but is **not used** by the EMS solver.
-
-### 4.2 Plant load (`PlantLoadConfig`)
-
-- `realtime_load_power`
-- `forecast` (historical average)
-
-Load forecasts are aligned to the horizon via time-weighted overlap, so the
-source interval does not have to match `ems.timestep_minutes` (though matching
-intervals can reduce unintended smoothing).
-(enforced in `MILPBuilder._resolve_load_series`). The plant load should **exclude
-controllable loads** (EV charging), which are modeled separately.
-
-### 4.3 Inverters (`InverterConfig`)
-
-Fields:
-
-- `id` (slug-safe identifier used as plan key)
-- `name`
-- `peak_power_kw`
-- `curtailment` (None | "binary" | "load-aware")
-- `pv` (forecast + optional realtime)
-- `battery` (optional)
-
-### 4.4 Battery (`BatteryConfig`)
-
-Fields:
-
-- `capacity_kwh`
-- `storage_efficiency_pct`
-- `charge_cost_per_kwh`, `discharge_cost_per_kwh`
-- `min_soc_pct`, `max_soc_pct`, `reserve_soc_pct`
-- `max_charge_kw`, `max_discharge_kw` (optional)
-- `state_of_charge_pct` (realtime)
-- `realtime_power` (currently unused by EMS)
-
-### 4.5 Loads (`LoadConfig`)
-
-`controlled_ev` loads support:
-
-- `min_power_kw`, `max_power_kw`, `energy_kwh`
-- `connected` (binary sensor)
-- `can_connect` (optional binary signal)
-- `allowed_connect_times` (list of `TimeWindow`, optional)
-- `connect_grace_minutes` (minutes before assuming EV can be connected)
-- `realtime_power`, `state_of_charge_pct`
-- `soc_incentives` (list of `{target_soc_pct, incentive}`)
-- `switch_penalty` (optional per-switch cost to discourage on/off cycling)
-
-`nonvariable_load` exists but is currently a placeholder (no constraints added).
-
----
-
-## 5. Time handling and horizon
-
-`build_horizon()` (see `src/energy_assistant/ems/horizon.py`) creates the planning
-slots used by the MILP.
-
-- **Timezone resolution**:
-  - If `ems.timezone` is set, it is used.
-  - Otherwise uses `now.tzinfo` or system local timezone.
-- **Slotting**:
-  - Horizon start is floored to the base timestep boundary (high-res if configured).
-  - Slots are **fixed-length** intervals of `timestep_minutes` minutes by default, or
-    multi-resolution when the high-res interval fields are configured.
-  - There is **no partial slot** at `t=0`; the first slot may partially precede `now`.
-- **Import forbidden periods**:
-  - `import_allowed[t]` is computed in the builder per slot by comparing the slot
-    start time against `grid.import_forbidden_periods` and stored on `GridBuild`.
-  - Time windows use local time-of-day and can wrap midnight.
-  - `months` (optional) scopes a window to specific months using 3-letter
-    abbreviations (`jan`..`dec`), case-insensitive.
+Layer 0 is a minimal graph representation of energy flow. It is not exposed as the user-facing
+model. It exists to let Layer 1 compose physical constraints without a monolithic builder.
 
 Key types:
 
-- `Horizon`: holds `now`, `start`, `slots`, and `T` range.
-- `HorizonSlot`: `index`, `start`, `end`, `duration_h`.
+- **Node templates** (persistent): `BusNodeTemplate`, `PortNodeTemplate`, `StorageNodeTemplate`
+- **Node models** (per-run): allocate PuLP vars and return constraints/objective terms
+- **Connection templates/models**: bidirectional flow variables with composable LinkComponents
+- **LinkComponents**: small pluggable constraint/objective fragments attached to connections
 
----
+#### 4.1.1 Physical law: bus balance
 
-## 6. Data resolution and forecast alignment
+`BusNodeModel` creates one constraint per bus per timestep:
 
-### 6.1 ValueResolver and HA sources
+- `sum(incoming_kW[t]) - sum(outgoing_kW[t]) == 0`
 
-`ValueResolver` (`src/energy_assistant/lib/source_resolver/resolver.py`) resolves
-`EntitySource` instances by pulling data from `HassDataProvider`.
+Incoming flow is scaled by the composed connection efficiency for that direction.
 
-Supported source types:
+#### 4.1.2 Storage nodes (SoC)
 
-- `HomeAssistantEntitySource` (single entity)
-- `HomeAssistantMultiEntitySource` (multiple entities)
-- `HomeAssistantHistoryEntitySource` (history data)
+`StorageNodeModel` owns SoC variables `E_by_i[i]` for `i = 0..N` and enforces:
 
-Forecast sources map HA data into interval lists:
+- Initial SoC equality (from inputs)
+- SoC dynamics driven by the incident connection's charge/discharge directional flows
+- Min/max SoC bounds
+- Optional terminal SoC modes (hard or adaptive, parity with legacy behavior)
 
-- **Price forecasts**: `HomeAssistantAmberElectricForecastSource` (official Amber HA schema) or `HomeAssistantAmberExpressForecastSource` (experimental [amber-express](https://github.com/hass-energy/amber-express) schema; `attributes.forecast`) →
-  list[`PriceForecastInterval`]
-- **PV forecasts**: `HomeAssistantSolcastForecastSource` →
-  list[`PowerForecastInterval`]
-- **Load forecast**: `HomeAssistantHistoricalAverageForecastSource` →
-  list[`PowerForecastInterval`]
+#### 4.1.3 LinkComponents (connection modifiers)
 
-### 6.2 Alignment to horizon
+LinkComponents are the reusable building blocks for physical constraints and objective terms.
+They are split into templates and per-run models.
 
-`PowerForecastAligner` / `PriceForecastAligner`:
+Implemented primitives include:
 
-- Convert forecast intervals into a per-slot series.
-- Require the forecast to **cover the full horizon**.
-- Allow a **missing slot 0** only when `first_slot_override` is provided.
-- For each slot, the aligner computes a time-weighted average across all forecast intervals
-  that overlap the slot.
-- Coverage is strict: small sub-second gaps are tolerated, but larger gaps fail alignment
-  (except slot 0 when `first_slot_override` is provided).
+- `DirectionalLimit` (hard directional max kW)
+- `ExclusiveDirection` (binary selector prevents simultaneous bidirectional flow)
+- `Efficiency` (directional transport efficiency applied in bus balance)
+- `LinearCostSeries` (linear cost coefficients per kWh, per direction)
+- `SoftDirectionalLimitSeries` (soft upper limit with slack + penalty objective)
+- `FixedFlowSeries` (equality constraint to a per-slot series)
+- `UpperBoundSeries` (per-slot kW upper bound)
+- `GateSeries` (per-slot gating `P <= max * gate[t]`)
 
-### 6.3 Realtime overrides
+#### 4.1.4 Extra fragments (policies and higher-order constraints)
 
-The builder uses:
+Some constraints naturally reference multiple Layer 0 primitives (e.g., "battery reserve blocks all export").
+These are modeled as extra fragment templates bound per-run and included in the snapshot fragment list.
 
-- Load forecast + realtime load override for **slot 0**.
-- PV forecast + realtime PV override for **slot 0** (if realtime exists).
-- Price forecast + realtime price override for **slot 0**.
+### 4.2 Layer 1: Logical components (compose Layer 0)
 
----
+Layer 1 components own:
 
-## 7. MILP model (variables and constraints)
+- How to construct their topology fragments (nodes, connections, LinkComponents, extra fragments)
+- How to extract their own per-timestep plan output (plan iterators)
 
-All MILP construction happens in `MILPBuilder`.
+Implemented components:
 
-### 7.1 Variables (key sets)
+- `SwitchboardComponent`: AC bus
+- `GridComponent`: grid import/export with pricing and forbidden-import slack
+- `BaseLoadComponent`: fixed base load series on the switchboard bus
+- `PvComponent`: PV availability + curtailment modes (fixed, load-aware, binary) with curtail tracking
+- `BatteryComponent`: storage + wear/time costs + export-reserve policy fragment
+- `InverterComponent`: DC bus plus AC/DC transfer constraints; composes PV + optional battery
+- `EvComponent`: charge-only storage + gating + switch penalty + optional SoC incentives
 
-Grid:
+Direction conventions are fixed per connection template so plan extraction can deterministically map
+`import` vs `export`, `charge` vs `discharge`, etc.
 
-- `P_grid_import[t]` (kW)
-- `P_grid_export[t]` (kW)
-- `P_grid_import_violation_kw[t]` (kW, slack for forbidden imports)
-- `Grid_import_on[t]` (binary selector)
+### 4.3 Layer 2: Inputs and system factory
 
-Inverters (per inverter):
+`EmsSystemFactory` builds:
 
-- `P_pv_kw[inv][t]` (PV output after curtailment)
-- `P_inv_ac_net_kw[inv][t]` (net AC flow)
-- `Curtail_inv[inv][t]` (binary when curtailment enabled)
+- A persistent `EmsSystem` template (topology template + component objects)
+- Per-run `EmsInputs` aligned to the current horizon
 
-Batteries (per inverter):
+The topology template is reusable across planning cycles; each solve binds it into a fresh per-run model.
 
-- `P_batt_charge_kw[inv][t]`
-- `P_batt_discharge_kw[inv][t]`
-- `E_batt_kwh[inv][t]` (SoC at slot boundaries, indexed 0..N)
-- `Batt_charge_mode[inv][t]` (binary; charge vs discharge)
+## 5. Configuration model (what the solver expects)
 
-EV loads (per EV):
+The EMS consumes `AppConfig` from `src/energy_assistant/models/config.py`. The high-level configuration
+shape is unchanged by the v4 refactor; the main difference is where the mapping happens (factory vs builder).
 
-- `P_ev_charge_kw[ev][t]`
-- `E_ev_kwh[ev][t]` (SoC indexed 0..N)
-- `Ev_charge_on[ev][t]` (binary when min power or switch penalty is enabled)
-- `Ev_charge_switch[ev][t]` (on/off transition indicator for switch penalty)
-- `Ev_*_incentive_*` (piecewise incentive segment variables)
+See:
 
-### 7.2 Grid constraints
+- `EmsConfig` for timestep/horizon configuration
+- `PlantConfig` for grid + load + inverter definitions
+- `LoadConfig` for controllable EV definitions
 
-- Import/export exclusivity via `Grid_import_on[t]`:
-  - `P_grid_import[t] <= max_import * Grid_import_on[t]`
-  - `P_grid_export[t] <= max_export * (1 - Grid_import_on[t])`
-- Import forbidden periods:
-  - `P_grid_import[t] <= max_import * import_allowed[t] + P_grid_import_violation[t]`
-  - `P_grid_import_violation[t]` keeps feasibility and is heavily penalized.
+## 6. Testing
 
-### 7.3 PV curtailment modes
+Tests live under `tests/energy_assistant/ems/`:
 
-Per inverter, one of:
+- Unit tests target Layer 0 primitives and Layer 1 components (limits, balance, SoC, curtailment, EV control).
+- Regression baselines are recorded under `tests/fixtures/ems/<fixture>/<scenario>/` and validated by
+  `tests/energy_assistant/ems/test_fixture_baselines.py`.
 
-- **No curtailment** (`curtailment: null`):
-  - `P_pv_kw[t] == forecast[t]`
+Use:
 
-- **Binary curtailment** (`curtailment: "binary"`):
-  - `P_pv_kw[t] == forecast[t] * (1 - Curtail_inv[t])`
-  - `Curtail_inv[t]` fully shuts PV off when 1.
-
-- **Load-aware curtailment** (`curtailment: "load-aware"`):
-  - `P_pv_kw[t] <= forecast[t]`
-  - `P_pv_kw[t] >= forecast[t] * (1 - Curtail_inv[t])`
-  - `P_grid_export[t] <= max_export * (1 - Curtail_inv[t])`
-
-This makes `Curtail_inv[t] == 1` a signal that export is blocked and PV can be
-reduced below forecast.
-
-### 7.4 Inverter net AC flow
-
-- If no battery: `P_inv_ac_net_kw[t] == P_pv_kw[t]`
-- With battery: `P_inv_ac_net_kw[t] == P_pv_kw[t] + P_batt_discharge - P_batt_charge`
-
-No explicit DC/AC efficiency is modeled in EMS v3.
-
-### 7.5 Battery constraints
-
-Per inverter battery:
-
-- Charge/discharge limits (`max_charge_kw`, `max_discharge_kw`).
-- Binary mode selector prevents simultaneous charge + discharge:
-  - `P_charge[t] <= limit * mode[t]`
-  - `P_discharge[t] <= limit * (1 - mode[t])`
-- SoC bounds:
-  - min bound uses `min_soc_pct`.
-  - max bound uses `max_soc_pct`.
-- Export reserve:
-  - Grid export is blocked unless SoC stays above `reserve_soc_pct` for the slot.
-- SoC dynamics:
-  - `E[t+1] = E[t] + (P_charge * eta - P_discharge / eta) * dt`
-  - `eta = storage_efficiency_pct / 100`.
-- Terminal constraint:
-  - `E[end] >= E[start]` (non-decreasing across horizon).
+- `uv run energy-assistant ems record-scenario --fixture <fixture> --name <scenario>`
+- `uv run energy-assistant ems refresh-baseline --fixture <fixture> --name <scenario>`
 
-### 7.6 EV constraints
-
-For `controlled_ev` loads:
-
-- **Connection gating** (per slot):
-  - If `connected` is true, all slots are allowed.
-  - If `connected` is false and `can_connect` is false, no slots are allowed.
-  - Otherwise, slots are allowed only after `connect_grace_minutes` and within
-    `allowed_connect_times` windows (if provided).
-- **Min power handling**:
-  - If `min_power_kw > 0`, a binary `charge_on[t]` enforces either 0 or
-    `[min_power_kw, max_power_kw]`.
-  - If `min_power_kw == 0`, charging is fully continuous.
-- **Switch penalty (optional)**:
-  - When `switch_penalty > 0`, `charge_on[t]` is enabled even if `min_power_kw == 0`.
-  - `Ev_charge_switch[t] >= |charge_on[t] - charge_on[t-1]|` for `t > 0`.
-  - `Ev_charge_switch[0]` compares `charge_on[0]` to the realtime charger state
-    to avoid a t-1 decision slot.
-- **SoC dynamics** (charge-only):
-  - `E_ev[t+1] = E_ev[t] + P_ev[t] * dt`.
-
-### 7.7 EV SoC incentives
-
-The EV charged energy above the current SoC is decomposed into piecewise segments:
-
-- Incentive targets must be **non-decreasing**.
-- Each segment covers a SoC range and has a per-kWh reward.
-- A trailing zero-incentive segment fills remaining capacity.
-- Constraint: `sum(segments) == E_ev[terminal] - E_ev[0]`.
-
-### 7.8 AC power balance
-
-System balance is enforced per slot:
-
-- `P_grid_import + sum(P_inv_ac_net) - P_grid_export == load_kw + controllable_loads`
-
-`load_kw` comes from the plant load forecast, and controllable loads currently
-include EV charge power.
-
----
-
-## 8. Objective function (current terms)
-
-The objective is a sum of:
-
-1. **Energy cost** (per slot):
-   - `import_cost - export_revenue`.
-   - If export price is exactly zero, a tiny **export bonus** (1e-4) is used
-     to prefer export over curtailment (or a tiny penalty when
-     `plant.grid.zero_price_export_preference` is `curtail`).
-2. **Forbidden import penalty**:
-   - Large penalty (`w_violation = 1e3`) on `P_grid_import_violation_kw`.
-3. **Early-flow tie-breaker**:
-   - Tiny negative weight on `(P_import + P_export) / (t+1)` to bias flow earlier.
-4. **Battery wear cost**:
-   - `charge_cost_per_kwh * charge + discharge_cost_per_kwh * discharge`.
-5. **Battery timing tie-breaker**:
-   - Tiny time-weighted throughput penalty to stabilize dispatch ordering.
-6. **Terminal SoC value** (optional):
-   - `-soc_value_per_kwh * E_batt[terminal]` rewards stored energy at horizon end.
-7. **EV incentive rewards**:
-   - Subtract incentive per kWh on incremental SoC segments.
-8. **EV switch penalty** (optional):
-   - Add a fixed cost per on/off transition.
-
----
-
-## 9. MPC anchoring behavior
-
-The EMS uses a standard MPC-style horizon but **anchors** some inputs at slot 0:
-
-- Load, PV, and prices override **slot 0** with realtime values.
-- Battery and EV SoC at `t=0` are set from realtime sensors.
-- EV switch penalties (when enabled) seed `t=0` from the realtime charger state.
-- Grid realtime power is **not** used by the EMS builder.
-
-Note: Because the horizon start is floored to the interval boundary, slot 0 can
-cover time before `now`. The slot-0 override compensates for this in practice.
-
----
-
-## 10. Plan output format
-
-`EmsMilpPlanner.generate_ems_plan()` returns a plan dict with:
-
-Top-level keys:
-
-- `generated_at` (epoch seconds)
-- `status` (solver status string)
-- `objective` (float)
-- `ev_connected` (map of EV -> bool)
-- `ev_realtime_power_kw` (map of EV -> realtime power)
-- `battery_capacity_kwh` (map of inverter -> capacity)
-- `ev_capacity_kwh` (map of EV -> capacity)
-- `slots` (list of per-slot records)
-
-Per-slot keys include:
-
-- Time: `index`, `start`, `end`, `duration_s`
-- Grid: `grid_import_kw`, `grid_export_kw`, `grid_import_violation_kw`, `grid_kw`
-- Load: `load_kw`, `load_total_kw`
-- Prices: `price_import`, `price_export`
-- Costs: `segment_cost`, `cumulative_cost`
-- PV: `pv_kw`, `pv_available_kw`, `pv_inverters`, `pv_inverters_available`
-- Battery: `battery_charge_kw`, `battery_discharge_kw`, `battery_soc_kwh`
-- EV: `ev_charge_kw`, `ev_soc_kwh`
-- Inverter: `inverter_ac_net_kw`
-- Curtailment: `curtail_inverters`, `curtail_any`
-- Import policy: `import_allowed`
-
-Note: `pv_available_*` fields currently mirror `pv_*` in EMS v3 (no separate
-"available" series is stored).
-
----
-
-## 11. Plotting and visualization
-
-`plot_plan()` in `src/energy_assistant/plotting/plan.py` renders:
-
-- Net grid, PV, inverter net AC, battery net, base load, and EV charge.
-- Price and cost panels when available.
-- SoC panel (battery + EV), using percent when capacities are available.
-
----
-
-## 12. Testing
-
-EMS tests live under `tests/energy_assistant/ems/`:
-
-- `test_builder.py`: core MILP behavior (prices, curtailment, alignment).
-- `test_forecast_alignment.py`: strict horizon coverage and slot-0 override.
-- `test_fixture_baselines.py`: fixture replay against summarized `ems_plan.json`
-  baselines (set `EMS_SCENARIO` to target a specific bundle).
-
-Fixtures can be recorded via:
-
-- `energy-assistant ems record-scenario --name <scenario>`
-- `energy-assistant ems refresh-baseline --name <name-or-path>`
-- `energy-assistant ems solve --scenario <name-or-path>`
-
----
-
-## 13. Known limitations and future work
-
-Current gaps or intentional simplifications:
-
-- No actuation layer (EMS only produces plans).
-- No DC/AC efficiency or inverter loss modeling.
-- EV discharge is not modeled (charge-only).
-- No battery/EV ramp smoothing (only tiny battery timing tie-breaker).
-- No explicit demand charges, peak power penalties, or block tariffs.
-- `nonvariable_load` is a placeholder (no constraints).
-- Grid realtime power is unused.
-- Forecast alignment is stepwise (no interpolation).
-- Horizon is fixed-size; no multi-day stitching logic.
-
-## 14. Unimplemented items from the original design
-
-Items that were proposed in the original design but remain unimplemented in the
-current EMS stack:
-
-- **Non-variable/deferrable loads**: `nonvariable_load` exists but adds no
-  constraints or scheduling logic yet.
-- **Action application layer**: there is no mapping of slot-0 decisions into
-  Home Assistant service calls or inverter/EV commands.
-- **Pre-MPC slot / partial slot handling**: no slot `-1` or partial lead-in is
-  modeled; slot 0 is a full interval starting at the floored boundary.
-- **Explicit DC bus + AC efficiency modeling**: the model uses a simplified
-  AC net equation without inverter/DC efficiency losses.
-- **EV departure targets & switching penalties**: no explicit departure-time
-  constraints or on/off switching penalty.
-- **Improved curtailment behavior**: no explicit incentive to curtail when
-  export price is negative or zero beyond the tiny zero-price bonus/penalty.
-- **Output hierarchy**: plan output is a flat per-slot dict; no structured
-  plant hierarchy in the plan payload.
-- **Cost reporting clarity**: incentives are included in the objective, and
-  there's a TODO to ensure they don't appear in “real” cost totals.
-- **Forecast conditioning**: no interpolation or blending of realtime load into
-  the load forecast beyond slot-0 override.
-
-## 15. EMS TODOs
-
-Tracked TODOs in the EMS package.

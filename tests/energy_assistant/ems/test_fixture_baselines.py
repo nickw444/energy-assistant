@@ -97,7 +97,7 @@ def test_fixture_baseline_up_to_date(fixture: str, scenario: str) -> None:
     actual = summarize_plan(plan)
     expected = json.loads(paths.plan_path.read_text())
 
-    record_hint = f"energy-assistant ems refresh-baseline --fixture {fixture} --scenario {scenario}"
+    record_hint = f"energy-assistant ems refresh-baseline --fixture {fixture} --name {scenario}"
     assert actual == expected, (
         f"Fixture {fixture}/{scenario!r} ems_plan.json is out of date. "
         "Re-record with: " + record_hint
@@ -115,7 +115,7 @@ def test_fixture_plot_up_to_date(fixture: str, scenario: str) -> None:
     if not _is_complete_bundle(paths):
         pytest.skip("EMS fixture scenario not recorded.")
 
-    record_hint = f"energy-assistant ems refresh-baseline --fixture {fixture} --scenario {scenario}"
+    record_hint = f"energy-assistant ems refresh-baseline --fixture {fixture} --name {scenario}"
 
     if paths.hash_path.exists() and not paths.plot_path.exists():
         pytest.fail(

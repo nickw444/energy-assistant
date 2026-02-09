@@ -1,4 +1,7 @@
-"""EMS MILP (v3) implementation.
+"""EMS MILP (v4) implementation.
 
-This is an in-progress, from-scratch MILP stack under `src/energy_assistant/ems`.
+The solver models the electrical system as a reusable topology template (Layer 0) composed
+by logical components (Layer 1). Each planning run binds that template to a per-run
+`ModelContext` to allocate PuLP vars and return query-only MILP fragments (constraints and
+objective terms), which are assembled into a PuLP `LpProblem` and solved.
 """
