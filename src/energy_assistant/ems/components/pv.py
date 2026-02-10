@@ -1,209 +1,216 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 import pulp
 
-from energy_assistant.ems.milp.context import ConstraintSpec, ObjectiveTerm
-from energy_assistant.ems.system.system import ModelSnapshot
-from energy_assistant.ems.topology.connection import ConnectionTemplate
-from energy_assistant.ems.topology.graph import EnergyGraphModel, EnergyGraphTemplate, FragmentModel
+from energy_assistant.ems.forecast_alignment import PowerForecastAligner, forecast_coverage_slots
+from energy_assistant.ems.forecast_multiplier import ForecastMultiplier
+from energy_assistant.ems.horizon import Horizon, floor_to_interval_boundary
+from energy_assistant.ems.milp.context import ConstraintDescriptor, value_of
+from energy_assistant.ems.milp.snapshot import ModelSnapshot
+from energy_assistant.ems.topology.connection import Connection
+from energy_assistant.ems.topology.deferred import DeferredSeries
+from energy_assistant.ems.topology.graph import EnergyGraph
 from energy_assistant.ems.topology.link_components import (
     DirectionalLimit,
-    FixedFlowSeries,
-    LinkComponentTemplate,
-    UpperBoundSeries,
+    FixedFlow,
+    LinkComponent,
+    UpperBound,
 )
-from energy_assistant.ems.topology.nodes import PortNodeTemplate
+from energy_assistant.ems.topology.link_components.base import ConnectionBinding, FlowDirection
+from energy_assistant.ems.topology.nodes import PortNode
+from energy_assistant.lib.source_resolver.resolver import ValueResolver
+from energy_assistant.models.plant import InverterConfig
 
 CurtailmentMode = Literal["load-aware", "binary"] | None
+
+_CURTAIL_POWER_THRESHOLD_KW = 0.01
+
+
+class PvCurtailTracking(LinkComponent):
+    """Expose curtailment as a derived nonnegative series: available - actual."""
+
+    def __init__(
+        self,
+        *,
+        direction: FlowDirection,
+        available_kw: DeferredSeries[float],
+        name: str,
+    ) -> None:
+        self.direction: FlowDirection = direction
+        self.available_kw = available_kw
+        self.name = str(name)
+
+    def curtail_kw(self, connection: ConnectionBinding) -> dict[int, pulp.LpVariable]:
+        return connection.nonnegative_series(f"P_curtail_{self.name}_{connection.id}_kw")
+
+    def constraints(self, connection: ConnectionBinding) -> list[ConstraintDescriptor]:
+        available = self.available_kw.get_for_len(len(connection.T))
+        flow = connection.P_a_to_b if self.direction == "a_to_b" else connection.P_b_to_a
+        curtail = self.curtail_kw(connection)
+        return [
+            ConstraintDescriptor(
+                f"pv_curtail_track_{self.name}_{connection.id}_t{t}",
+                curtail[t] == float(available[t]) - flow[t],
+            )
+            for t in connection.T
+        ]
+
+
+class PvBinaryCurtailment(LinkComponent):
+    """Binary curtailment: either produce full available or zero."""
+
+    def __init__(
+        self,
+        *,
+        direction: FlowDirection,
+        available_kw: DeferredSeries[float],
+        name: str,
+    ) -> None:
+        self.direction: FlowDirection = direction
+        self.available_kw = available_kw
+        self.name = str(name)
+
+    def curtail_binary(self, connection: ConnectionBinding) -> dict[int, pulp.LpVariable]:
+        return connection.binary_series(f"Curtail_{self.name}_{connection.id}")
+
+    def constraints(self, connection: ConnectionBinding) -> list[ConstraintDescriptor]:
+        available = self.available_kw.get_for_len(len(connection.T))
+        flow = connection.P_a_to_b if self.direction == "a_to_b" else connection.P_b_to_a
+        curtail = self.curtail_binary(connection)
+        return [
+            ConstraintDescriptor(
+                f"pv_binary_{self.name}_{connection.id}_t{t}",
+                flow[t] == float(available[t]) * (1 - curtail[t]),
+            )
+            for t in connection.T
+        ]
 
 
 class PvComponent:
     def __init__(
         self,
         *,
-        graph: EnergyGraphTemplate,
-        inverter_id: str,
+        graph: EnergyGraph,
+        inverter: InverterConfig,
         dc_bus_id: str,
-        peak_power_kw: float,
-        curtailment: CurtailmentMode,
-        available_series_key: str,
     ) -> None:
-        self.inverter_id = str(inverter_id)
+        self.inverter_id = str(inverter.id)
+        self.name = str(inverter.name)
         self.dc_bus_id = str(dc_bus_id)
-        self.peak_power_kw = float(peak_power_kw)
-        self.curtailment = curtailment
-        self.available_series_key = str(available_series_key)
+        self.peak_power_kw = float(inverter.peak_power_kw)
+        self.curtailment: CurtailmentMode = inverter.curtailment
+        self._pv_cfg = inverter.pv
 
         self.node_id = f"pv_{self.inverter_id}"
         self.connection_id = f"pv_{self.inverter_id}_link"
 
-        self._tracking_enabled = curtailment is not None
-        self._binary = curtailment == "binary"
+        self.available_kw = DeferredSeries[float](name=f"pv_available:{self.inverter_id}")
+        self._aligner = PowerForecastAligner()
 
-        graph.add_port(PortNodeTemplate(id=self.node_id, name=f"PV {self.inverter_id}"))
+        self.connection: Connection
+        self._curtail_tracking: PvCurtailTracking | None = None
+        self._binary_curtail: PvBinaryCurtailment | None = None
 
-        link_components: list[LinkComponentTemplate] = [
+        graph.add_port(PortNode(id=self.node_id, name=f"PV {self.inverter_id}"))
+
+        link_components: list[LinkComponent] = [
             DirectionalLimit(max_a_to_b_kw=self.peak_power_kw, max_b_to_a_kw=0.0),
         ]
-        if curtailment is None:
+
+        if self.curtailment is None:
             link_components.append(
-                FixedFlowSeries(
+                FixedFlow(
                     direction="a_to_b",
-                    value_key=self.available_series_key,
+                    values_kw=self.available_kw,
                     name=f"pv_fixed_{self.inverter_id}",
                 )
             )
         else:
             link_components.append(
-                UpperBoundSeries(
+                UpperBound(
                     direction="a_to_b",
-                    ub_key=self.available_series_key,
+                    upper_bounds_kw=self.available_kw,
                     name=f"pv_ub_{self.inverter_id}",
                 )
             )
+            self._curtail_tracking = PvCurtailTracking(
+                direction="a_to_b",
+                available_kw=self.available_kw,
+                name=f"pv_{self.inverter_id}",
+            )
+            link_components.append(self._curtail_tracking)
 
-        graph.add_connection(
-            ConnectionTemplate(
-                id=self.connection_id,
-                a_node_id=self.node_id,
-                b_node_id=self.dc_bus_id,
-                link_components=link_components,
+            if self.curtailment == "binary":
+                self._binary_curtail = PvBinaryCurtailment(
+                    direction="a_to_b",
+                    available_kw=self.available_kw,
+                    name=f"pv_{self.inverter_id}",
+                )
+                link_components.append(self._binary_curtail)
+
+        self.connection = Connection(
+            id=self.connection_id,
+            a_node_id=self.node_id,
+            b_node_id=self.dc_bus_id,
+            link_components=link_components,
+        )
+        graph.add_connection(self.connection)
+
+    def mark_for_hydration(self, resolver: ValueResolver) -> None:
+        if self._pv_cfg.realtime_power is not None:
+            resolver.mark_for_hydration(self._pv_cfg.realtime_power)
+        resolver.mark_for_hydration(self._pv_cfg.forecast)
+
+    def forecast_coverage_intervals(
+        self, *, now: datetime, interval_minutes: int, resolver: ValueResolver
+    ) -> int:
+        start = floor_to_interval_boundary(now, interval_minutes)
+        intervals = resolver.resolve(self._pv_cfg.forecast)
+        allow_first_slot_missing = self._pv_cfg.realtime_power is not None
+        return int(
+            forecast_coverage_slots(
+                start,
+                interval_minutes,
+                intervals,
+                allow_first_slot_missing=allow_first_slot_missing,
             )
         )
 
-        if self._tracking_enabled:
-            graph.add_fragment(
-                PvCurtailTrackingTemplate(
-                    connection_id=self.connection_id,
-                    available_key=self.available_series_key,
-                )
-            )
-        if self._binary:
-            graph.add_fragment(
-                PvBinaryCurtailmentTemplate(
-                    connection_id=self.connection_id,
-                    available_key=self.available_series_key,
-                )
-            )
+    def update(self, *, horizon: Horizon, resolver: ValueResolver) -> None:
+        realtime_pv = None
+        if self._pv_cfg.realtime_power is not None:
+            realtime_pv = float(resolver.resolve(self._pv_cfg.realtime_power))
+
+        intervals = resolver.resolve(self._pv_cfg.forecast)
+        pv_series = self._aligner.align(
+            horizon,
+            intervals,
+            first_slot_override=realtime_pv,
+        )
+
+        pv_series = [max(0.0, min(float(v), float(self.peak_power_kw))) for v in pv_series]
+        pv_series = ForecastMultiplier(self._pv_cfg.forecast_multiplier).apply(
+            pv_series,
+            skip_first_slot=realtime_pv is not None,
+        )
+        self.available_kw.set([float(x) for x in pv_series])
 
     def pv_kw(self, snapshot: ModelSnapshot, t: int) -> float:
-        conn = snapshot.graph.connections[self.connection_id]
-        return float(pulp.value(conn.P_a_to_b[t]) or 0.0)
+        _ = snapshot
+        return value_of(self.connection.P_a_to_b.get(t))
 
     def curtail_kw(self, snapshot: ModelSnapshot, t: int) -> float | None:
-        if not self._tracking_enabled:
+        _ = snapshot
+        if self._curtail_tracking is None:
             return None
-        model = _find_fragment(snapshot.graph, PvCurtailTrackingModel, self.connection_id)
-        if model is None:
-            return None
-        v = pulp.value(model.P_curtail_kw[t])
+        v = pulp.value(self._curtail_tracking.curtail_kw(self.connection).get(t))
         return None if v is None else float(v)
 
-
-class PvCurtailTrackingTemplate:
-    def __init__(self, *, connection_id: str, available_key: str) -> None:
-        self.connection_id = str(connection_id)
-        self.available_key = str(available_key)
-
-    def bind(self, graph: EnergyGraphModel) -> PvCurtailTrackingModel:
-        return PvCurtailTrackingModel(
-            graph=graph,
-            connection_id=self.connection_id,
-            available_key=self.available_key,
-        )
-
-
-class PvCurtailTrackingModel:
-    def __init__(self, *, graph: EnergyGraphModel, connection_id: str, available_key: str) -> None:
-        self.connection_id = str(connection_id)
-        self.available_key = str(available_key)
-
-        ctx = graph.ctx
-        conn = graph.connections[self.connection_id]
-        available = ctx.inputs.float_series(self.available_key)
-
-        self.P_curtail_kw: dict[int, pulp.LpVariable] = pulp.LpVariable.dicts(
-            f"P_curtail_{self.connection_id}_kw",
-            ctx.horizon.T,
-            lowBound=0,
-        )
-        self._constraints: list[ConstraintSpec] = []
-        for t in ctx.horizon.T:
-            self._constraints.append(
-                ConstraintSpec(
-                    f"pv_curtail_track_{self.connection_id}_t{t}",
-                    self.P_curtail_kw[t] == float(available[t]) - conn.P_a_to_b[t],
-                )
-            )
-        self._objective_terms: list[ObjectiveTerm] = []
-
-    @property
-    def constraints(self) -> list[ConstraintSpec]:
-        return list(self._constraints)
-
-    @property
-    def objective_terms(self) -> list[ObjectiveTerm]:
-        return list(self._objective_terms)
-
-
-class PvBinaryCurtailmentTemplate:
-    def __init__(self, *, connection_id: str, available_key: str) -> None:
-        self.connection_id = str(connection_id)
-        self.available_key = str(available_key)
-
-    def bind(self, graph: EnergyGraphModel) -> PvBinaryCurtailmentModel:
-        return PvBinaryCurtailmentModel(
-            graph=graph,
-            connection_id=self.connection_id,
-            available_key=self.available_key,
-        )
-
-
-class PvBinaryCurtailmentModel:
-    def __init__(self, *, graph: EnergyGraphModel, connection_id: str, available_key: str) -> None:
-        self.connection_id = str(connection_id)
-        self.available_key = str(available_key)
-
-        ctx = graph.ctx
-        conn = graph.connections[self.connection_id]
-        available = ctx.inputs.float_series(self.available_key)
-
-        self.curtail_binary: dict[int, pulp.LpVariable] = pulp.LpVariable.dicts(
-            f"Curtail_{self.connection_id}",
-            ctx.horizon.T,
-            lowBound=0,
-            upBound=1,
-            cat="Binary",
-        )
-
-        self._constraints: list[ConstraintSpec] = []
-        for t in ctx.horizon.T:
-            self._constraints.append(
-                ConstraintSpec(
-                    f"pv_binary_{self.connection_id}_t{t}",
-                    conn.P_a_to_b[t] == float(available[t]) * (1 - self.curtail_binary[t]),
-                )
-            )
-        self._objective_terms: list[ObjectiveTerm] = []
-
-    @property
-    def constraints(self) -> list[ConstraintSpec]:
-        return list(self._constraints)
-
-    @property
-    def objective_terms(self) -> list[ObjectiveTerm]:
-        return list(self._objective_terms)
-
-
-def _find_fragment[TFragment: FragmentModel](
-    graph: EnergyGraphModel,
-    cls: type[TFragment],
-    connection_id: str,
-) -> TFragment | None:
-    cid = str(connection_id)
-    for frag in graph.extra_fragments:
-        if isinstance(frag, cls) and getattr(frag, "connection_id", None) == cid:
-            return frag
-    return None
+    def curtailment_active(self, snapshot: ModelSnapshot, t: int) -> bool | None:
+        curtail_kw = self.curtail_kw(snapshot, t)
+        if curtail_kw is None:
+            return None
+        return bool(float(curtail_kw) > _CURTAIL_POWER_THRESHOLD_KW)

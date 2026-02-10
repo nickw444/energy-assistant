@@ -47,7 +47,10 @@ class Worker:
     ) -> None:
         self._app_config = app_config
         self._resolver = resolver
+        # Keep the worker lightweight at construction time (tests use partial mocks).
+        # We still do the standard two-pass workflow: mark once, hydrate each run.
         self._resolver.mark_for_hydration(app_config)
+        self._planner: EmsMilpPlanner | None = None
 
         self._condition = asyncio.Condition()
         self._in_progress = False
@@ -227,8 +230,11 @@ class Worker:
             self._condition.notify_all()
 
     def _solve_once_blocking(self) -> EmsPlanOutput:
+        if self._planner is None:
+            self._planner = EmsMilpPlanner(self._app_config, resolver=self._resolver)
+            self._planner.mark_for_hydration()
         self._resolver.hydrate_all()
-        return EmsMilpPlanner(self._app_config, resolver=self._resolver).generate_ems_plan()
+        return self._planner.generate_ems_plan()
 
     async def _run_scheduler(self) -> None:
         """Scheduler loop: runs immediately, then waits for fallback interval after each run."""

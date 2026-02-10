@@ -5,64 +5,52 @@ from datetime import UTC, datetime
 import pulp
 import pytest
 
-from energy_assistant.ems.components.base_load import BaseLoadComponent
-from energy_assistant.ems.components.grid import GridComponent
-from energy_assistant.ems.components.pv import PvComponent
-from energy_assistant.ems.components.switchboard import SwitchboardComponent
+from energy_assistant.ems.components.pv import PvBinaryCurtailment, PvCurtailTracking
 from energy_assistant.ems.horizon import build_horizon
-from energy_assistant.ems.milp.context import ModelContext
-from energy_assistant.ems.system.inputs import EmsInputs
-from energy_assistant.ems.system.system import ModelSnapshot
-from energy_assistant.ems.topology.graph import EnergyGraphTemplate
+from energy_assistant.ems.milp.context import ModelContext, value_of
+from energy_assistant.ems.milp.snapshot import ModelSnapshot
+from energy_assistant.ems.topology.connection import Connection
+from energy_assistant.ems.topology.deferred import DeferredSeries
+from energy_assistant.ems.topology.graph import EnergyGraph
+from energy_assistant.ems.topology.link_components import DirectionalLimit, LinearCost, UpperBound
+from energy_assistant.ems.topology.nodes import PortNode
 
 
-@pytest.mark.parametrize(
-    ("mode", "expected_pv_kw", "expected_curtail_kw"),
-    [
-        ("load-aware", 2.0, 3.0),
-        ("binary", 0.0, 5.0),
-    ],
-)
-def test_pv_curtailment_modes(mode: str, expected_pv_kw: float, expected_curtail_kw: float) -> None:
+def test_pv_binary_curtailment_can_force_all_or_nothing() -> None:
     now = datetime(2026, 1, 1, tzinfo=UTC)
     horizon = build_horizon(now=now, timestep_minutes=60, num_intervals=1)
 
-    inputs = EmsInputs(horizon=horizon)
-    inputs.set_float_series("base_load_kw", [2.0])
-    inputs.set_float_series("pv_available", [5.0])
-    inputs.set_bool_series("grid_import_allowed", [True])
-    inputs.set_float_series("grid_import_limit_kw", [10.0])
-    inputs.set_float_series("grid_import_cost_per_kwh", [1.0])
-    inputs.set_float_series("grid_export_cost_per_kwh", [10.0])
-    inputs.set_float_series("grid_early_cost_per_kwh", [0.0])
+    available = DeferredSeries[float](name="available", initial=[5.0])
 
-    ctx = ModelContext(horizon=horizon, inputs=inputs)
+    # Penalize production so the solver prefers curtailment.
+    cost_ab = DeferredSeries[float](name="cost_ab", initial=[100.0])
+    cost_ba = DeferredSeries[float](name="cost_ba", initial=[0.0])
 
-    graph = EnergyGraphTemplate()
-    switchboard = SwitchboardComponent(graph=graph, bus_id="bus")
-    _ = BaseLoadComponent(graph=graph, switchboard_bus_id=switchboard.bus_id)
-    _ = GridComponent(
-        graph=graph,
-        switchboard_bus_id=switchboard.bus_id,
-        max_import_kw=10.0,
-        max_export_kw=10.0,
+    tracking = PvCurtailTracking(direction="a_to_b", available_kw=available, name="pv")
+    binary = PvBinaryCurtailment(direction="a_to_b", available_kw=available, name="pv")
+
+    graph = EnergyGraph()
+    graph.add_port(PortNode(id="pv", name="PV"))
+    graph.add_port(PortNode(id="bus", name="Bus"))
+    conn = Connection(
+        id="pv_link",
+        a_node_id="pv",
+        b_node_id="bus",
+        link_components=[
+            DirectionalLimit(max_a_to_b_kw=5.0, max_b_to_a_kw=0.0),
+            UpperBound(direction="a_to_b", upper_bounds_kw=available, name="pv_avail"),
+            tracking,
+            binary,
+            LinearCost(cost_a_to_b_per_kwh=cost_ab, cost_b_to_a_per_kwh=cost_ba, name="penalty"),
+        ],
     )
-    pv = PvComponent(
-        graph=graph,
-        inverter_id="inv",
-        dc_bus_id=switchboard.bus_id,
-        peak_power_kw=10.0,
-        curtailment=mode,  # type: ignore[arg-type]
-        available_series_key="pv_available",
-    )
+    graph.add_connection(conn)
 
-    snapshot = ModelSnapshot(ctx=ctx, graph=graph.bind(ctx))
+    snapshot = ModelSnapshot(ctx=ModelContext(horizon=horizon), graph=graph)
     snapshot.problem.solve(pulp.PULP_CBC_CMD(msg=False))
     assert pulp.LpStatus.get(snapshot.problem.status) == "Optimal"
 
-    pv_kw = pv.pv_kw(snapshot, 0)
-    curtail_kw = pv.curtail_kw(snapshot, 0)
-
-    assert pv_kw == pytest.approx(expected_pv_kw)
-    assert curtail_kw == pytest.approx(expected_curtail_kw)
+    assert value_of(conn.P_a_to_b[0]) == pytest.approx(0.0)
+    assert value_of(binary.curtail_binary(conn)[0]) == pytest.approx(1.0)
+    assert value_of(tracking.curtail_kw(conn)[0]) == pytest.approx(5.0)
 

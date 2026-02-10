@@ -260,12 +260,13 @@ def ems_solve(
             provider, captured_at = FixtureHassDataProvider.from_path(paths.fixture_path)
             now = datetime.fromisoformat(captured_at) if captured_at else None
             resolver = ValueResolverImpl(hass_data_provider=provider)
-            resolver.mark_for_hydration(app_config)
+            planner = EmsMilpPlanner(app_config, resolver=resolver)
+            planner.mark_for_hydration()
             resolver.hydrate_all()
 
             click.echo("Solving EMS MILP (fixture replay)...")
             with freeze_hass_source_time(now):
-                plan = EmsMilpPlanner(app_config, resolver=resolver).generate_ems_plan(
+                plan = planner.generate_ems_plan(
                     now=now,
                     solver_msg=solver_msg,
                 )
@@ -274,11 +275,12 @@ def ems_solve(
             hass_data_provider = HassDataProviderImpl(hass_client=hass_client)
 
             resolver = ValueResolverImpl(hass_data_provider=hass_data_provider)
-            resolver.mark_for_hydration(app_config)
+            planner = EmsMilpPlanner(app_config, resolver=resolver)
+            planner.mark_for_hydration()
             resolver.hydrate_all()
 
             click.echo("Solving EMS MILP...")
-            plan = EmsMilpPlanner(app_config, resolver=resolver).generate_ems_plan(
+            plan = planner.generate_ems_plan(
                 solver_msg=solver_msg,
             )
         click.echo(f"Timesteps: {len(plan.timesteps)}")
@@ -367,7 +369,8 @@ def ems_record_scenario(
         hass_data_provider = HassDataProviderImpl(hass_client=hass_client)
 
         resolver = ValueResolverImpl(hass_data_provider=hass_data_provider)
-        resolver.mark_for_hydration(app_config)
+        planner = EmsMilpPlanner(app_config, resolver=resolver)
+        planner.mark_for_hydration()
         resolver.hydrate_all()
 
         captured_at = datetime.now().astimezone()
@@ -394,10 +397,11 @@ def ems_record_scenario(
                 history=fixture_history,
             )
             fixture_resolver = ValueResolverImpl(hass_data_provider=fixture_provider)
-            fixture_resolver.mark_for_hydration(app_config)
+            fixture_planner = EmsMilpPlanner(app_config, resolver=fixture_resolver)
+            fixture_planner.mark_for_hydration()
             fixture_resolver.hydrate_all()
             with freeze_hass_source_time(captured_at):
-                plan = EmsMilpPlanner(app_config, resolver=fixture_resolver).generate_ems_plan(
+                plan = fixture_planner.generate_ems_plan(
                     now=captured_at,
                     solver_msg=solver_msg,
                 )
@@ -521,11 +525,12 @@ def _refresh_baseline_bundle(
     now = datetime.fromisoformat(captured_at) if captured_at else None
 
     resolver = ValueResolverImpl(hass_data_provider=provider)
-    resolver.mark_for_hydration(app_config)
+    planner = EmsMilpPlanner(app_config, resolver=resolver)
+    planner.mark_for_hydration()
     resolver.hydrate_all()
 
     with freeze_hass_source_time(now):
-        plan = EmsMilpPlanner(app_config, resolver=resolver).generate_ems_plan(
+        plan = planner.generate_ems_plan(
             now=now,
             solver_msg=solver_msg,
         )
@@ -655,11 +660,12 @@ def ems_scenario_report(
             now = datetime.fromisoformat(captured_at) if captured_at else None
 
             resolver = ValueResolverImpl(hass_data_provider=provider)
-            resolver.mark_for_hydration(app_config)
+            planner = EmsMilpPlanner(app_config, resolver=resolver)
+            planner.mark_for_hydration()
             resolver.hydrate_all()
 
             with freeze_hass_source_time(now):
-                plan = EmsMilpPlanner(app_config, resolver=resolver).generate_ems_plan(
+                plan = planner.generate_ems_plan(
                     now=now,
                     solver_msg=solver_msg,
                 )

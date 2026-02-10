@@ -1,174 +1,158 @@
-# EMS MILP System Design (v4 Implementation)
+# EMS MILP System Design (v4)
 
-This document describes the **current implementation** under `src/energy_assistant/ems/` and
-mirrors the shipped code. For developer workflow notes, see `src/energy_assistant/ems/AGENTS.md`.
+This document describes the **current implementation** under `src/energy_assistant/ems/`.
+For developer workflow notes, see `src/energy_assistant/ems/AGENTS.md`.
 
-The defining design choice in v4 is a **reusable topology template** that is bound per-solve
-into a **query-only** set of MILP fragments (vars/constraints/objective terms). Domain logic is
-owned by the fragments themselves; the solve pipeline only assembles and solves the returned
-constraints and objective expression.
+The defining design choice in v4 is a **persistent topology graph** with **deferred (mutable)
+inputs** owned by Layer 1 components. Each planning run:
 
-## 1. Scope and status
+1. Components resolve realtime + forecast inputs and update their deferred boxes.
+2. The topology activates a horizon (`EnergyGraph.set_horizon(...)`), creating per-run PuLP vars.
+3. The solve pipeline assembles the PuLP problem by **querying** fragments for constraints/objective.
 
-The EMS package builds and solves a PuLP MILP that produces a **time-stepped plan** for:
+There is no monolithic builder and no key-based `EmsInputs` bundle.
 
-- Grid import/export
-- PV utilization + curtailment
-- Battery charge/discharge + SoC tracking
-- Controllable EV charging + SoC tracking
-
-The EMS does not directly apply control actions to devices; it only emits a plan for inspection
-and for higher-level intent mapping.
-
-## 2. Code Map (Actual Modules)
+## Code Map (Actual Modules)
 
 Top-level orchestration:
 
 - `src/energy_assistant/ems/planner.py`
-  - Orchestrates horizon selection, input alignment, solve, and plan extraction.
+  - Orchestrates horizon sizing, component updates, solve, and plan extraction.
 - `src/energy_assistant/ems/system/factory.py`
-  - Builds the persistent `EmsSystem` template and produces per-run `EmsInputs`.
+  - Wires config into a persistent `EmsSystem` (components + topology graph).
 - `src/energy_assistant/ems/system/system.py`
-  - Binds the template per-run, assembles the PuLP problem, and merges per-component plan outputs.
+  - Coordinates per-run updates, builds a `ModelSnapshot`, and merges per-component plans.
+- `src/energy_assistant/ems/milp/snapshot.py`
+  - Assembles a PuLP `LpProblem` from query-only fragments and solves it.
 
 Layer 0: topology + generic link components:
 
 - `src/energy_assistant/ems/topology/graph.py`
 - `src/energy_assistant/ems/topology/nodes.py`
 - `src/energy_assistant/ems/topology/connection.py`
-- `src/energy_assistant/ems/topology/link_components.py`
+- `src/energy_assistant/ems/topology/deferred.py` (deferred boxes)
+- `src/energy_assistant/ems/topology/link_components/*` (modular LinkComponents)
 
 Layer 1: logical components (compose Layer 0):
 
 - `src/energy_assistant/ems/components/*`
 
-Supporting modules (unchanged from earlier versions):
+Supporting modules:
 
 - `src/energy_assistant/ems/horizon.py` (time slotting; single and multi-resolution horizons)
-- `src/energy_assistant/ems/forecast_alignment.py` (aligns forecasts to horizon slots)
+- `src/energy_assistant/ems/forecast_alignment.py` (align forecasts to horizon slots)
 - `src/energy_assistant/ems/pricing.py` (price transforms: bias/risk/zero-export preference)
 - `src/energy_assistant/ems/fixture_harness.py` (fixture capture/replay/baselines)
 
-## 3. Runtime Flow (What Actually Happens)
+## Runtime Flow
 
-### 3.1 Planner solve (`EmsMilpPlanner.generate_ems_plan`)
+### Planner solve (`EmsMilpPlanner.generate_ems_plan`)
 
-1. Resolve and hydrate Home Assistant inputs via `ValueResolver`.
-2. `EmsSystemFactory.resolve_forecasts(...)` loads forecast intervals (load, PV per inverter, import/export prices)
-   and determines the shortest coverage horizon.
-3. `build_horizon(...)` constructs a time horizon (single-resolution or multi-resolution).
-4. `EmsSystemFactory.build_inputs(...)` aligns forecasts into slot series and emits an `EmsInputs` bundle:
-   load series, PV availability series, pricing series, import-allowed series, EV gating series, and scalars
-   (initial SoC, realtime power, etc).
-5. `EmsSystem.bind(ModelContext(...))` creates a `ModelSnapshot`:
-   - Binds the hidden topology template into a per-run topology model
-   - Collects all fragment constraints/objective terms
-   - Assembles a PuLP `LpProblem` (generic assembly; no domain logic)
-6. Solve with CBC (`pulp.PULP_CBC_CMD`).
-7. Extract per-component timestep plans via `EmsSystem.build_timestep_plans(snapshot)` and return `EmsPlanOutput`.
+1. Determine the base interval used for horizon sizing (`high_res_timestep_minutes` or `timestep_minutes`).
+2. Ask the `EmsSystem` for the shortest forecast coverage across its components.
+3. Build a `Horizon` with `build_horizon(...)` (single- or multi-resolution).
+4. Call `EmsSystem.update(horizon, resolver)`:
+   - Each component resolves the sources it owns (realtime + forecast intervals).
+   - Each component aligns to the horizon and writes the aligned series/scalars into `Deferred` boxes.
+5. Create a `ModelSnapshot` with `ModelContext(horizon=...)`:
+   - `ModelSnapshot` calls `EnergyGraph.set_horizon(horizon)`, allocating per-run PuLP vars.
+   - It queries all fragments (`graph.fragments`) for constraints and objective expressions.
+   - It assembles and solves a PuLP `LpProblem` (generic assembly; no domain logic).
+6. Extract per-component timestep plans and return `EmsPlanOutput`.
 
-### 3.2 Worker + API
+### Worker + API
 
-The worker schedules the solve loop. Each run hydrates HA data, solves the MILP, and stores the
-latest `EmsPlanOutput` for API consumers.
+The worker runs the solve loop. Each run hydrates HA data, solves the MILP, and stores the latest
+`EmsPlanOutput` for API consumers.
 
-## 4. Layered Architecture
+## Layered Architecture
 
-### 4.1 Layer 0 (Hidden): Topology primitives + LinkComponents
+### Layer 0 (Hidden): Topology primitives + LinkComponents
 
 Layer 0 is a minimal graph representation of energy flow. It is not exposed as the user-facing
-model. It exists to let Layer 1 compose physical constraints without a monolithic builder.
+model. It exists to let Layer 1 compose physical constraints without a monolithic solver builder.
 
 Key types:
 
-- **Node templates** (persistent): `BusNodeTemplate`, `PortNodeTemplate`, `StorageNodeTemplate`
-- **Node models** (per-run): allocate PuLP vars and return constraints/objective terms
-- **Connection templates/models**: bidirectional flow variables with composable LinkComponents
-- **LinkComponents**: small pluggable constraint/objective fragments attached to connections
+- **Graph**: `EnergyGraph`
+  - Holds persistent nodes, connections, and cross-cutting fragments.
+  - Activates a run via `set_horizon(...)` (allocates PuLP vars, rebuilds constraints/objective).
+- **Nodes**:
+  - `BusNode`: creates one balance constraint per bus per timestep.
+  - `PortNode`: terminal node (no intrinsic constraints).
+  - `StorageNode`: SoC dynamics over the horizon (vars + constraints + optional terminal objective).
+- **Connections**:
+  - `Connection`: bidirectional nonnegative flow vars (`P_a_to_b`, `P_b_to_a`) per timestep.
+  - Connections are extended by composable `LinkComponent`s.
+- **Deferred boxes**:
+  - `Deferred[T]` and `DeferredSeries[T]` are mutable containers updated by components each run.
+  - Topology fragments read deferred values when building constraints/objective for the current horizon.
 
-#### 4.1.1 Physical law: bus balance
+#### Physical law: bus balance
 
-`BusNodeModel` creates one constraint per bus per timestep:
+For each `BusNode` and timestep `t`:
 
 - `sum(incoming_kW[t]) - sum(outgoing_kW[t]) == 0`
 
-Incoming flow is scaled by the composed connection efficiency for that direction.
+Incoming power is scaled by the composed **transport efficiency** for the relevant direction.
 
-#### 4.1.2 Storage nodes (SoC)
+#### Storage SoC
 
-`StorageNodeModel` owns SoC variables `E_by_i[i]` for `i = 0..N` and enforces:
+`StorageNode` owns `E_by_i[i]` for `i = 0..N` and enforces:
 
-- Initial SoC equality (from inputs)
-- SoC dynamics driven by the incident connection's charge/discharge directional flows
-- Min/max SoC bounds
-- Optional terminal SoC modes (hard or adaptive, parity with legacy behavior)
+- Initial SoC equality
+- SoC dynamics driven by its single incident connection's charge/discharge flows
+- Min/max bounds
+- Optional terminal modes (`hard` or `adaptive`) and optional terminal value reward
 
-#### 4.1.3 LinkComponents (connection modifiers)
+Storage efficiency is modeled as a **connection component** (`StorageEfficiency`) so batteries and EVs
+do not need bespoke node types.
 
-LinkComponents are the reusable building blocks for physical constraints and objective terms.
-They are split into templates and per-run models.
+#### LinkComponents (connection modifiers)
 
-Implemented primitives include:
+LinkComponents are small, composable, query-only fragments attached to a single connection:
 
-- `DirectionalLimit` (hard directional max kW)
-- `ExclusiveDirection` (binary selector prevents simultaneous bidirectional flow)
-- `Efficiency` (directional transport efficiency applied in bus balance)
-- `LinearCostSeries` (linear cost coefficients per kWh, per direction)
-- `SoftDirectionalLimitSeries` (soft upper limit with slack + penalty objective)
-- `FixedFlowSeries` (equality constraint to a per-slot series)
-- `UpperBoundSeries` (per-slot kW upper bound)
-- `GateSeries` (per-slot gating `P <= max * gate[t]`)
+- `DirectionalLimit` (hard directional max kW; optional `exclusive=True`)
+- `TransportEfficiency` (directional multiplier applied in bus balance)
+- `StorageEfficiency` (directional multiplier applied in storage SoC dynamics)
+- `LinearCost` (linear cost per kWh, per direction)
+- `SoftDirectionalLimit` (soft upper bound with slack + penalty objective)
+- `FixedFlow` (fix a directional flow to a per-slot series)
+- `UpperBound` (per-slot kW upper bound)
+- `Gate` (per-slot gating `P <= max * gate[t]`, with input validation)
 
-#### 4.1.4 Extra fragments (policies and higher-order constraints)
+### Extra fragments (cross-cutting policies)
 
-Some constraints naturally reference multiple Layer 0 primitives (e.g., "battery reserve blocks all export").
-These are modeled as extra fragment templates bound per-run and included in the snapshot fragment list.
+Some constraints reference multiple primitives (e.g., "battery reserve blocks all export", EV terminal incentives).
+These are modeled as `GraphFragment`s added to the `EnergyGraph`, and rebuilt each run during `set_horizon(...)`.
 
-### 4.2 Layer 1: Logical components (compose Layer 0)
+### Layer 1: Logical components
 
 Layer 1 components own:
 
-- How to construct their topology fragments (nodes, connections, LinkComponents, extra fragments)
-- How to extract their own per-timestep plan output (plan iterators)
+- How to create and hold references to their topology primitives (nodes, connections, LinkComponents, fragments).
+- How to mark hydration dependencies (`mark_for_hydration`).
+- How to update deferred boxes each run (`update(horizon, resolver)`).
+- How to extract their own plan outputs (`iter_timestep_plan(snapshot)`).
 
 Implemented components:
 
 - `SwitchboardComponent`: AC bus
-- `GridComponent`: grid import/export with pricing and forbidden-import slack
-- `BaseLoadComponent`: fixed base load series on the switchboard bus
+- `GridComponent`: grid import/export, pricing objective, forbidden-import slack
+- `BaseLoadComponent`: fixed base load series
 - `PvComponent`: PV availability + curtailment modes (fixed, load-aware, binary) with curtail tracking
-- `BatteryComponent`: storage + wear/time costs + export-reserve policy fragment
+- `BatteryComponent`: storage + wear/time costs + export-reserve policy
 - `InverterComponent`: DC bus plus AC/DC transfer constraints; composes PV + optional battery
 - `EvComponent`: charge-only storage + gating + switch penalty + optional SoC incentives
 
-Direction conventions are fixed per connection template so plan extraction can deterministically map
+Direction conventions are fixed per connection so plan extraction can deterministically map
 `import` vs `export`, `charge` vs `discharge`, etc.
 
-### 4.3 Layer 2: Inputs and system factory
-
-`EmsSystemFactory` builds:
-
-- A persistent `EmsSystem` template (topology template + component objects)
-- Per-run `EmsInputs` aligned to the current horizon
-
-The topology template is reusable across planning cycles; each solve binds it into a fresh per-run model.
-
-## 5. Configuration model (what the solver expects)
-
-The EMS consumes `AppConfig` from `src/energy_assistant/models/config.py`. The high-level configuration
-shape is unchanged by the v4 refactor; the main difference is where the mapping happens (factory vs builder).
-
-See:
-
-- `EmsConfig` for timestep/horizon configuration
-- `PlantConfig` for grid + load + inverter definitions
-- `LoadConfig` for controllable EV definitions
-
-## 6. Testing
+## Testing
 
 Tests live under `tests/energy_assistant/ems/`:
 
-- Unit tests target Layer 0 primitives and Layer 1 components (limits, balance, SoC, curtailment, EV control).
+- Unit tests target Layer 0 primitives and LinkComponents (limits, balance, SoC, curtailment, EV control).
 - Regression baselines are recorded under `tests/fixtures/ems/<fixture>/<scenario>/` and validated by
   `tests/energy_assistant/ems/test_fixture_baselines.py`.
 

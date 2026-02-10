@@ -9,7 +9,6 @@ from typing import get_args
 import pulp
 
 from energy_assistant.ems.horizon import build_horizon
-from energy_assistant.ems.milp.context import ModelContext
 from energy_assistant.ems.models import (
     EmsPlanOutput,
     EmsPlanStatus,
@@ -29,6 +28,9 @@ class EmsMilpPlanner:
         self._last_timings: EmsPlanTimings | None = None
         self._system_factory = EmsSystemFactory(app_config, resolver=resolver)
 
+    def mark_for_hydration(self) -> None:
+        self._system_factory.mark_for_hydration()
+
     def generate_ems_plan(
         self,
         *,
@@ -44,12 +46,11 @@ class EmsMilpPlanner:
         high_res_horizon = self._app_config.ems.high_res_horizon_minutes
         # Base interval used to size the forecast horizon and align forecasts into slots.
         base_interval_minutes = high_res_timestep or self._app_config.ems.timestep_minutes
-        forecasts = self._system_factory.resolve_forecasts(
-            now=solve_time,
-            interval_minutes=base_interval_minutes,
-        )
         horizon_intervals = self._validate_min_horizon_intervals(
-            forecasts.min_coverage_intervals,
+            self._system_factory.forecast_coverage_intervals(
+                now=solve_time,
+                interval_minutes=base_interval_minutes,
+            ),
             base_interval_minutes,
         )
         total_minutes = horizon_intervals * base_interval_minutes
@@ -79,8 +80,8 @@ class EmsMilpPlanner:
             schedule_info,
         )
         build_start = time.perf_counter()
-        inputs = self._system_factory.build_inputs(horizon=horizon, forecasts=forecasts)
-        snapshot = self._system_factory.system.bind(ModelContext(horizon=horizon, inputs=inputs))
+        self._system_factory.system.update(horizon=horizon, resolver=self._resolver)
+        snapshot = self._system_factory.system.build_snapshot(horizon=horizon)
         build_seconds = time.perf_counter() - build_start
 
         solve_start = time.perf_counter()

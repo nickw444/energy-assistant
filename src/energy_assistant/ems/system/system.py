@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from typing import TYPE_CHECKING
+from datetime import datetime
 
-import pulp
-
-from energy_assistant.ems.milp.context import ConstraintSpec, ModelContext, ObjectiveTerm
+from energy_assistant.ems.components.base_load import BaseLoadComponent
+from energy_assistant.ems.components.ev import EvComponent
+from energy_assistant.ems.components.grid import GridComponent
+from energy_assistant.ems.components.inverter import InverterComponent
+from energy_assistant.ems.horizon import Horizon
+from energy_assistant.ems.milp.context import ModelContext
+from energy_assistant.ems.milp.snapshot import ModelSnapshot
 from energy_assistant.ems.models import (
     EconomicsTimestepPlan,
     EvTimestepPlan,
@@ -14,67 +18,92 @@ from energy_assistant.ems.models import (
     LoadsTimestepPlan,
     TimestepPlan,
 )
-from energy_assistant.ems.topology.graph import EnergyGraphModel, EnergyGraphTemplate
-
-if TYPE_CHECKING:
-    from energy_assistant.ems.components.ev import EvComponent
-    from energy_assistant.ems.components.grid import GridComponent
-    from energy_assistant.ems.components.inverter import InverterComponent
-
-
-class ModelSnapshot:
-    def __init__(self, *, ctx: ModelContext, graph: EnergyGraphModel) -> None:
-        self.ctx = ctx
-        self.graph = graph
-
-        self.problem = pulp.LpProblem("ems_optimisation", pulp.LpMinimize)
-
-        constraints: list[ConstraintSpec] = []
-        objective_terms: list[ObjectiveTerm] = []
-        for fragment in graph.fragments:
-            constraints.extend(fragment.constraints)
-            objective_terms.extend(fragment.objective_terms)
-
-        _attach_constraints(self.problem, constraints)
-        self.objective = (
-            pulp.lpSum(term.expr for term in objective_terms)
-            if objective_terms
-            else 0.0
-        )
-        self.problem += self.objective
+from energy_assistant.ems.topology.graph import EnergyGraph
+from energy_assistant.lib.source_resolver.resolver import ValueResolver
 
 
 class EmsSystem:
-    """Persistent EMS system template composed of Layer 1 components + a hidden Layer 0 topology."""
+    """Persistent EMS system composed of Layer 1 components + a hidden Layer 0 topology."""
 
     def __init__(
         self,
         *,
-        graph: EnergyGraphTemplate,
+        graph: EnergyGraph,
+        switchboard_bus_id: str,
+        base_load: BaseLoadComponent,
         grid: GridComponent,
         inverters: dict[str, InverterComponent],
         evs: dict[str, EvComponent],
     ) -> None:
-        self._graph = graph
+        self.graph = graph
+        self.switchboard_bus_id = str(switchboard_bus_id)
+        self.base_load = base_load
         self.grid = grid
         self.inverters = dict(inverters)
         self.evs = dict(evs)
 
-    def bind(self, ctx: ModelContext) -> ModelSnapshot:
-        graph_model = self._graph.bind(ctx)
-        return ModelSnapshot(ctx=ctx, graph=graph_model)
+    def mark_for_hydration(self, resolver: ValueResolver) -> None:
+        self.base_load.mark_for_hydration(resolver)
+        self.grid.mark_for_hydration(resolver)
+        for inv in self.inverters.values():
+            inv.mark_for_hydration(resolver)
+        for ev in self.evs.values():
+            ev.mark_for_hydration(resolver)
+
+    def forecast_coverage_intervals(
+        self, *, now: datetime, interval_minutes: int, resolver: ValueResolver
+    ) -> int:
+        coverages: list[int] = []
+        coverages.append(
+            int(
+                self.base_load.forecast_coverage_intervals(
+                    now=now, interval_minutes=interval_minutes, resolver=resolver
+                )
+            )
+        )
+        coverages.append(
+            int(
+                self.grid.forecast_coverage_intervals(
+                    now=now, interval_minutes=interval_minutes, resolver=resolver
+                )
+            )
+        )
+        for inv in self.inverters.values():
+            coverages.append(
+                int(
+                    inv.forecast_coverage_intervals(
+                        now=now, interval_minutes=interval_minutes, resolver=resolver
+                    )
+                )
+            )
+        # EVs do not contribute to horizon sizing today (no forecasts), only realtime gating.
+        if not coverages:
+            raise ValueError("No forecasts available to determine planning horizon")
+        return int(min(coverages))
+
+    def update(self, *, horizon: Horizon, resolver: ValueResolver) -> None:
+        """Update all deferred boxes for this run (forecast alignment + realtime overrides)."""
+        self.base_load.update(horizon=horizon, resolver=resolver)
+        self.grid.update(horizon=horizon, resolver=resolver)
+        for inv in self.inverters.values():
+            inv.update(horizon=horizon, resolver=resolver)
+        for ev in self.evs.values():
+            ev.update(horizon=horizon, resolver=resolver)
+
+    def build_snapshot(self, *, horizon: Horizon) -> ModelSnapshot:
+        ctx = ModelContext(horizon=horizon)
+        return ModelSnapshot(ctx=ctx, graph=self.graph)
 
     def build_timestep_plans(self, snapshot: ModelSnapshot) -> list[TimestepPlan]:
         horizon = snapshot.ctx.horizon
-        inputs = snapshot.ctx.inputs
 
-        base_load_series = inputs.float_series("base_load_kw")
-        price_import = inputs.float_series("price_import_raw")
-        price_export = inputs.float_series("price_export_raw")
-        price_import_eff = inputs.float_series("price_import_effective")
-        price_export_eff = inputs.float_series("price_export_effective")
+        base_load_series = self.base_load.base_load_kw.get_for_horizon(horizon)
+        price_import = self.grid.price_import_raw.get_for_horizon(horizon)
+        price_export = self.grid.price_export_raw.get_for_horizon(horizon)
+        price_import_eff = self.grid.price_import_effective.get_for_horizon(horizon)
+        price_export_eff = self.grid.price_export_effective.get_for_horizon(horizon)
 
-        grid_iter = self.grid.iter_timestep_plan(snapshot)
+        grid_iter: Iterator[GridTimestepPlan] = self.grid.iter_timestep_plan(snapshot)
         inverter_iters: dict[str, Iterator[InverterTimestepPlan]] = {
             inv_id: inv.iter_timestep_plan(snapshot) for inv_id, inv in self.inverters.items()
         }
@@ -85,7 +114,7 @@ class EmsSystem:
         cumulative_cost = 0.0
         timesteps: list[TimestepPlan] = []
         for t, slot in enumerate(horizon.slots):
-            grid_plan: GridTimestepPlan = next(grid_iter)
+            grid_plan = next(grid_iter)
 
             inverter_plans: dict[str, InverterTimestepPlan] = {
                 inv_id: next(it) for inv_id, it in sorted(inverter_iters.items())
@@ -128,13 +157,3 @@ class EmsSystem:
                 )
             )
         return timesteps
-
-
-def _attach_constraints(problem: pulp.LpProblem, constraints: list[ConstraintSpec]) -> None:
-    seen: set[str] = set()
-    for spec in constraints:
-        name = spec.name
-        if name in seen:
-            raise ValueError(f"Duplicate constraint name: {name}")
-        seen.add(name)
-        problem += (spec.constraint, name)

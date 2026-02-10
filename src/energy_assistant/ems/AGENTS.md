@@ -9,8 +9,8 @@ plotting and inspection. Canonical implementation notes live in
 
 Key files:
 - `src/energy_assistant/ems/planner.py` orchestrates build, solve, and plan extraction.
-- `src/energy_assistant/ems/system/factory.py` builds the persistent system template and per-run `EmsInputs`.
-- `src/energy_assistant/ems/system/system.py` assembles the PuLP problem and merges per-component plans.
+- `src/energy_assistant/ems/system/factory.py` wires config into a persistent `EmsSystem` (components + topology graph).
+- `src/energy_assistant/ems/system/system.py` coordinates component updates, builds the MILP snapshot, and merges per-component plans.
 - `src/energy_assistant/ems/topology/*` contains Layer 0 topology primitives (nodes, connections, LinkComponents).
 - `src/energy_assistant/ems/components/*` contains Layer 1 logical components (Grid, PV, Battery, EV, etc).
 - `src/energy_assistant/ems/horizon.py` handles time slotting (single and multi-resolution horizons).

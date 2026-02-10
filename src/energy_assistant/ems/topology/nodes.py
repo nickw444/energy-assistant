@@ -1,39 +1,90 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import Literal, Protocol
 
 import pulp
 
 from energy_assistant.ems.horizon import Horizon
-from energy_assistant.ems.milp.context import ConstraintSpec, ModelContext, ObjectiveTerm
-
-if TYPE_CHECKING:
-    from energy_assistant.ems.topology.graph import EnergyGraphModel
-
+from energy_assistant.ems.milp.context import ConstraintDescriptor
+from energy_assistant.ems.topology.connection import Connection
+from energy_assistant.ems.topology.deferred import Deferred, DeferredSeries
+from energy_assistant.ems.topology.link_components import FlowDirection
 
 NodeDomain = Literal["ac", "dc"]
+TerminalMode = Literal["none", "hard", "adaptive"]
 
 
-class BusNodeTemplate:
-    def __init__(self, *, id: str, name: str, domain: NodeDomain | None = None) -> None:
-        self.id = str(id)
-        self.name = str(name)
-        self.domain = domain
-
-    def bind(self, graph: EnergyGraphModel) -> BusNodeModel:
-        return BusNodeModel(ctx=graph.ctx, graph=graph, template=self)
+class GraphLike(Protocol):
+    def connections_for_node(self, node_id: str) -> list[Connection]: ...
 
 
-class PortNodeTemplate:
+class Node:
+    """Topology node (persistent across planning runs)."""
+
     def __init__(self, *, id: str, name: str) -> None:
         self.id = str(id)
         self.name = str(name)
+        self._horizon: Horizon | None = None
 
-    def bind(self, graph: EnergyGraphModel) -> PortNodeModel:
-        return PortNodeModel(ctx=graph.ctx, template=self)
+    def set_horizon(self, horizon: Horizon, graph: GraphLike) -> None:
+        # Default nodes do nothing; subclasses allocate per-run vars/constraints.
+        _ = graph
+        self._horizon = horizon
+
+    @property
+    def constraints(self) -> list[ConstraintDescriptor]:
+        return []
+
+    @property
+    def objective(self) -> pulp.LpAffineExpression:
+        return pulp.LpAffineExpression()
 
 
-class StorageNodeTemplate:
+class BusNode(Node):
+    """Junction node enforcing energy conservation via per-slot balance constraints."""
+
+    def __init__(self, *, id: str, name: str, domain: NodeDomain | None = None) -> None:
+        super().__init__(id=str(id), name=str(name))
+        self.domain = domain
+        self._constraints: list[ConstraintDescriptor] = []
+
+    def set_horizon(self, horizon: Horizon, graph: GraphLike) -> None:
+        self._horizon = horizon
+        constraints: list[ConstraintDescriptor] = []
+        for t in horizon.T:
+            incoming: pulp.LpAffineExpression = pulp.LpAffineExpression()
+            outgoing: pulp.LpAffineExpression = pulp.LpAffineExpression()
+            for conn in graph.connections_for_node(self.id):
+                if conn.a_node_id == self.id:
+                    incoming += conn.P_b_to_a[t] * conn.transport_efficiency("b_to_a")
+                    outgoing += conn.P_a_to_b[t]
+                elif conn.b_node_id == self.id:
+                    incoming += conn.P_a_to_b[t] * conn.transport_efficiency("a_to_b")
+                    outgoing += conn.P_b_to_a[t]
+                else:
+                    raise ValueError("Graph adjacency invariant violated")
+            constraints.append(
+                ConstraintDescriptor(
+                    f"balance_{self.id}_t{t}",
+                    incoming - outgoing == 0,
+                )
+            )
+        self._constraints = constraints
+
+    @property
+    def constraints(self) -> list[ConstraintDescriptor]:
+        return list(self._constraints)
+
+
+class PortNode(Node):
+    """Terminal node used for attaching external sources/sinks (no intrinsic constraints)."""
+
+    pass
+
+
+class StorageNode(Node):
+    """Energy storage node with SoC dynamics and optional terminal constraints/objective."""
+
     def __init__(
         self,
         *,
@@ -42,120 +93,43 @@ class StorageNodeTemplate:
         capacity_kwh: float,
         soc_min_kwh: float,
         soc_max_kwh: float,
-        storage_efficiency: float,
-        initial_soc_kwh_key: str,
-        terminal_mode: Literal["none", "hard", "adaptive"] = "none",
+        initial_soc_kwh: Deferred[float],
+        terminal_mode: TerminalMode = "none",
         terminal_reserve_kwh: float = 0.0,
         terminal_penalty_per_kwh: float | Literal["mean", "median"] | None = "median",
-        price_import_raw_key: str = "price_import_raw",
+        price_import_raw: DeferredSeries[float] | None = None,
         terminal_soc_value_per_kwh: float | None = None,
-        mode: Literal["bidirectional", "charge_only"] = "bidirectional",
     ) -> None:
-        self.id = str(id)
-        self.name = str(name)
+        super().__init__(id=str(id), name=str(name))
         self.capacity_kwh = float(capacity_kwh)
         self.soc_min_kwh = float(soc_min_kwh)
         self.soc_max_kwh = float(soc_max_kwh)
-        self.storage_efficiency = float(storage_efficiency)
-        self.initial_soc_kwh_key = str(initial_soc_kwh_key)
-        self.terminal_mode: Literal["none", "hard", "adaptive"] = terminal_mode
+        self.initial_soc_kwh = initial_soc_kwh
+        self.terminal_mode: TerminalMode = terminal_mode
         self.terminal_reserve_kwh = float(terminal_reserve_kwh)
         self.terminal_penalty_per_kwh: float | Literal["mean", "median"] | None = (
             terminal_penalty_per_kwh
         )
-        self.price_import_raw_key = str(price_import_raw_key)
+        self.price_import_raw = price_import_raw
         self.terminal_soc_value_per_kwh = (
             None if terminal_soc_value_per_kwh is None else float(terminal_soc_value_per_kwh)
         )
-        self.mode: Literal["bidirectional", "charge_only"] = mode
 
-    def bind(self, graph: EnergyGraphModel) -> StorageNodeModel:
-        return StorageNodeModel(ctx=graph.ctx, graph=graph, template=self)
+        self.E_by_i: dict[int, pulp.LpVariable] = {}
+        self.P_charge_kw: dict[int, pulp.LpVariable] = {}
+        self.P_discharge_kw: dict[int, pulp.LpVariable] = {}
+        self.terminal_shortfall_kwh: pulp.LpVariable | None = None
 
+        self._connection: Connection | None = None
+        self._constraints: list[ConstraintDescriptor] = []
+        self._objective: pulp.LpAffineExpression = pulp.LpAffineExpression()
 
-class NodeModel:
-    @property
-    def constraints(self) -> list[ConstraintSpec]:
-        return []
+    def set_horizon(self, horizon: Horizon, graph: GraphLike) -> None:
+        self._horizon = horizon
+        initial_soc_kwh = float(self.initial_soc_kwh.get())
 
-    @property
-    def objective_terms(self) -> list[ObjectiveTerm]:
-        return []
-
-
-class BusNodeModel(NodeModel):
-    def __init__(
-        self,
-        *,
-        ctx: ModelContext,
-        graph: EnergyGraphModel,
-        template: BusNodeTemplate,
-    ) -> None:
-        self.ctx = ctx
-        self.graph = graph
-        self.id = template.id
-        self.name = template.name
-        self.domain = template.domain
-
-        self._constraints: list[ConstraintSpec] = []
-        for t in ctx.horizon.T:
-            incoming: pulp.LpAffineExpression = pulp.LpAffineExpression()
-            outgoing: pulp.LpAffineExpression = pulp.LpAffineExpression()
-            for conn in graph.connections_for_node(self.id):
-                if conn.a_node_id == self.id:
-                    incoming += conn.P_b_to_a[t] * conn.efficiency("b_to_a")
-                    outgoing += conn.P_a_to_b[t]
-                elif conn.b_node_id == self.id:
-                    incoming += conn.P_a_to_b[t] * conn.efficiency("a_to_b")
-                    outgoing += conn.P_b_to_a[t]
-                else:
-                    raise ValueError("Graph adjacency invariant violated")
-            self._constraints.append(
-                ConstraintSpec(
-                    f"balance_{self.id}_t{t}",
-                    incoming - outgoing == 0,
-                )
-            )
-
-    @property
-    def constraints(self) -> list[ConstraintSpec]:
-        return list(self._constraints)
-
-
-class PortNodeModel(NodeModel):
-    def __init__(self, *, ctx: ModelContext, template: PortNodeTemplate) -> None:
-        self.ctx = ctx
-        self.id = template.id
-        self.name = template.name
-
-
-class StorageNodeModel(NodeModel):
-    def __init__(
-        self,
-        *,
-        ctx: ModelContext,
-        graph: EnergyGraphModel,
-        template: StorageNodeTemplate,
-    ) -> None:
-        self.ctx = ctx
-        self.graph = graph
-        self.id = template.id
-        self.name = template.name
-        self.capacity_kwh = float(template.capacity_kwh)
-        self.soc_min_kwh = float(template.soc_min_kwh)
-        self.soc_max_kwh = float(template.soc_max_kwh)
-        self.storage_efficiency = float(template.storage_efficiency)
-        self.mode = template.mode
-        self.terminal_mode = template.terminal_mode
-        self.terminal_reserve_kwh = float(template.terminal_reserve_kwh)
-        self.terminal_penalty_per_kwh = template.terminal_penalty_per_kwh
-        self.price_import_raw_key = template.price_import_raw_key
-        self.terminal_soc_value_per_kwh = template.terminal_soc_value_per_kwh
-
-        initial_soc_kwh = float(ctx.inputs.float(template.initial_soc_kwh_key))
-
-        soc_indices = range(ctx.horizon.num_intervals + 1)
-        self.E_by_i: dict[int, pulp.LpVariable] = pulp.LpVariable.dicts(
+        soc_indices = range(int(horizon.num_intervals) + 1)
+        self.E_by_i = pulp.LpVariable.dicts(
             f"E_{self.id}_kwh",
             soc_indices,
             lowBound=self.soc_min_kwh,
@@ -168,97 +142,108 @@ class StorageNodeModel(NodeModel):
                 f"Storage node {self.id!r} must have exactly 1 incident connection; "
                 f"got {len(incident)}"
             )
-        self._connection = incident[0]
+        conn = incident[0]
+        self._connection = conn
 
         # Determine charge/discharge directional flows relative to this storage node.
-        if self._connection.a_node_id == self.id:
-            charge_flow = self._connection.P_b_to_a  # other -> storage
-            discharge_flow = self._connection.P_a_to_b  # storage -> other
-        elif self._connection.b_node_id == self.id:
-            charge_flow = self._connection.P_a_to_b
-            discharge_flow = self._connection.P_b_to_a
+        if conn.a_node_id == self.id:
+            charge_flow = conn.P_b_to_a  # other -> storage
+            discharge_flow = conn.P_a_to_b  # storage -> other
+            charge_dir: FlowDirection = "b_to_a"
+            discharge_dir: FlowDirection = "a_to_b"
+        elif conn.b_node_id == self.id:
+            charge_flow = conn.P_a_to_b
+            discharge_flow = conn.P_b_to_a
+            charge_dir = "a_to_b"
+            discharge_dir = "b_to_a"
         else:
             raise ValueError("Graph adjacency invariant violated")
 
         self.P_charge_kw = charge_flow
         self.P_discharge_kw = discharge_flow
 
-        eta = float(self.storage_efficiency)
-        if eta <= 0 or eta > 1.0:
-            raise ValueError(f"storage_efficiency must be in (0,1]; got {eta}")
+        eta_charge = float(conn.storage_efficiency(charge_dir))
+        eta_discharge = float(conn.storage_efficiency(discharge_dir))
+        if eta_charge <= 0 or eta_charge > 1.0:
+            raise ValueError(f"charge efficiency must be in (0,1]; got {eta_charge}")
+        if eta_discharge <= 0 or eta_discharge > 1.0:
+            raise ValueError(f"discharge efficiency must be in (0,1]; got {eta_discharge}")
 
-        self._constraints: list[ConstraintSpec] = []
-        self._constraints.append(
-            ConstraintSpec(
+        constraints: list[ConstraintDescriptor] = [
+            ConstraintDescriptor(
                 f"soc_initial_{self.id}",
                 self.E_by_i[0] == float(initial_soc_kwh),
             )
-        )
-        for t in ctx.horizon.T:
-            self._constraints.append(
-                ConstraintSpec(
+        ]
+        for t in horizon.T:
+            constraints.append(
+                ConstraintDescriptor(
                     f"soc_step_{self.id}_t{t}",
                     self.E_by_i[t + 1]
                     == self.E_by_i[t]
-                    + (self.P_charge_kw[t] * eta - self.P_discharge_kw[t] / eta)
-                    * ctx.horizon.dt_hours(t),
+                    + (self.P_charge_kw[t] * eta_charge - self.P_discharge_kw[t] / eta_discharge)
+                    * float(horizon.dt_hours(t)),
                 )
             )
 
-        self.terminal_shortfall_kwh: pulp.LpVariable | None = None
-        self._objective_terms: list[ObjectiveTerm] = []
+        self.terminal_shortfall_kwh = None
+        objective_parts: list[pulp.LpAffineExpression] = []
 
-        terminal_idx = int(ctx.horizon.num_intervals)
+        terminal_idx = int(horizon.num_intervals)
         if self.terminal_mode == "hard":
-            self._constraints.append(
-                ConstraintSpec(
+            constraints.append(
+                ConstraintDescriptor(
                     f"soc_terminal_{self.id}",
                     self.E_by_i[terminal_idx] >= float(initial_soc_kwh),
                 )
             )
         elif self.terminal_mode == "adaptive":
-            ratio = _terminal_soc_return_ratio(ctx.horizon)
+            if self.price_import_raw is None:
+                raise ValueError(
+                    f"Storage node {self.id!r} terminal_mode='adaptive' requires price_import_raw"
+                )
+            ratio = _terminal_soc_return_ratio(horizon)
             floor_kwh = min(float(initial_soc_kwh), float(self.terminal_reserve_kwh))
             target_kwh = float(floor_kwh + ratio * (float(initial_soc_kwh) - floor_kwh))
+
             self.terminal_shortfall_kwh = pulp.LpVariable(
                 f"E_{self.id}_terminal_shortfall_kwh",
                 lowBound=0,
             )
-            self._constraints.append(
-                ConstraintSpec(
+            constraints.append(
+                ConstraintDescriptor(
                     f"soc_terminal_{self.id}",
                     self.E_by_i[terminal_idx] + self.terminal_shortfall_kwh >= target_kwh,
                 )
             )
+
+            price_import_raw = self.price_import_raw.get_for_horizon(horizon)
             penalty = _terminal_penalty_per_kwh(
-                horizon=ctx.horizon,
-                price_import=ctx.inputs.float_series(self.price_import_raw_key),
+                horizon=horizon,
+                price_import=price_import_raw,
                 penalty_cfg=self.terminal_penalty_per_kwh,
                 ratio=ratio,
             )
             if penalty > 0:
-                self._objective_terms.append(
-                    ObjectiveTerm(
-                        penalty * self.terminal_shortfall_kwh,
-                        name=f"terminal_soc:{self.id}",
-                    )
-                )
+                objective_parts.append(float(penalty) * self.terminal_shortfall_kwh)
 
         if self.terminal_soc_value_per_kwh is not None and self.terminal_soc_value_per_kwh > 0:
-            self._objective_terms.append(
-                ObjectiveTerm(
-                    -float(self.terminal_soc_value_per_kwh) * self.E_by_i[terminal_idx],
-                    name=f"soc_value:{self.id}",
-                )
+            objective_parts.append(
+                -float(self.terminal_soc_value_per_kwh) * self.E_by_i[terminal_idx]
             )
 
+        self._constraints = constraints
+        self._objective = (
+            pulp.lpSum(objective_parts) if objective_parts else pulp.LpAffineExpression()
+        )
+
     @property
-    def constraints(self) -> list[ConstraintSpec]:
+    def constraints(self) -> list[ConstraintDescriptor]:
         return list(self._constraints)
 
     @property
-    def objective_terms(self) -> list[ObjectiveTerm]:
-        return list(self._objective_terms)
+    def objective(self) -> pulp.LpAffineExpression:
+        return self._objective
 
 
 _TERMINAL_SOC_REFERENCE_MINUTES = 1440.0
