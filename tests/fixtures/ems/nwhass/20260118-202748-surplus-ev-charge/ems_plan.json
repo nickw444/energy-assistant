@@ -2,7 +2,7 @@
   "buckets": [
     {
       "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 1.107,
+      "battery_discharge_kwh": 1.165,
       "curtailment_minutes": 0.0,
       "end": "2026-01-18T21:25:00+11:00",
       "ev_charge_kwh": 0.0,
@@ -15,7 +15,7 @@
     },
     {
       "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.742,
+      "battery_discharge_kwh": 0.781,
       "curtailment_minutes": 0.0,
       "end": "2026-01-18T22:25:00+11:00",
       "ev_charge_kwh": 0.0,
@@ -28,7 +28,7 @@
     },
     {
       "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.642,
+      "battery_discharge_kwh": 0.676,
       "curtailment_minutes": 0.0,
       "end": "2026-01-18T23:25:00+11:00",
       "ev_charge_kwh": 0.0,
@@ -41,7 +41,7 @@
     },
     {
       "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.552,
+      "battery_discharge_kwh": 0.581,
       "curtailment_minutes": 0.0,
       "end": "2026-01-19T00:25:00+11:00",
       "ev_charge_kwh": 0.0,
@@ -54,7 +54,7 @@
     },
     {
       "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.607,
+      "battery_discharge_kwh": 0.639,
       "curtailment_minutes": 0.0,
       "end": "2026-01-19T01:25:00+11:00",
       "ev_charge_kwh": 0.0,
@@ -67,7 +67,7 @@
     },
     {
       "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.574,
+      "battery_discharge_kwh": 0.604,
       "curtailment_minutes": 0.0,
       "end": "2026-01-19T02:25:00+11:00",
       "ev_charge_kwh": 0.0,
@@ -80,7 +80,7 @@
     },
     {
       "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.558,
+      "battery_discharge_kwh": 0.588,
       "curtailment_minutes": 0.0,
       "end": "2026-01-19T03:25:00+11:00",
       "ev_charge_kwh": 0.0,
@@ -93,7 +93,7 @@
     },
     {
       "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.536,
+      "battery_discharge_kwh": 0.564,
       "curtailment_minutes": 0.0,
       "end": "2026-01-19T04:25:00+11:00",
       "ev_charge_kwh": 0.0,
@@ -106,7 +106,7 @@
     },
     {
       "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.503,
+      "battery_discharge_kwh": 0.53,
       "curtailment_minutes": 0.0,
       "end": "2026-01-19T05:25:00+11:00",
       "ev_charge_kwh": 0.0,
@@ -119,7 +119,7 @@
     },
     {
       "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.528,
+      "battery_discharge_kwh": 0.556,
       "curtailment_minutes": 0.0,
       "end": "2026-01-19T06:25:00+11:00",
       "ev_charge_kwh": 0.0,
@@ -132,7 +132,7 @@
     },
     {
       "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.239,
+      "battery_discharge_kwh": 0.252,
       "curtailment_minutes": 0.0,
       "end": "2026-01-19T07:25:00+11:00",
       "ev_charge_kwh": 0.0,
@@ -144,7 +144,7 @@
       "start": "2026-01-19T06:25:00+11:00"
     },
     {
-      "battery_charge_kwh": 0.434,
+      "battery_charge_kwh": 0.412,
       "battery_discharge_kwh": 0.001,
       "curtailment_minutes": 0.0,
       "end": "2026-01-19T08:25:00+11:00",
@@ -157,7 +157,7 @@
       "start": "2026-01-19T07:25:00+11:00"
     },
     {
-      "battery_charge_kwh": 0.925,
+      "battery_charge_kwh": 0.878,
       "battery_discharge_kwh": 0.0,
       "curtailment_minutes": 0.0,
       "end": "2026-01-19T09:25:00+11:00",
@@ -170,7 +170,7 @@
       "start": "2026-01-19T08:25:00+11:00"
     },
     {
-      "battery_charge_kwh": 1.466,
+      "battery_charge_kwh": 1.392,
       "battery_discharge_kwh": 0.0,
       "curtailment_minutes": 0.0,
       "end": "2026-01-19T10:25:00+11:00",
@@ -183,7 +183,7 @@
       "start": "2026-01-19T09:25:00+11:00"
     },
     {
-      "battery_charge_kwh": 2.147,
+      "battery_charge_kwh": 2.04,
       "battery_discharge_kwh": 0.0,
       "curtailment_minutes": 0.0,
       "end": "2026-01-19T11:25:00+11:00",
@@ -196,7 +196,7 @@
       "start": "2026-01-19T10:25:00+11:00"
     },
     {
-      "battery_charge_kwh": 2.558,
+      "battery_charge_kwh": 2.431,
       "battery_discharge_kwh": 0.0,
       "curtailment_minutes": 0.0,
       "end": "2026-01-19T12:25:00+11:00",
@@ -209,7 +209,7 @@
       "start": "2026-01-19T11:25:00+11:00"
     },
     {
-      "battery_charge_kwh": 2.943,
+      "battery_charge_kwh": 2.796,
       "battery_discharge_kwh": 0.0,
       "curtailment_minutes": 0.0,
       "end": "2026-01-19T13:25:00+11:00",
@@ -222,7 +222,7 @@
       "start": "2026-01-19T12:25:00+11:00"
     },
     {
-      "battery_charge_kwh": 2.97,
+      "battery_charge_kwh": 2.822,
       "battery_discharge_kwh": 0.0,
       "curtailment_minutes": 0.0,
       "end": "2026-01-19T14:25:00+11:00",
@@ -235,7 +235,7 @@
       "start": "2026-01-19T13:25:00+11:00"
     },
     {
-      "battery_charge_kwh": 2.983,
+      "battery_charge_kwh": 2.834,
       "battery_discharge_kwh": 0.0,
       "curtailment_minutes": 0.0,
       "end": "2026-01-19T15:25:00+11:00",
@@ -248,7 +248,7 @@
       "start": "2026-01-19T14:25:00+11:00"
     },
     {
-      "battery_charge_kwh": 2.713,
+      "battery_charge_kwh": 2.577,
       "battery_discharge_kwh": 0.0,
       "curtailment_minutes": 0.0,
       "end": "2026-01-19T16:25:00+11:00",
@@ -261,7 +261,7 @@
       "start": "2026-01-19T15:25:00+11:00"
     },
     {
-      "battery_charge_kwh": 1.954,
+      "battery_charge_kwh": 1.857,
       "battery_discharge_kwh": 0.0,
       "curtailment_minutes": 0.0,
       "end": "2026-01-19T17:25:00+11:00",
@@ -274,8 +274,8 @@
       "start": "2026-01-19T16:25:00+11:00"
     },
     {
-      "battery_charge_kwh": 0.697,
-      "battery_discharge_kwh": 0.017,
+      "battery_charge_kwh": 0.662,
+      "battery_discharge_kwh": 0.018,
       "curtailment_minutes": 0.0,
       "end": "2026-01-19T18:25:00+11:00",
       "ev_charge_kwh": 0.0,
@@ -288,7 +288,7 @@
     },
     {
       "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 1.345,
+      "battery_discharge_kwh": 1.416,
       "curtailment_minutes": 0.0,
       "end": "2026-01-19T19:25:00+11:00",
       "ev_charge_kwh": 0.0,
@@ -301,7 +301,7 @@
     },
     {
       "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 1.17,
+      "battery_discharge_kwh": 1.231,
       "curtailment_minutes": 0.0,
       "end": "2026-01-19T20:25:00+11:00",
       "ev_charge_kwh": 0.0,
@@ -314,7 +314,7 @@
     },
     {
       "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 1.075,
+      "battery_discharge_kwh": 1.132,
       "curtailment_minutes": 0.0,
       "end": "2026-01-19T21:25:00+11:00",
       "ev_charge_kwh": 0.0,
@@ -327,7 +327,7 @@
     },
     {
       "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.712,
+      "battery_discharge_kwh": 0.75,
       "curtailment_minutes": 0.0,
       "end": "2026-01-19T22:25:00+11:00",
       "ev_charge_kwh": 0.0,
@@ -340,7 +340,7 @@
     },
     {
       "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.608,
+      "battery_discharge_kwh": 0.64,
       "curtailment_minutes": 0.0,
       "end": "2026-01-19T23:25:00+11:00",
       "ev_charge_kwh": 0.0,
@@ -353,7 +353,7 @@
     },
     {
       "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.551,
+      "battery_discharge_kwh": 0.58,
       "curtailment_minutes": 0.0,
       "end": "2026-01-20T00:25:00+11:00",
       "ev_charge_kwh": 0.0,
@@ -366,7 +366,7 @@
     },
     {
       "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.607,
+      "battery_discharge_kwh": 0.639,
       "curtailment_minutes": 0.0,
       "end": "2026-01-20T01:25:00+11:00",
       "ev_charge_kwh": 0.0,
@@ -379,7 +379,7 @@
     },
     {
       "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.574,
+      "battery_discharge_kwh": 0.604,
       "curtailment_minutes": 0.0,
       "end": "2026-01-20T02:25:00+11:00",
       "ev_charge_kwh": 0.0,
@@ -392,7 +392,7 @@
     },
     {
       "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.558,
+      "battery_discharge_kwh": 0.588,
       "curtailment_minutes": 0.0,
       "end": "2026-01-20T03:25:00+11:00",
       "ev_charge_kwh": 0.0,
@@ -405,7 +405,7 @@
     },
     {
       "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.536,
+      "battery_discharge_kwh": 0.564,
       "curtailment_minutes": 0.0,
       "end": "2026-01-20T04:25:00+11:00",
       "ev_charge_kwh": 0.0,
@@ -418,7 +418,7 @@
     },
     {
       "battery_charge_kwh": 0.0,
-      "battery_discharge_kwh": 0.284,
+      "battery_discharge_kwh": 0.3,
       "curtailment_minutes": 0.0,
       "end": "2026-01-20T05:00:00+11:00",
       "ev_charge_kwh": 0.0,
@@ -445,8 +445,8 @@
   "inverters": {
     "primary": {
       "ac_net_kwh": 23.29,
-      "battery_charge_kwh": 21.791,
-      "battery_discharge_kwh": 14.627,
+      "battery_charge_kwh": 20.702,
+      "battery_discharge_kwh": 15.398,
       "curtailment_minutes": 0.0,
       "pv_kwh": 30.456,
       "soc_kwh_end": 33.215,
@@ -463,7 +463,7 @@
     "generated_at": "2026-01-18T09:27:53.349940+00:00",
     "horizon_end": "2026-01-20T05:00:00+11:00",
     "horizon_start": "2026-01-18T20:25:00+11:00",
-    "objective_value": -1.906,
+    "objective_value": -1.928,
     "status": "Optimal",
     "timestep_minutes": {
       "avg": 22.733,
@@ -485,8 +485,8 @@
     "import_min": 0.06
   },
   "totals": {
-    "battery_charge_kwh": 21.791,
-    "battery_discharge_kwh": 14.627,
+    "battery_charge_kwh": 20.702,
+    "battery_discharge_kwh": 15.398,
     "ev_charge_kwh": 0.0,
     "grid_export_kw_max": 0.0,
     "grid_export_kwh": 0.0,

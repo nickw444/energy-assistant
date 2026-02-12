@@ -5,7 +5,7 @@ import pulp
 from energy_assistant.ems.horizon import Horizon
 
 
-class ConstraintDescriptor:
+class ConstraintSpec:
     """A named constraint returned by a topology fragment.
 
     Fragments are query-only: they return constraints as values rather than mutating the PuLP

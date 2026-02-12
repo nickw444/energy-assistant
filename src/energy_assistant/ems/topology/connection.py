@@ -1,134 +1,149 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import TypeVar
+
 import pulp
 
 from energy_assistant.ems.horizon import Horizon
-from energy_assistant.ems.milp.context import ConstraintDescriptor
-from energy_assistant.ems.topology.link_components import FlowDirection, LinkComponent
+from energy_assistant.ems.milp.context import ConstraintSpec
+from energy_assistant.ems.topology.policies import ConnectionPolicy, TransferConnectionPolicy
+
+P = TypeVar("P", bound=ConnectionPolicy)
+
+
+def asset_has_transfer_policy(
+    *,
+    connection_id: str,
+    policies: Mapping[str, ConnectionPolicy],
+) -> None:
+    transfer_policies = [
+        policy for policy in policies.values() if isinstance(policy, TransferConnectionPolicy)
+    ]
+    if len(transfer_policies) != 1:
+        raise ValueError(
+            f"Connection {connection_id!r} requires exactly one TransferConnectionPolicy in "
+            f"policies; got {len(transfer_policies)}"
+        )
 
 
 class Connection:
-    """Bidirectional connection between two nodes.
+    """Bidirectional run-scoped connection between two nodes.
 
-    This is a persistent topology object that is re-used across planning runs. Per-run PuLP vars
-    and constraint expressions are (re)created when `set_horizon(...)` is called.
+    For each direction we track source-side and sink-side power:
+    - `power_in_ab`: power leaving node A toward node B (kW)
+    - `power_out_ab`: power arriving at node B from node A (kW)
+    - `power_in_ba`: power leaving node B toward node A (kW)
+    - `power_out_ba`: power arriving at node A from node B (kW)
+
+    Connection policies define constraints over these variables and are stored as a named map.
+
+    Exactly one transfer-defining policy (`TransferConnectionPolicy`) must be present in
+    `policies`. This keeps the physical transfer behavior explicit and unambiguous:
+    each direction has one mapping from source-side flow to sink-side flow.
     """
 
     def __init__(
         self,
         *,
+        horizon: Horizon,
         id: str,
         a_node_id: str,
         b_node_id: str,
-        link_components: list[LinkComponent] | None = None,
+        policies: Mapping[str, ConnectionPolicy] | None = None,
     ) -> None:
+        self.horizon = horizon
         self.id = str(id)
         self.a_node_id = str(a_node_id)
         self.b_node_id = str(b_node_id)
-        self.link_components = list(link_components or [])
+        self.policies: dict[str, ConnectionPolicy] = dict(policies or {})
+        asset_has_transfer_policy(connection_id=self.id, policies=self.policies)
 
-        self._horizon: Horizon | None = None
-        self.T: list[int] = []
-        self.dt_hours: dict[int, float] = {}
-
-        self._var_cache: dict[str, dict[int, pulp.LpVariable]] = {}
-
-        # Directional nonnegative flow variables for each timestep.
-        self.P_a_to_b: dict[int, pulp.LpVariable] = {}
-        self.P_b_to_a: dict[int, pulp.LpVariable] = {}
-
-    def set_horizon(self, horizon: Horizon) -> None:
-        """(Re)create per-run variables for the given horizon."""
-        self._horizon = horizon
-        self.T[:] = list(horizon.T)
-        self.dt_hours = {t: float(horizon.dt_hours(t)) for t in self.T}
-
-        # Reset per-run caches.
-        self._var_cache = {}
-
-        self.P_a_to_b = pulp.LpVariable.dicts(
-            f"P_{self.id}_a_to_b_kw",
-            self.T,
+        # Direction a->b: source=a, destination=b
+        self.power_in_ab: dict[int, pulp.LpVariable] = pulp.LpVariable.dicts(
+            f"P_{self.id}_in_ab_kw",
+            self.horizon.T,
             lowBound=0,
         )
-        self.P_b_to_a = pulp.LpVariable.dicts(
-            f"P_{self.id}_b_to_a_kw",
-            self.T,
+        self.power_out_ab: dict[int, pulp.LpVariable] = pulp.LpVariable.dicts(
+            f"P_{self.id}_out_ab_kw",
+            self.horizon.T,
             lowBound=0,
         )
 
-    def _ensure_horizon(self) -> None:
-        if self._horizon is None:
-            raise ValueError(f"Connection {self.id!r} has no active horizon; call set_horizon()")
+        # Direction b->a: source=b, destination=a
+        self.power_in_ba: dict[int, pulp.LpVariable] = pulp.LpVariable.dicts(
+            f"P_{self.id}_in_ba_kw",
+            self.horizon.T,
+            lowBound=0,
+        )
+        self.power_out_ba: dict[int, pulp.LpVariable] = pulp.LpVariable.dicts(
+            f"P_{self.id}_out_ba_kw",
+            self.horizon.T,
+            lowBound=0,
+        )
 
     @property
-    def components(self) -> list[LinkComponent]:
-        return list(self.link_components)
-
-    def flow(self, direction: FlowDirection) -> dict[int, pulp.LpVariable]:
-        self._ensure_horizon()
-        if direction == "a_to_b":
-            return self.P_a_to_b
-        return self.P_b_to_a
-
-    def transport_efficiency(self, direction: FlowDirection) -> float:
-        eta = 1.0
-        for comp in self.link_components:
-            eta *= float(comp.transport_efficiency(direction))
-        return float(eta)
-
-    def storage_efficiency(self, direction: FlowDirection) -> float:
-        eta = 1.0
-        for comp in self.link_components:
-            eta *= float(comp.storage_efficiency(direction))
-        return float(eta)
-
-    def binary_series(self, name: str) -> dict[int, pulp.LpVariable]:
-        self._ensure_horizon()
-        key = f"bin:{name}"
-        if key not in self._var_cache:
-            self._var_cache[key] = pulp.LpVariable.dicts(
-                str(name),
-                self.T,
-                lowBound=0,
-                upBound=1,
-                cat="Binary",
-            )
-        return self._var_cache[key]
-
-    def nonnegative_series(self, name: str) -> dict[int, pulp.LpVariable]:
-        self._ensure_horizon()
-        key = f"nn:{name}"
-        if key not in self._var_cache:
-            self._var_cache[key] = pulp.LpVariable.dicts(
-                str(name),
-                self.T,
-                lowBound=0,
-            )
-        return self._var_cache[key]
-
-    def unit_series(self, name: str) -> dict[int, pulp.LpVariable]:
-        """Continuous per-slot variable in [0,1]."""
-        self._ensure_horizon()
-        key = f"unit:{name}"
-        if key not in self._var_cache:
-            self._var_cache[key] = pulp.LpVariable.dicts(
-                str(name),
-                self.T,
-                lowBound=0,
-                upBound=1,
-            )
-        return self._var_cache[key]
+    def flow_in_ab(self) -> dict[int, pulp.LpVariable]:
+        return self.power_in_ab
 
     @property
-    def constraints(self) -> list[ConstraintDescriptor]:
-        constraints: list[ConstraintDescriptor] = []
-        self._ensure_horizon()
-        for comp in self.link_components:
-            constraints.extend(comp.constraints(self))
+    def flow_out_ab(self) -> dict[int, pulp.LpVariable]:
+        return self.power_out_ab
+
+    @property
+    def flow_in_ba(self) -> dict[int, pulp.LpVariable]:
+        return self.power_in_ba
+
+    @property
+    def flow_out_ba(self) -> dict[int, pulp.LpVariable]:
+        return self.power_out_ba
+
+    def flow_out_of_node(self, node_id: str) -> dict[int, pulp.LpVariable]:
+        nid = str(node_id)
+        if nid == self.a_node_id:
+            return self.flow_in_ab
+        if nid == self.b_node_id:
+            return self.flow_in_ba
+        raise ValueError(f"Node {node_id!r} is not connected to {self.id!r}")
+
+    def flow_into_node(self, node_id: str) -> dict[int, pulp.LpVariable]:
+        nid = str(node_id)
+        if nid == self.a_node_id:
+            return self.flow_out_ba
+        if nid == self.b_node_id:
+            return self.flow_out_ab
+        raise ValueError(f"Node {node_id!r} is not connected to {self.id!r}")
+
+    def policy(self, name: str, policy_type: type[P]) -> P:
+        policy = self.policies.get(str(name))
+        if policy is None:
+            raise KeyError(f"Connection {self.id!r} has no policy named {name!r}")
+        if not isinstance(policy, policy_type):
+            raise TypeError(
+                f"Connection {self.id!r} policy {name!r} is {type(policy).__name__}, "
+                f"expected {policy_type.__name__}"
+            )
+        return policy
+
+    def find_policy(self, name: str, policy_type: type[P]) -> P | None:
+        policy = self.policies.get(str(name))
+        if policy is None:
+            return None
+        if not isinstance(policy, policy_type):
+            raise TypeError(
+                f"Connection {self.id!r} policy {name!r} is {type(policy).__name__}, "
+                f"expected {policy_type.__name__}"
+            )
+        return policy
+
+    @property
+    def constraints(self) -> list[ConstraintSpec]:
+        constraints: list[ConstraintSpec] = []
+        for policy in self.policies.values():
+            constraints.extend(policy.constraints(self))
         return constraints
 
     @property
     def objective(self) -> pulp.LpAffineExpression:
-        self._ensure_horizon()
-        return pulp.lpSum(comp.objective(self) for comp in self.link_components)
+        return pulp.lpSum(policy.objective(self) for policy in self.policies.values())

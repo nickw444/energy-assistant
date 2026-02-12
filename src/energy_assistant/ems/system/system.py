@@ -7,6 +7,7 @@ from energy_assistant.ems.components.base_load import BaseLoadComponent
 from energy_assistant.ems.components.ev import EvComponent
 from energy_assistant.ems.components.grid import GridComponent
 from energy_assistant.ems.components.inverter import InverterComponent
+from energy_assistant.ems.components.switchboard import SwitchboardComponent
 from energy_assistant.ems.horizon import Horizon
 from energy_assistant.ems.milp.context import ModelContext
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
@@ -23,24 +24,26 @@ from energy_assistant.lib.source_resolver.resolver import ValueResolver
 
 
 class EmsSystem:
-    """Persistent EMS system composed of Layer 1 components + a hidden Layer 0 topology."""
+    """Persistent EMS component definitions that build a run-scoped topology per solve."""
 
     def __init__(
         self,
         *,
-        graph: EnergyGraph,
-        switchboard_bus_id: str,
+        switchboard: SwitchboardComponent,
         base_load: BaseLoadComponent,
         grid: GridComponent,
         inverters: dict[str, InverterComponent],
         evs: dict[str, EvComponent],
     ) -> None:
-        self.graph = graph
-        self.switchboard_bus_id = str(switchboard_bus_id)
+        self.switchboard = switchboard
         self.base_load = base_load
         self.grid = grid
         self.inverters = dict(inverters)
         self.evs = dict(evs)
+
+    @property
+    def switchboard_bus_id(self) -> str:
+        return str(self.switchboard.bus_id)
 
     def mark_for_hydration(self, resolver: ValueResolver) -> None:
         self.base_load.mark_for_hydration(resolver)
@@ -81,27 +84,39 @@ class EmsSystem:
             raise ValueError("No forecasts available to determine planning horizon")
         return int(min(coverages))
 
-    def update(self, *, horizon: Horizon, resolver: ValueResolver) -> None:
-        """Update all deferred boxes for this run (forecast alignment + realtime overrides)."""
-        self.base_load.update(horizon=horizon, resolver=resolver)
-        self.grid.update(horizon=horizon, resolver=resolver)
-        for inv in self.inverters.values():
-            inv.update(horizon=horizon, resolver=resolver)
-        for ev in self.evs.values():
-            ev.update(horizon=horizon, resolver=resolver)
+    def build_snapshot(self, *, horizon: Horizon, resolver: ValueResolver) -> ModelSnapshot:
+        graph = EnergyGraph()
+        graph.add_elements(self.switchboard.build(horizon=horizon))
+        graph.add_elements(self.base_load.build(horizon=horizon, resolver=resolver))
+        graph.add_elements(self.grid.build(horizon=horizon, resolver=resolver))
 
-    def build_snapshot(self, *, horizon: Horizon) -> ModelSnapshot:
+        grid_connection = self.grid.latest_connection()
+        price_import_raw = self.grid.latest_price_import_raw()
+
+        for inv in self.inverters.values():
+            graph.add_elements(
+                inv.build(
+                    horizon=horizon,
+                    resolver=resolver,
+                    grid_connection=grid_connection,
+                    price_import_raw=price_import_raw,
+                )
+            )
+
+        for ev in self.evs.values():
+            graph.add_elements(ev.build(horizon=horizon, resolver=resolver))
+
         ctx = ModelContext(horizon=horizon)
-        return ModelSnapshot(ctx=ctx, graph=self.graph)
+        return ModelSnapshot(ctx=ctx, graph=graph)
 
     def build_timestep_plans(self, snapshot: ModelSnapshot) -> list[TimestepPlan]:
         horizon = snapshot.ctx.horizon
 
-        base_load_series = self.base_load.base_load_kw.get_for_horizon(horizon)
-        price_import = self.grid.price_import_raw.get_for_horizon(horizon)
-        price_export = self.grid.price_export_raw.get_for_horizon(horizon)
-        price_import_eff = self.grid.price_import_effective.get_for_horizon(horizon)
-        price_export_eff = self.grid.price_export_effective.get_for_horizon(horizon)
+        base_load_series = self.base_load.latest_base_load_kw()
+        price_import = self.grid.latest_price_import_raw()
+        price_export = self.grid.latest_price_export_raw()
+        price_import_eff = self.grid.latest_price_import_effective()
+        price_export_eff = self.grid.latest_price_export_effective()
 
         grid_iter: Iterator[GridTimestepPlan] = self.grid.iter_timestep_plan(snapshot)
         inverter_iters: dict[str, Iterator[InverterTimestepPlan]] = {

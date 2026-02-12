@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pulp
 
-from energy_assistant.ems.milp.context import ConstraintDescriptor, ModelContext
+from energy_assistant.ems.milp.context import ConstraintSpec, ModelContext
 from energy_assistant.ems.topology.graph import EnergyGraph
 
 
@@ -15,10 +15,7 @@ class ModelSnapshot:
 
         self.problem = pulp.LpProblem("ems_optimisation", pulp.LpMinimize)
 
-        # Activate per-run vars/constraints on the persistent topology.
-        self.graph.set_horizon(ctx.horizon)
-
-        constraints: list[ConstraintDescriptor] = []
+        constraints: list[ConstraintSpec] = []
         objective_terms: list[pulp.LpAffineExpression] = []
         for fragment in self.graph.fragments:
             constraints.extend(fragment.constraints)
@@ -31,7 +28,7 @@ class ModelSnapshot:
         self.problem += self.objective
 
 
-def _attach_constraints(problem: pulp.LpProblem, constraints: list[ConstraintDescriptor]) -> None:
+def _attach_constraints(problem: pulp.LpProblem, constraints: list[ConstraintSpec]) -> None:
     seen: set[str] = set()
     for spec in constraints:
         name = spec.name

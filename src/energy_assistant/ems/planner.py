@@ -80,8 +80,8 @@ class EmsMilpPlanner:
             schedule_info,
         )
         build_start = time.perf_counter()
-        self._system_factory.system.update(horizon=horizon, resolver=self._resolver)
-        snapshot = self._system_factory.system.build_snapshot(horizon=horizon)
+        system = self._system_factory.build_system_for_run()
+        snapshot = system.build_snapshot(horizon=horizon, resolver=self._resolver)
         build_seconds = time.perf_counter() - build_start
 
         solve_start = time.perf_counter()
@@ -90,7 +90,7 @@ class EmsMilpPlanner:
 
         objective_value = _objective_value(snapshot.problem)
         status = _map_status(pulp.LpStatus.get(snapshot.problem.status, "Unknown"))
-        timesteps = self._system_factory.system.build_timestep_plans(snapshot)
+        timesteps = system.build_timestep_plans(snapshot)
         total_seconds = time.perf_counter() - total_start
         timings = EmsPlanTimings(
             build_seconds=build_seconds,
