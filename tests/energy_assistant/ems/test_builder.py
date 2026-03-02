@@ -317,7 +317,7 @@ def _solve_ev_switch_t0(
     forecasts = builder.resolve_forecasts(now=now, interval_minutes=horizon.interval_minutes)
     model = builder.build(horizon=horizon, forecasts=forecasts)
     model.problem.solve(pulp.PULP_CBC_CMD(msg=False))
-    ev_vars = model.loads.evs["ev"]
+    ev_vars = builder.ev_components["ev"]
     return (
         _require_value(pulp.value(ev_vars.P_ev_charge_kw[0])),
         _require_value(pulp.value(ev_vars.Ev_charge_switch[0])),
@@ -403,7 +403,7 @@ def test_builder_import_forbidden_periods_apply_via_model() -> None:
         )
         forecasts = builder.resolve_forecasts(now=now, interval_minutes=horizon.interval_minutes)
         model = builder.build(horizon=horizon, forecasts=forecasts)
-        return model.grid.import_allowed
+        return builder.grid_component.import_allowed
 
     assert _import_allowed_for(datetime(2025, 1, 15, 8, 0, tzinfo=UTC)) == [False]
     assert _import_allowed_for(datetime(2025, 3, 15, 8, 0, tzinfo=UTC)) == [True]
@@ -477,7 +477,7 @@ def test_zero_price_export_bonus_toggle_affects_objective() -> None:
         )
         forecasts = builder.resolve_forecasts(now=now, interval_minutes=horizon.interval_minutes)
         model = builder.build(horizon=horizon, forecasts=forecasts)
-        return _objective_coeff(model.problem.objective, model.grid.P_export[0])
+        return _objective_coeff(model.problem.objective, builder.grid_component.P_export[0])
 
     coeff_prefer = _build_coeff(True)
     coeff_discourage = _build_coeff(False)

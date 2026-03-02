@@ -24,7 +24,14 @@ emits a plan for inspection/plotting. The plan is used by:
 Core EMS code lives in:
 
 - `src/energy_assistant/ems/builder.py`
-  - Builds variables, constraints, and objective.
+  - Orchestrates the MILP building process using a physical topology of components.
+- `src/energy_assistant/ems/topology/` (Physical Topology)
+  - `base.py`: Abstract base class for energy components.
+  - `registry.py`: Topology container and lifecycle orchestrator.
+  - `grid.py`: Grid import/export component.
+  - `load.py`: Plant baseline load component.
+  - `inverter.py`: Inverter, PV, and Battery component.
+  - `ev.py`: Controllable EV load component.
 - `src/energy_assistant/ems/planner.py`
   - Orchestrates build + solve and extracts a plan.
 - `src/energy_assistant/ems/horizon.py`
@@ -224,7 +231,8 @@ The builder uses:
 
 ## 7. MILP model (variables and constraints)
 
-All MILP construction happens in `MILPBuilder`.
+All MILP construction is orchestrated by `MILPBuilder` but implemented within
+isolated components in `src/energy_assistant/ems/topology/`.
 
 ### 7.1 Variables (key sets)
 

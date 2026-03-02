@@ -103,7 +103,7 @@ class EmsMilpPlanner:
         solve_seconds = time.perf_counter() - solve_start
 
         objective_value = _objective_value(model)
-        status, timesteps = _extract_plan(model, horizon)
+        status, timesteps = _extract_plan(model, horizon, builder)
         total_seconds = time.perf_counter() - total_start
         timings = EmsPlanTimings(
             build_seconds=build_seconds,
@@ -155,13 +155,14 @@ def _map_status(status_text: str) -> EmsPlanStatus:
     return "Unknown"
 
 
-def _extract_plan(model: MILPModel, horizon: Horizon) -> tuple[EmsPlanStatus, list[TimestepPlan]]:
+def _extract_plan(model: MILPModel, horizon: Horizon, builder: MILPBuilder) -> tuple[EmsPlanStatus, list[TimestepPlan]]:
     status_text = pulp.LpStatus.get(model.problem.status, "Unknown")
     status = _map_status(status_text)
 
-    grid = model.grid
-    inverters = model.inverters.inverters
-    loads = model.loads
+    grid = builder.grid_component
+    inverters = builder.inverter_components
+    evs = builder.ev_components
+    load = builder.load_component
 
     cumulative_cost = 0.0
     timesteps: list[TimestepPlan] = []
@@ -187,10 +188,12 @@ def _extract_plan(model: MILPModel, horizon: Horizon) -> tuple[EmsPlanStatus, li
             discharge_series = inv.P_batt_discharge_kw
             soc_series = inv.E_batt_kwh
             curtail_power_series = inv.P_curtail_kw
+
+            capacity_kwh = inv._config.battery.capacity_kwh if inv._config.battery else None
             battery_soc_kwh = _value(soc_series.get(t)) if soc_series is not None else None
             battery_soc_pct = None
-            if battery_soc_kwh is not None and inv.battery_capacity_kwh:
-                battery_soc_pct = (battery_soc_kwh / float(inv.battery_capacity_kwh)) * 100.0
+            if battery_soc_kwh is not None and capacity_kwh:
+                battery_soc_pct = (battery_soc_kwh / float(capacity_kwh)) * 100.0
             curtail_kw_val = _value(curtail_power_series.get(t)) if curtail_power_series else None
             inverter_plans[key] = InverterTimestepPlan(
                 name=str(inv.name),
@@ -209,14 +212,15 @@ def _extract_plan(model: MILPModel, horizon: Horizon) -> tuple[EmsPlanStatus, li
             )
 
         ev_plans: dict[str, EvTimestepPlan] = {}
-        for key, ev in sorted(loads.evs.items()):
+        for key, ev in sorted(evs.items()):
             ev_series = ev.P_ev_charge_kw
             ev_soc_series = ev.E_ev_kwh
             connected = ev.connected
             ev_soc_kwh = _value(ev_soc_series.get(t))
             ev_soc_pct = None
-            if ev.capacity_kwh:
-                ev_soc_pct = (ev_soc_kwh / float(ev.capacity_kwh)) * 100.0
+            capacity_kwh = float(ev._config.energy_kwh)
+            if capacity_kwh:
+                ev_soc_pct = (ev_soc_kwh / capacity_kwh) * 100.0
             ev_plans[key] = EvTimestepPlan(
                 name=str(ev.name),
                 charge_kw=_value(ev_series.get(t)),
@@ -225,9 +229,8 @@ def _extract_plan(model: MILPModel, horizon: Horizon) -> tuple[EmsPlanStatus, li
                 connected=connected,
             )
 
-        base_load_kw = float(loads.base_load_kw[t]) if t < len(loads.base_load_kw) else 0.0
-        extra_load_kw = _value(loads.load_contribs.get(t))
-        total_load_kw = base_load_kw + extra_load_kw
+        base_load_kw = float(load.base_load_kw[t]) if t < len(load.base_load_kw) else 0.0
+        total_load_kw = base_load_kw + sum(_value(ev.P_ev_charge_kw.get(t)) for ev in evs.values())
 
         timesteps.append(
             TimestepPlan(
