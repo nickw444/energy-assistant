@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from energy_assistant.models.config import EmsConfig
-from energy_assistant.models.plant import BatteryComponentConfig
+from energy_assistant.models.plant import BatteryComponentConfig, InputReference
 
 
 def test_high_res_requires_both_fields() -> None:
@@ -46,8 +46,8 @@ def test_battery_terminal_soc_defaults_to_adaptive() -> None:
         min_soc_pct=10.0,
         max_soc_pct=100.0,
         reserve_soc_pct=20.0,
-        state_of_charge_pct="battery_soc",
-        realtime_power="battery_power",
+        state_of_charge_pct=InputReference(source="battery_soc"),
+        realtime_power=InputReference(source="battery_power"),
     )
 
     assert battery.terminal_soc.mode == "adaptive"

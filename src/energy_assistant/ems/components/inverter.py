@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from energy_assistant.ems.inputs.models import AppliedInputRegistry
@@ -19,6 +20,7 @@ from energy_assistant.ems.topology.nodes import Node
 from energy_assistant.ems.topology.policies import DirectionalLimit
 from energy_assistant.models.plant import (
     BatteryComponentConfig,
+    InputReference,
     InverterComponentConfig,
     PvComponentConfig,
 )
@@ -30,8 +32,8 @@ from .pv import PvComponent, PvSolveState
 @dataclass(frozen=True, slots=True)
 class InverterSolveState:
     inverter_connection: Connection
-    battery_solve_state: BatterySolveState | None
-    pv_solve_state: PvSolveState | None
+    battery_solve_states: dict[str, BatterySolveState]
+    pv_solve_states: dict[str, PvSolveState]
 
 
 class InverterComponent:
@@ -41,42 +43,44 @@ class InverterComponent:
         component_id: str,
         switchboard_bus_id: str,
         inverter: InverterComponentConfig,
-        battery_id: str | None,
-        battery: BatteryComponentConfig | None,
-        pv_id: str | None,
-        pv: PvComponentConfig | None,
+        battery_components: Sequence[tuple[str, BatteryComponentConfig]],
+        pv_components: Sequence[tuple[str, PvComponentConfig]],
         grid_max_export_kw: float,
     ) -> None:
         self.id = str(component_id)
         self.name = str(inverter.name)
         self.peak_power_kw = float(inverter.peak_power_kw)
         self.curtailment = inverter.curtailment
-        self._battery_cfg = battery
 
         self.ac_bus_id = str(switchboard_bus_id)
         self.dc_bus_id = f"{self.id}_dc"
         self.inverter_link_id = f"{self.id}_acdc"
 
-        self.pv: PvComponent | None = None
-        if pv is not None:
-            self.pv = PvComponent(
-                component_id=pv_id or f"{self.id}_pv",
+        self._battery_cfgs: dict[str, BatteryComponentConfig] = {
+            battery_id: battery for battery_id, battery in battery_components
+        }
+
+        self.pvs: dict[str, PvComponent] = {
+            pv_id: PvComponent(
+                component_id=pv_id,
                 inverter_id=self.id,
                 inverter=inverter,
                 pv=pv,
                 dc_bus_id=self.dc_bus_id,
             )
-
-        self.battery: BatteryComponent | None = None
-        if battery is not None:
-            self.battery = BatteryComponent(
-                component_id=battery_id or f"{self.id}_battery",
+            for pv_id, pv in pv_components
+        }
+        self.batteries: dict[str, BatteryComponent] = {
+            battery_id: BatteryComponent(
+                component_id=battery_id,
                 inverter_id=self.id,
                 dc_bus_id=self.dc_bus_id,
                 inverter_peak_kw=self.peak_power_kw,
                 battery=battery,
                 grid_max_export_kw=float(grid_max_export_kw),
             )
+            for battery_id, battery in battery_components
+        }
 
     def update_inputs(
         self,
@@ -84,10 +88,10 @@ class InverterComponent:
         horizon: Horizon,
         inputs: AppliedInputRegistry,
     ) -> None:
-        if self.pv is not None:
-            self.pv.update_inputs(horizon=horizon, inputs=inputs)
-        if self.battery is not None:
-            self.battery.update_inputs(horizon=horizon, inputs=inputs)
+        for pv in self.pvs.values():
+            pv.update_inputs(horizon=horizon, inputs=inputs)
+        for battery in self.batteries.values():
+            battery.update_inputs(horizon=horizon, inputs=inputs)
 
     def graph_elements(
         self,
@@ -96,16 +100,14 @@ class InverterComponent:
         grid_connection: Connection,
         price_import_raw: list[float],
     ) -> tuple[list[GraphElement], InverterSolveState]:
-        elements: list[GraphElement] = []
-
-        elements.append(
+        elements: list[GraphElement] = [
             Node(
                 horizon=horizon,
                 id=self.dc_bus_id,
                 name=f"DC Bus {self.id}",
                 node_role="bus",
             )
-        )
+        ]
 
         inverter_connection = Connection(
             horizon=horizon,
@@ -122,24 +124,26 @@ class InverterComponent:
         )
         elements.append(inverter_connection)
 
-        pv_solve_state: PvSolveState | None = None
-        if self.pv is not None:
-            pv_elements, pv_solve_state = self.pv.graph_elements(horizon=horizon)
+        pv_solve_states: dict[str, PvSolveState] = {}
+        for pv_id, pv in self.pvs.items():
+            pv_elements, pv_solve_state = pv.graph_elements(horizon=horizon)
             elements.extend(pv_elements)
+            pv_solve_states[pv_id] = pv_solve_state
 
-        battery_solve_state: BatterySolveState | None = None
-        if self.battery is not None:
-            battery_elements, battery_solve_state = self.battery.graph_elements(
+        battery_solve_states: dict[str, BatterySolveState] = {}
+        for battery_id, battery in self.batteries.items():
+            battery_elements, battery_solve_state = battery.graph_elements(
                 horizon=horizon,
                 grid_connection=grid_connection,
                 price_import_raw=price_import_raw,
             )
             elements.extend(battery_elements)
+            battery_solve_states[battery_id] = battery_solve_state
 
         solve_state = InverterSolveState(
             inverter_connection=inverter_connection,
-            battery_solve_state=battery_solve_state,
-            pv_solve_state=pv_solve_state,
+            battery_solve_states=battery_solve_states,
+            pv_solve_states=pv_solve_states,
         )
         return elements, solve_state
 
@@ -160,25 +164,33 @@ class InverterComponent:
             - value_of(inverter_connection.flow_out_of_node(self.ac_bus_id).get(t))
             for t in horizon.T
         ]
-        battery_charge_kw: list[float] = []
-        battery_discharge_kw: list[float] = []
+
+        battery_charge_kw = [0.0 for _ in horizon.T]
+        battery_discharge_kw = [0.0 for _ in horizon.T]
         battery_soc_pct: list[float] = []
-        if solve_state.battery_solve_state is not None:
-            batt_conn = solve_state.battery_solve_state.connection
-            batt_node = solve_state.battery_solve_state.storage
-            battery_charge_kw = [
-                value_of(batt_conn.flow_into_node(batt_node.id).get(t)) for t in horizon.T
-            ]
-            battery_discharge_kw = [
-                value_of(batt_conn.flow_out_of_node(batt_node.id).get(t)) for t in horizon.T
-            ]
+
+        total_capacity_kwh = sum(
+            self.batteries[battery_id].capacity_kwh
+            for battery_id in solve_state.battery_solve_states
+        )
+        if total_capacity_kwh:
+            battery_soc_kwh = [0.0 for _ in horizon.T]
+            for battery_id, battery_solve_state in solve_state.battery_solve_states.items():
+                battery = self.batteries[battery_id]
+                connection = battery_solve_state.connection
+                storage = battery_solve_state.storage
+                for index, t in enumerate(horizon.T):
+                    battery_charge_kw[index] += value_of(
+                        connection.flow_into_node(storage.id).get(t)
+                    )
+                    battery_discharge_kw[index] += value_of(
+                        connection.flow_out_of_node(storage.id).get(t)
+                    )
+                    battery_soc_kwh[index] += value_of(storage.E_by_i.get(t))
+
             battery_soc_pct = [
-                (
-                    value_of(batt_node.E_by_i.get(t)) / float(self.battery.capacity_kwh) * 100.0
-                    if self.battery is not None and self.battery.capacity_kwh
-                    else 0.0
-                )
-                for t in horizon.T
+                (float(value) / float(total_capacity_kwh)) * 100.0
+                for value in battery_soc_kwh
             ]
 
         exports: dict[str, InverterComponentPlan | PvComponentPlan | BatteryComponentPlan] = {
@@ -193,17 +205,64 @@ class InverterComponent:
                     grid_export_kw=float(grid_export_kw[0]) if grid_export_kw else 0.0,
                     price_export=float(grid_price_export[0]) if grid_price_export else 0.0,
                     export_limit_normal_kw=export_limit_normal_kw,
-                    battery=self._battery_cfg,
+                    battery=aggregate_battery_for_intent(
+                        self._battery_cfgs,
+                        self.batteries,
+                    ),
                 ),
             )
         }
-        if self.pv is not None and solve_state.pv_solve_state is not None:
-            exports[self.pv.id] = self.pv.build_plan(
-                snapshot,
-                solve_state=solve_state.pv_solve_state,
-            )
-        if self.battery is not None and solve_state.battery_solve_state is not None:
-            exports[self.battery.id] = self.battery.build_plan(
-                snapshot, solve_state=solve_state.battery_solve_state
-            )
+
+        for pv_id, pv in self.pvs.items():
+            pv_solve_state = solve_state.pv_solve_states.get(pv_id)
+            if pv_solve_state is None:
+                continue
+            exports[pv.id] = pv.build_plan(snapshot, solve_state=pv_solve_state)
+
+        for battery_id, battery in self.batteries.items():
+            battery_solve_state = solve_state.battery_solve_states.get(battery_id)
+            if battery_solve_state is None:
+                continue
+            exports[battery.id] = battery.build_plan(snapshot, solve_state=battery_solve_state)
+
         return exports
+
+
+def aggregate_battery_for_intent(
+    battery_cfgs: dict[str, BatteryComponentConfig],
+    batteries: dict[str, BatteryComponent],
+) -> BatteryComponentConfig | None:
+    if not battery_cfgs:
+        return None
+
+    total_capacity_kwh = sum(
+        float(battery.capacity_kwh) for battery in battery_cfgs.values()
+    )
+    total_reserve_kwh = sum(
+        float(battery.capacity_kwh) * float(battery.reserve_soc_pct) / 100.0
+        for battery in battery_cfgs.values()
+    )
+
+    max_charge_kw = sum(float(battery.max_charge_kw) for battery in batteries.values())
+    max_discharge_kw = sum(float(battery.max_discharge_kw) for battery in batteries.values())
+
+    return BatteryComponentConfig(
+        type="battery",
+        connection=next(iter(battery_cfgs.values())).connection,
+        name=" / ".join(battery.name for battery in battery_cfgs.values()),
+        capacity_kwh=total_capacity_kwh,
+        storage_efficiency_pct=100.0,
+        charge_cost_per_kwh=0.0,
+        discharge_cost_per_kwh=0.0,
+        min_soc_pct=0.0,
+        max_soc_pct=min(float(battery.max_soc_pct) for battery in battery_cfgs.values()),
+        reserve_soc_pct=(
+            (float(total_reserve_kwh) / float(total_capacity_kwh)) * 100.0
+            if total_capacity_kwh
+            else 0.0
+        ),
+        max_charge_kw=max_charge_kw,
+        max_discharge_kw=max_discharge_kw,
+        state_of_charge_pct=InputReference(source="aggregate_battery_soc"),
+        realtime_power=InputReference(source="aggregate_battery_power"),
+    )

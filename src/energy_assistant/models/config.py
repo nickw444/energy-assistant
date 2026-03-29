@@ -124,8 +124,8 @@ class AppConfig(BaseModel):
         if len(loads) != 1:
             raise ValueError("plant must define exactly one load component")
 
-        batteries_by_inverter: dict[str, int] = {}
-        pv_by_inverter: dict[str, int] = {}
+        batteries_by_inverter: set[str] = set()
+        pv_by_inverter: set[str] = set()
 
         for key, component in self.plant.items():
             if isinstance(component, GridComponentConfig):
@@ -175,9 +175,7 @@ class AppConfig(BaseModel):
                     component.connection,
                     InverterComponentConfig,
                 )
-                batteries_by_inverter[component.connection] = (
-                    batteries_by_inverter.get(component.connection, 0) + 1
-                )
+                batteries_by_inverter.add(component.connection)
                 self._expect_input(
                     component.state_of_charge_pct,
                     ScalarInputConfig,
@@ -196,9 +194,7 @@ class AppConfig(BaseModel):
                     component.connection,
                     InverterComponentConfig,
                 )
-                pv_by_inverter[component.connection] = (
-                    pv_by_inverter.get(component.connection, 0) + 1
-                )
+                pv_by_inverter.add(component.connection)
                 self._expect_input(component.forecast, ForecastInputConfig, InputValueKind.POWER)
                 continue
 
@@ -226,13 +222,6 @@ class AppConfig(BaseModel):
                     InputValueKind.PERCENTAGE,
                 )
                 continue
-
-        for inverter_key, count in batteries_by_inverter.items():
-            if count > 1:
-                raise ValueError(f"inverter {inverter_key} may only have one connected battery")
-        for inverter_key, count in pv_by_inverter.items():
-            if count > 1:
-                raise ValueError(f"inverter {inverter_key} may only have one connected pv")
 
         if not inverters and (batteries_by_inverter or pv_by_inverter):
             raise ValueError("battery/pv components require an inverter component")

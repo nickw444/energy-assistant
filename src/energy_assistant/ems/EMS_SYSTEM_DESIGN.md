@@ -65,6 +65,10 @@ component-specific `series` and, where applicable, immediate component-local `in
 remain exported as `{time, value}` points, with no ownership tree or merged hierarchy introduced on
 top of the plant model.
 
+An inverter remains one logical component with one AC/DC link, but several `pv` and `battery`
+entries may attach to the same inverter `connection`. In that case the inverter expands all of
+those children onto its shared DC bus and still exports one flat component plan per logical child.
+
 Input hydration is not performed by EMS components directly. The input provider walks the typed
 `inputs` config, uses the source resolver when running live, and returns resolved scalar values plus
 raw forecast point maps. EMS then applies those raw forecasts to the current horizon before

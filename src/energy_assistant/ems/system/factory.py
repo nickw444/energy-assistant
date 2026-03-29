@@ -75,20 +75,12 @@ class EmsSystemFactory:
             self._app_config.plant,
             InverterComponentConfig,
         ):
-            battery_entry = batteries_by_inverter.get(inverter_id)
-            pv_entry = pv_by_inverter.get(inverter_id)
-            battery_id = battery_entry[0] if battery_entry is not None else None
-            battery_cfg = battery_entry[1] if battery_entry is not None else None
-            pv_id = pv_entry[0] if pv_entry is not None else None
-            pv_cfg = pv_entry[1] if pv_entry is not None else None
             inverters[inverter_id] = InverterComponent(
                 component_id=inverter_id,
                 switchboard_bus_id=switchboard.bus_id,
                 inverter=inverter_cfg,
-                battery_id=battery_id,
-                battery=battery_cfg,
-                pv_id=pv_id,
-                pv=pv_cfg,
+                battery_components=batteries_by_inverter.get(inverter_id, []),
+                pv_components=pv_by_inverter.get(inverter_id, []),
                 grid_max_export_kw=float(grid_cfg.constraints.max_export_kw),
             )
 
@@ -133,17 +125,17 @@ def _single_component[TPlant: PlantComponentConfig](
 
 def _battery_components_by_connection(
     registry: dict[str, PlantComponentConfig],
-) -> dict[str, tuple[str, BatteryComponentConfig]]:
-    result: dict[str, tuple[str, BatteryComponentConfig]] = {}
+) -> dict[str, list[tuple[str, BatteryComponentConfig]]]:
+    result: dict[str, list[tuple[str, BatteryComponentConfig]]] = {}
     for key, component in _components(registry, BatteryComponentConfig):
-        result[component.connection] = (key, component)
+        result.setdefault(component.connection, []).append((key, component))
     return result
 
 
 def _pv_components_by_connection(
     registry: dict[str, PlantComponentConfig],
-) -> dict[str, tuple[str, PvComponentConfig]]:
-    result: dict[str, tuple[str, PvComponentConfig]] = {}
+) -> dict[str, list[tuple[str, PvComponentConfig]]]:
+    result: dict[str, list[tuple[str, PvComponentConfig]]] = {}
     for key, component in _components(registry, PvComponentConfig):
-        result[component.connection] = (key, component)
+        result.setdefault(component.connection, []).append((key, component))
     return result
