@@ -5,9 +5,9 @@ from datetime import UTC, datetime
 import pulp
 import pytest
 
-from energy_assistant.ems.horizon import Horizon, build_horizon
 from energy_assistant.ems.milp.context import ModelContext, value_of
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
+from energy_assistant.ems.planning.horizon import Horizon, build_horizon
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import EnergyGraph
 from energy_assistant.ems.topology.nodes import Node

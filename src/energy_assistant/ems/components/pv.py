@@ -1,15 +1,16 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Literal
 
 import pulp
 
-from energy_assistant.ems.forecast_multiplier import ForecastMultiplier
-from energy_assistant.ems.horizon import Horizon
-from energy_assistant.ems.input_registry import AppliedInputRegistry
+from energy_assistant.ems.inputs.models import AppliedInputRegistry
+from energy_assistant.ems.inputs.transforms import ForecastMultiplier
 from energy_assistant.ems.milp.context import ConstraintSpec, value_of
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
 from energy_assistant.ems.parameters import SeriesParameter
+from energy_assistant.ems.planning.horizon import Horizon
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import GraphElement
 from energy_assistant.ems.topology.nodes import Node
@@ -115,15 +116,10 @@ class PvBinaryCurtailment(ConnectionPolicy):
         ]
 
 
-class PvRun:
-    def __init__(
-        self,
-        *,
-        available_kw: list[float],
-        connection: Connection,
-    ) -> None:
-        self.available_kw = [float(v) for v in available_kw]
-        self.connection = connection
+@dataclass(frozen=True, slots=True)
+class PvSolveState:
+    available_kw: list[float]
+    connection: Connection
 
 
 class PvComponent:
@@ -148,7 +144,6 @@ class PvComponent:
         self.connection_id = f"{self.id}_link"
 
         self._available_kw = SeriesParameter[float](f"{self.id}_available_kw")
-        self._latest: PvRun | None = None
 
     def update_inputs(self, *, horizon: Horizon, inputs: AppliedInputRegistry) -> None:
         pv_series = inputs.forecast(self._pv_cfg.forecast.key, kind=InputValueKind.POWER)
@@ -161,7 +156,7 @@ class PvComponent:
         )
         self._available_kw.set([float(x) for x in pv_series])
 
-    def graph_elements(self, *, horizon: Horizon) -> list[GraphElement]:
+    def graph_elements(self, *, horizon: Horizon) -> tuple[list[GraphElement], PvSolveState]:
         available_kw = self._available_kw.get()
 
         node = Node(
@@ -216,33 +211,41 @@ class PvComponent:
             policies=policies,
         )
 
-        self._latest = PvRun(
+        solve_state = PvSolveState(
             available_kw=available_kw,
             connection=connection,
         )
-        return [node, connection]
+        return [node, connection], solve_state
 
-    def pv_kw(self, snapshot: ModelSnapshot, t: int) -> float:
+    def pv_kw(self, snapshot: ModelSnapshot, t: int, *, solve_state: PvSolveState) -> float:
         _ = snapshot
-        if self._latest is None:
-            raise ValueError("PvComponent has not been built for this run")
-        return value_of(self._latest.connection.flow_out_of_node(self.node_id).get(t))
+        return value_of(solve_state.connection.flow_out_of_node(self.node_id).get(t))
 
-    def curtail_kw(self, snapshot: ModelSnapshot, t: int) -> float | None:
+    def curtail_kw(
+        self,
+        snapshot: ModelSnapshot,
+        t: int,
+        *,
+        solve_state: PvSolveState,
+    ) -> float | None:
         _ = snapshot
-        if self._latest is None:
-            raise ValueError("PvComponent has not been built for this run")
-        curtail_tracking = self._latest.connection.find_policy(
+        curtail_tracking = solve_state.connection.find_policy(
             "curtail_tracking",
             PvCurtailTracking,
         )
         if curtail_tracking is None:
             return None
-        v = pulp.value(curtail_tracking.curtail_kw(self._latest.connection).get(t))
+        v = pulp.value(curtail_tracking.curtail_kw(solve_state.connection).get(t))
         return None if v is None else float(v)
 
-    def curtailment_active(self, snapshot: ModelSnapshot, t: int) -> bool | None:
-        curtail_kw = self.curtail_kw(snapshot, t)
+    def curtailment_active(
+        self,
+        snapshot: ModelSnapshot,
+        t: int,
+        *,
+        solve_state: PvSolveState,
+    ) -> bool | None:
+        curtail_kw = self.curtail_kw(snapshot, t, solve_state=solve_state)
         if curtail_kw is None:
             return None
         return bool(float(curtail_kw) > _CURTAIL_POWER_THRESHOLD_KW)

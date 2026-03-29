@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from energy_assistant.ems.horizon import Horizon
+from energy_assistant.ems.planning.horizon import Horizon
 from energy_assistant.models.plant import (
     PriceBiasFilterConfig,
     PriceBindingConfig,

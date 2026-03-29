@@ -7,13 +7,14 @@ from typing import get_args
 
 import pulp
 
-from energy_assistant.ems.input_provider import EmsInputProvider, ResolverBackedInputProvider
 from energy_assistant.ems.models import (
     EmsPlanOutput,
     EmsPlanStatus,
     EmsPlanTimings,
 )
 from energy_assistant.ems.system.factory import EmsSystemFactory
+from energy_assistant.inputs.provider import EmsInputProvider, ResolverBackedInputProvider
+from energy_assistant.inputs.window import InputWindow
 from energy_assistant.lib.source_resolver.resolver import ValueResolver
 from energy_assistant.models.config import AppConfig
 
@@ -77,14 +78,16 @@ class EmsMilpPlanner:
             schedule_info,
         )
         build_start = time.perf_counter()
-        resolved_inputs = self._input_provider.resolve_for_horizon(horizon=horizon)
+        resolved_inputs = self._input_provider.resolve_for_window(
+            window=InputWindow(now=horizon.now, end=horizon.slots[-1].end)
+        )
         applied_inputs = self._system_factory.input_applicator.apply_to_horizon(
             horizon=horizon,
             inputs=resolved_inputs,
         )
         system = self._system_factory.system
         system.update_inputs(horizon=horizon, inputs=applied_inputs)
-        snapshot = system.build_snapshot(horizon=horizon)
+        snapshot, solve_state = system.build_snapshot(horizon=horizon)
         build_seconds = time.perf_counter() - build_start
 
         solve_start = time.perf_counter()
@@ -93,7 +96,7 @@ class EmsMilpPlanner:
 
         objective_value = _objective_value(snapshot.problem)
         status = _map_status(pulp.LpStatus.get(snapshot.problem.status, "Unknown"))
-        timesteps = system.build_timestep_plans(snapshot)
+        timesteps = system.build_timestep_plans(snapshot, solve_state=solve_state)
         total_seconds = time.perf_counter() - total_start
         timings = EmsPlanTimings(
             build_seconds=build_seconds,

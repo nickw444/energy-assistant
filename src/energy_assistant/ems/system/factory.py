@@ -5,8 +5,8 @@ from energy_assistant.ems.components.ev import EvComponent
 from energy_assistant.ems.components.grid import GridComponent
 from energy_assistant.ems.components.inverter import InverterComponent
 from energy_assistant.ems.components.switchboard import SwitchboardComponent
-from energy_assistant.ems.horizon import HorizonShape, build_horizon_shape
-from energy_assistant.ems.input_application import EmsInputApplicator
+from energy_assistant.ems.inputs.application import EmsInputApplicator
+from energy_assistant.ems.planning.horizon import HorizonShape, build_horizon_shape
 from energy_assistant.ems.system.system import EmsSystem
 from energy_assistant.models.config import AppConfig
 from energy_assistant.models.plant import (

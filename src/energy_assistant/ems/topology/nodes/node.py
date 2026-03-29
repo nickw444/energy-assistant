@@ -4,15 +4,15 @@ from typing import Literal
 
 import pulp
 
-from energy_assistant.ems.horizon import Horizon
 from energy_assistant.ems.milp.context import ConstraintSpec
+from energy_assistant.ems.planning.horizon import Horizon
 from energy_assistant.ems.topology.connection import Connection
 
 NodeRole = Literal["bus", "producer", "consumer", "prosumer"]
 
 
 class Node:
-    """Topology node for a single planning run."""
+    """Topology node for a single planning solve."""
 
     def __init__(
         self,

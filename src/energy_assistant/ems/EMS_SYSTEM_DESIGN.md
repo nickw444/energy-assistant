@@ -16,14 +16,15 @@ Key behavior in v6:
   coverage.
 - EMS config is split into a typed `inputs` registry and a flat logical `plant` registry.
 - Layer 1 components are **persistent definitions** that own input parameter boxes and consume a
-  per-run `AppliedInputRegistry`.
-- Input resolution happens outside the EMS component layer in `input_provider.py`, which produces
+  per-solve `AppliedInputRegistry`.
+- Input resolution happens outside the EMS component layer in `src/energy_assistant/inputs/provider.py`, which produces
   raw resolved inputs.
 - Forecast alignment, slot-0 realtime replacement, coverage validation, and price tail extension
-  application happen inside EMS in `input_application.py`.
+  application happen inside EMS in `src/energy_assistant/ems/inputs/application.py`.
 - At solve time, components **update their input boxes** from resolved inputs, then **emit
-  run-scoped topology elements** for the current horizon.
-- PuLP problems and topology objects remain run-scoped in v6; persistent reuse is at the component and
+  solve-scoped topology elements** for the current horizon and return explicit solve-state artifacts used
+  for plan extraction.
+- PuLP problems and topology objects remain solve-scoped in v6; persistent reuse is at the component and
   horizon-shape level.
 
 ## Runtime Flow
@@ -32,28 +33,30 @@ Key behavior in v6:
 
 1. Build the current solve window from the configured rolling `HorizonShape`.
 2. Get persistent component definitions from `EmsSystemFactory`.
-3. Resolve the configured `inputs` registry into a per-run raw `ResolvedInputRegistry`.
+3. Resolve the configured `inputs` registry into a per-solve raw `ResolvedInputRegistry`.
 4. Apply raw inputs to the current horizon to produce `AppliedInputRegistry`.
 5. Call `EmsSystem.update_inputs(horizon, inputs)`.
 6. Call `EmsSystem.build_snapshot(horizon)`:
    - create a fresh `EnergyGraph`,
-   - call each component's `graph_elements(...)` method (returns run-scoped topology elements),
+   - call each component's `graph_elements(...)` method (returns solve-scoped topology elements plus
+     explicit solve-state artifacts),
    - add all returned elements through `EnergyGraph.add_elements(...)`,
-   - collect fragment constraints/objective into `ModelSnapshot`.
+   - collect fragment constraints/objective into `ModelSnapshot`,
+   - return a typed `EmsSystemSolveState` containing solve-bound component context.
 7. Solve PuLP model.
-8. Ask each component to iterate plan output from solved vars.
+8. Ask each component to iterate plan output from solved vars using the explicit solve-state artifacts.
 
 ## Layer 1 Component Contract
 
 Each component supports:
 
 - `update_inputs(horizon, inputs)` to populate persistent scalar/series parameters
-- `graph_elements(horizon, ...) -> list[GraphElement]` to create run-scoped topology primitives
+- `graph_elements(horizon, ...) -> list[GraphElement]` to create solve-scoped topology primitives
 - `iter_timestep_plan(snapshot)` for result extraction where applicable
 
-Components keep configuration and helper objects persistently, while run-scoped MILP objects
+Components keep configuration and helper objects persistently, while solve-scoped MILP objects
 (nodes/connections/connection fragments) are rebuilt per solve. For plan extraction they keep references
-to the latest run-scoped topology objects only, alongside the latest resolved input parameters.
+to explicit solve-scoped topology objects in `EmsSystemSolveState`, alongside the resolved input parameters.
 
 Input hydration is not performed by EMS components directly. The input provider walks the typed
 `inputs` config, uses the source resolver when running live, and returns resolved scalar values plus
@@ -64,7 +67,7 @@ components consume the aligned series.
 
 ### EnergyGraph
 
-`EnergyGraph` contains run-scoped:
+`EnergyGraph` contains solve-scoped:
 
 - nodes,
 - connections,

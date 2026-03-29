@@ -116,7 +116,7 @@ Just as important, the refactor also clarified what the system is **not** doing:
 
 - it does not use a separate domain-specific compiler layer,
 - it does not depend on a large number of concrete physical node types,
-- it does not currently reuse run-scoped solver objects across planning cycles,
+- it does not currently reuse solve-scoped solver objects across planning cycles,
 - it does not rely on a single central builder abstraction anymore.
 
 ## Current Conceptual Model

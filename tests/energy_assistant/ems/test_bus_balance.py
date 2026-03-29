@@ -4,9 +4,9 @@ from datetime import UTC, datetime
 
 import pulp
 
-from energy_assistant.ems.horizon import build_horizon
 from energy_assistant.ems.milp.context import ModelContext
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
+from energy_assistant.ems.planning.horizon import build_horizon
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import EnergyGraph
 from energy_assistant.ems.topology.nodes import Node

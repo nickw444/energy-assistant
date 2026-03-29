@@ -21,7 +21,7 @@ type GraphElement = Node | Connection | Fragment
 
 
 class EnergyGraph:
-    """Topology definition for a single planning run."""
+    """Topology definition for a single planning solve."""
 
     def __init__(self) -> None:
         self._nodes: dict[str, Node] = {}

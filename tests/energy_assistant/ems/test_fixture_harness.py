@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from energy_assistant.ems.fixture_harness import resolve_ems_fixture_paths
+from energy_assistant.ems.fixtures.harness import resolve_ems_fixture_paths
 
 
 def test_resolve_ems_fixture_paths_fixture_only(tmp_path: Path) -> None:

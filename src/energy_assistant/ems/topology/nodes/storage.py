@@ -4,8 +4,8 @@ from typing import Literal
 
 import pulp
 
-from energy_assistant.ems.horizon import Horizon
 from energy_assistant.ems.milp.context import ConstraintSpec
+from energy_assistant.ems.planning.horizon import Horizon
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.nodes.node import Node
 

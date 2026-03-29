@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from energy_assistant.ems.horizon import Horizon
-from energy_assistant.ems.input_registry import AppliedInputRegistry
+from dataclasses import dataclass
+
+from energy_assistant.ems.inputs.models import AppliedInputRegistry
 from energy_assistant.ems.parameters import SeriesParameter
+from energy_assistant.ems.planning.horizon import Horizon
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import GraphElement
 from energy_assistant.ems.topology.nodes import Node
@@ -11,9 +13,10 @@ from energy_assistant.models.inputs import InputValueKind
 from energy_assistant.models.plant import LoadComponentConfig
 
 
-class BaseLoadRun:
-    def __init__(self, *, connection: Connection) -> None:
-        self.connection = connection
+@dataclass(frozen=True, slots=True)
+class BaseLoadSolveState:
+    connection: Connection
+    base_load_kw: list[float]
 
 
 class BaseLoadComponent:
@@ -34,7 +37,6 @@ class BaseLoadComponent:
         self._power_input_key = load.power.key
 
         self._base_load_kw = SeriesParameter[float](f"{self.id}_kw")
-        self._latest: BaseLoadRun | None = None
 
     def update_inputs(
         self,
@@ -51,7 +53,7 @@ class BaseLoadComponent:
         self,
         *,
         horizon: Horizon,
-    ) -> list[GraphElement]:
+    ) -> tuple[list[GraphElement], BaseLoadSolveState]:
         base_load_kw = self._base_load_kw.get()
 
         node = Node(
@@ -77,8 +79,5 @@ class BaseLoadComponent:
                 ),
             },
         )
-        self._latest = BaseLoadRun(connection=connection)
-        return [node, connection]
-
-    def latest_base_load_kw(self) -> list[float]:
-        return self._base_load_kw.get()
+        solve_state = BaseLoadSolveState(connection=connection, base_load_kw=base_load_kw)
+        return [node, connection], solve_state

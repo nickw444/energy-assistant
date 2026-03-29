@@ -7,9 +7,9 @@ from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Literal
 
-from energy_assistant.ems.input_provider import ResolverBackedInputProvider
 from energy_assistant.ems.models import EmsPlanOutput
 from energy_assistant.ems.planner import EmsMilpPlanner
+from energy_assistant.inputs.provider import ResolverBackedInputProvider
 from energy_assistant.lib.home_assistant_ws import HomeAssistantWebSocketClient
 from energy_assistant.lib.source_resolver.resolver import ValueResolver
 from energy_assistant.models.config import AppConfig

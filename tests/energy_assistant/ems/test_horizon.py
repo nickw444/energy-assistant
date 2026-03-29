@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from energy_assistant.ems.horizon import build_horizon, build_horizon_shape
+from energy_assistant.ems.planning.horizon import build_horizon, build_horizon_shape
 
 
 def test_build_horizon_with_interval_schedule() -> None:

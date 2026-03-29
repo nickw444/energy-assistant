@@ -4,8 +4,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from energy_assistant.ems.horizon import build_horizon
-from energy_assistant.ems.pricing import PriceSeriesBuilder
+from energy_assistant.ems.planning.horizon import build_horizon
+from energy_assistant.ems.planning.pricing import PriceSeriesBuilder
 from energy_assistant.models.plant import (
     InputReference,
     PriceBiasFilterConfig,

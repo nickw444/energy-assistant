@@ -18,20 +18,21 @@ import yaml
 
 from energy_assistant.api.server import create_app
 from energy_assistant.config import load_app_config
-from energy_assistant.ems.fixture_harness import (
+from energy_assistant.ems.fixtures.harness import (
     EmsFixturePaths,
     compute_plan_hash,
     resolve_ems_fixture_paths,
     summarize_plan,
 )
-from energy_assistant.ems.fixture_inputs import (
+from energy_assistant.ems.planner import EmsMilpPlanner
+from energy_assistant.ems.system.factory import EmsSystemFactory
+from energy_assistant.inputs.fixtures import (
     load_fixture_input_provider,
     resolve_fixture_input_registry,
     save_resolved_inputs_fixture,
 )
-from energy_assistant.ems.input_provider import ResolverBackedInputProvider
-from energy_assistant.ems.planner import EmsMilpPlanner
-from energy_assistant.ems.system.factory import EmsSystemFactory
+from energy_assistant.inputs.provider import ResolverBackedInputProvider
+from energy_assistant.inputs.window import InputWindow
 from energy_assistant.lib.home_assistant import HomeAssistantClient
 from energy_assistant.lib.home_assistant_ws import HomeAssistantWebSocketClientImpl
 from energy_assistant.lib.source_resolver.fixtures import save_hass_fixture
@@ -774,7 +775,9 @@ def hydrate_load_forecast(ctx: click.Context, limit: int) -> None:
         input_provider.hydrate_all()
         system_factory = EmsSystemFactory(app_config)
         horizon = system_factory.horizon_shape.build(now=datetime.now().astimezone())
-        resolved = input_provider.resolve_for_horizon(horizon=horizon)
+        resolved = input_provider.resolve_for_window(
+            window=InputWindow(now=horizon.now, end=horizon.slots[-1].end)
+        )
         applied = system_factory.input_applicator.apply_to_horizon(
             horizon=horizon,
             inputs=resolved,

@@ -6,16 +6,14 @@ from typing import Any, cast
 import yaml
 
 from energy_assistant.ems.components.grid import GridComponent
-from energy_assistant.ems.horizon import build_horizon_shape
-from energy_assistant.ems.input_application import EmsInputApplicator
-from energy_assistant.ems.input_provider import ResolverBackedInputProvider
-from energy_assistant.ems.input_registry import (
-    AppliedForecastInput,
-    AppliedInputRegistry,
-)
+from energy_assistant.ems.inputs.application import EmsInputApplicator
+from energy_assistant.ems.inputs.models import AppliedForecastInput, AppliedInputRegistry
+from energy_assistant.ems.planning.horizon import build_horizon_shape
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.nodes import Node
 from energy_assistant.ems.topology.policies import LinearCost
+from energy_assistant.inputs.provider import ResolverBackedInputProvider
+from energy_assistant.inputs.window import InputWindow
 from energy_assistant.lib.home_assistant import (
     HomeAssistantHistoryStateDict,
     HomeAssistantStateDict,
@@ -223,7 +221,9 @@ def test_input_provider_uses_fixed_horizon_for_coverage_validation() -> None:
     resolver.set(import_input.realtime, 0.10)
     resolver.set(export_input.realtime, 0.05)
 
-    resolved = provider.resolve_for_horizon(horizon=horizon)
+    resolved = provider.resolve_for_window(
+        window=InputWindow(now=horizon.now, end=horizon.slots[-1].end)
+    )
     try:
         applicator.apply_to_horizon(horizon=horizon, inputs=resolved)
     except ValueError as exc:
@@ -258,7 +258,7 @@ def test_grid_rebinds_inputs_without_changing_topology_ids() -> None:
             }
         ),
     )
-    first_elements = component.graph_elements(horizon=horizon)
+    first_elements, first_run = component.graph_elements(horizon=horizon)
     first_node = next(element for element in first_elements if isinstance(element, Node))
     first_connection = next(
         element for element in first_elements if isinstance(element, Connection)
@@ -267,7 +267,7 @@ def test_grid_rebinds_inputs_without_changing_topology_ids() -> None:
         "grid_energy_cost",
         LinearCost,
     ).cost_b_to_a_per_kwh
-    first_effective = component.latest_price_import_effective()
+    first_effective = first_run.price_import_effective
 
     component.update_inputs(
         horizon=horizon,
@@ -286,7 +286,7 @@ def test_grid_rebinds_inputs_without_changing_topology_ids() -> None:
             }
         ),
     )
-    second_elements = component.graph_elements(horizon=horizon)
+    second_elements, second_run = component.graph_elements(horizon=horizon)
     second_node = next(element for element in second_elements if isinstance(element, Node))
     second_connection = next(
         element for element in second_elements if isinstance(element, Connection)
@@ -295,14 +295,14 @@ def test_grid_rebinds_inputs_without_changing_topology_ids() -> None:
         "grid_energy_cost",
         LinearCost,
     ).cost_b_to_a_per_kwh
-    second_effective = component.latest_price_import_effective()
+    second_effective = second_run.price_import_effective
 
     assert first_node.id == second_node.id == component.node_id
     assert first_connection.id == second_connection.id == component.connection_id
     assert first_costs != second_costs
     assert first_costs == first_effective
     assert second_costs == second_effective
-    assert component.latest_price_import_raw() == [0.30, 0.31]
+    assert second_run.price_import_raw == [0.30, 0.31]
 
 
 def test_input_provider_can_extend_short_price_forecast_from_history() -> None:
@@ -378,7 +378,9 @@ def test_input_provider_can_extend_short_price_forecast_from_history() -> None:
         ],
     )
 
-    resolved = provider.resolve_for_horizon(horizon=horizon)
+    resolved = provider.resolve_for_window(
+        window=InputWindow(now=horizon.now, end=horizon.slots[-1].end)
+    )
     import_raw = resolved.forecast("grid_price_import", kind=InputValueKind.PRICE)
     export_raw = resolved.forecast("grid_price_export", kind=InputValueKind.PRICE)
     assert list(import_raw.points.values()) == [0.20]
@@ -468,7 +470,9 @@ def test_price_extension_covers_unaligned_multi_resolution_horizon() -> None:
     resolver.set_history(import_input.realtime.entity, repeated_import_history)
     resolver.set_history(export_input.realtime.entity, repeated_export_history)
 
-    resolved = provider.resolve_for_horizon(horizon=horizon)
+    resolved = provider.resolve_for_window(
+        window=InputWindow(now=horizon.now, end=horizon.slots[-1].end)
+    )
     raw_import = resolved.forecast("grid_price_import", kind=InputValueKind.PRICE)
     raw_export = resolved.forecast("grid_price_export", kind=InputValueKind.PRICE)
     assert raw_import.interval_minutes == 30

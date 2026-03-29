@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pulp
 
-from energy_assistant.ems.horizon import Horizon
+from energy_assistant.ems.planning.horizon import Horizon
 
 
 class ConstraintSpec:
@@ -18,7 +18,7 @@ class ConstraintSpec:
 
 
 class ModelContext:
-    """Per-run context shared by all bound topology fragments."""
+    """Per-solve context shared by all bound topology fragments."""
 
     def __init__(self, *, horizon: Horizon) -> None:
         self.horizon = horizon

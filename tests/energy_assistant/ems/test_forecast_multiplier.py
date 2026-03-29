@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from energy_assistant.ems.forecast_multiplier import ForecastMultiplier
+from energy_assistant.ems.inputs.transforms import ForecastMultiplier
 
 
 def test_forecast_multiplier_apply_empty_series() -> None:

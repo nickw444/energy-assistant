@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import pulp
 
-from energy_assistant.ems.horizon import Horizon
-from energy_assistant.ems.input_registry import AppliedInputRegistry
+from energy_assistant.ems.inputs.models import AppliedInputRegistry
 from energy_assistant.ems.milp.context import ConstraintSpec
 from energy_assistant.ems.parameters import ScalarParameter
+from energy_assistant.ems.planning.horizon import Horizon
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import GraphElement
 from energy_assistant.ems.topology.nodes import StorageNode
@@ -89,10 +91,10 @@ class BatteryExportReservePolicy:
         return pulp.LpAffineExpression()
 
 
-class BatteryRun:
-    def __init__(self, *, storage: StorageNode, connection: Connection) -> None:
-        self.storage = storage
-        self.connection = connection
+@dataclass(frozen=True, slots=True)
+class BatterySolveState:
+    storage: StorageNode
+    connection: Connection
 
 
 class BatteryComponent:
@@ -143,7 +145,6 @@ class BatteryComponent:
         self._initial_soc_kwh = ScalarParameter[float](
             f"{self.id}_initial_soc_kwh"
         )
-        self._latest: BatteryRun | None = None
 
     def update_inputs(
         self,
@@ -165,7 +166,7 @@ class BatteryComponent:
         horizon: Horizon,
         grid_connection: Connection,
         price_import_raw: list[float],
-    ) -> list[GraphElement]:
+    ) -> tuple[list[GraphElement], BatterySolveState]:
         initial_soc_kwh = self._initial_soc_kwh.get()
 
         charge_cost_per_kwh = [
@@ -233,15 +234,5 @@ class BatteryComponent:
             grid_max_export_kw=self._grid_max_export_kw,
         )
 
-        self._latest = BatteryRun(storage=storage, connection=connection)
-        return [storage, connection, reserve_policy]
-
-    def latest_storage(self) -> StorageNode:
-        if self._latest is None:
-            raise ValueError("BatteryComponent has not been built for this run")
-        return self._latest.storage
-
-    def latest_connection(self) -> Connection:
-        if self._latest is None:
-            raise ValueError("BatteryComponent has not been built for this run")
-        return self._latest.connection
+        solve_state = BatterySolveState(storage=storage, connection=connection)
+        return [storage, connection, reserve_policy], solve_state

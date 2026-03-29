@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any, Protocol, cast
 
-from energy_assistant.ems.horizon import Horizon, floor_to_interval_boundary
-from energy_assistant.ems.input_registry import (
+from energy_assistant.inputs.registry import (
     ResolvedForecastInput,
     ResolvedInputRegistry,
     ResolvedScalarInput,
 )
+from energy_assistant.inputs.window import InputWindow
 from energy_assistant.lib.source_resolver.hass_source import (
     HomeAssistantAmberElectricForecastSource,
     HomeAssistantBinarySensorEntitySource,
@@ -42,7 +42,7 @@ class EmsInputProvider(Protocol):
 
     def hydrate_all(self) -> None: ...
 
-    def resolve_for_horizon(self, *, horizon: Horizon) -> ResolvedInputRegistry: ...
+    def resolve_for_window(self, *, window: InputWindow) -> ResolvedInputRegistry: ...
 
     def grid_price_watch_entity_ids(self) -> set[str]: ...
 
@@ -86,7 +86,7 @@ class ResolverBackedInputProvider:
     def hydrate_all(self) -> None:
         self._resolver.hydrate_all()
 
-    def resolve_for_horizon(self, *, horizon: Horizon) -> ResolvedInputRegistry:
+    def resolve_for_window(self, *, window: InputWindow) -> ResolvedInputRegistry:
         scalars: dict[str, ResolvedScalarInput] = {}
         forecasts: dict[str, ResolvedForecastInput] = {}
         for key, input_config in self._app_config.inputs.items():
@@ -113,7 +113,7 @@ class ResolverBackedInputProvider:
                 ),
                 extension_points=self._resolve_extension_point_map(
                     input_config=input_config,
-                    horizon=horizon,
+                    window=window,
                     kind=kind,
                 ),
                 extension_interval_minutes=self._resolve_extension_interval_minutes(
@@ -184,7 +184,7 @@ class ResolverBackedInputProvider:
         self,
         *,
         input_config: ForecastInputConfig,
-        horizon: Horizon,
+        window: InputWindow,
         kind: InputValueKind,
     ) -> dict[str, float] | None:
         expansion = input_config.forecast_expansion
@@ -194,7 +194,7 @@ class ResolverBackedInputProvider:
         extension_source = self._build_price_extension_source(
             realtime_entity=realtime.entity,
             forecast_horizon_hours=self._price_extension_horizon_hours(
-                horizon=horizon,
+                window=window,
                 interval_duration=expansion.interval_duration,
             ),
             history_days=expansion.history_days,
@@ -230,10 +230,14 @@ class ResolverBackedInputProvider:
             forecast_horizon_hours=max(1, int(forecast_horizon_hours)),
         )
 
-    def _price_extension_horizon_hours(self, *, horizon: Horizon, interval_duration: int) -> int:
-        forecast_start = floor_to_interval_boundary(horizon.now, interval_duration)
-        horizon_end = horizon.slots[-1].end
-        required_minutes = int((horizon_end - forecast_start).total_seconds() / 60.0)
+    def _price_extension_horizon_hours(
+        self,
+        *,
+        window: InputWindow,
+        interval_duration: int,
+    ) -> int:
+        forecast_start = _floor_to_interval_boundary(window.now, interval_duration)
+        required_minutes = int((window.end - forecast_start).total_seconds() / 60.0)
         hours, remainder = divmod(required_minutes, 60)
         return max(1, hours + (1 if remainder else 0))
 
@@ -294,8 +298,8 @@ class FixtureResolvedInputProvider:
     def hydrate_all(self) -> None:
         return
 
-    def resolve_for_horizon(self, *, horizon: Horizon) -> ResolvedInputRegistry:
-        _ = horizon
+    def resolve_for_window(self, *, window: InputWindow) -> ResolvedInputRegistry:
+        _ = window
         return self._registry
 
     def grid_price_watch_entity_ids(self) -> set[str]:
@@ -340,3 +344,8 @@ def _default_forecast_interval_minutes(forecast: ForecastSource) -> int:
     if isinstance(forecast, HomeAssistantAmberElectricForecastSource):
         return 30
     return 5
+
+
+def _floor_to_interval_boundary(now: datetime, interval_minutes: int) -> datetime:
+    minutes = (now.minute // interval_minutes) * interval_minutes
+    return now.replace(minute=minutes, second=0, microsecond=0)

@@ -10,14 +10,14 @@ from pathlib import Path
 import pytest
 
 from energy_assistant.config import load_app_config
-from energy_assistant.ems.fixture_harness import (
+from energy_assistant.ems.fixtures.harness import (
     EmsFixturePaths,
     compute_plan_hash,
     resolve_ems_fixture_paths,
     summarize_plan,
 )
-from energy_assistant.ems.fixture_inputs import load_fixture_input_provider
 from energy_assistant.ems.planner import EmsMilpPlanner
+from energy_assistant.inputs.fixtures import load_fixture_input_provider
 
 FIXTURE_BASE = Path("tests/fixtures/ems")
 

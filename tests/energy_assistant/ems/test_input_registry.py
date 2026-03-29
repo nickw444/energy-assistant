@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 from typing import cast
 
-from energy_assistant.ems.fixture_inputs import save_resolved_inputs_fixture
-from energy_assistant.ems.input_registry import ResolvedForecastInput, ResolvedInputRegistry
+from energy_assistant.inputs.fixtures import save_resolved_inputs_fixture
+from energy_assistant.inputs.registry import ResolvedForecastInput, ResolvedInputRegistry
 from energy_assistant.models.inputs import InputValueKind
 
 

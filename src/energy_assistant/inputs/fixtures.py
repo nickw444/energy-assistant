@@ -3,25 +3,23 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, TypedDict, cast
+from typing import TypedDict, cast
 
-from energy_assistant.ems.input_provider import (
+from energy_assistant.ems.system.factory import EmsSystemFactory
+from energy_assistant.inputs.provider import (
     EmsInputProvider,
     FixtureResolvedInputProvider,
     ResolverBackedInputProvider,
 )
-from energy_assistant.ems.input_registry import ResolvedInputRegistry
-from energy_assistant.ems.system.factory import EmsSystemFactory
+from energy_assistant.inputs.registry import ResolvedInputRegistry
+from energy_assistant.inputs.window import InputWindow
 from energy_assistant.lib.source_resolver.fixtures import (
     FixtureHassDataProvider,
     freeze_hass_source_time,
 )
 from energy_assistant.lib.source_resolver.resolver import ValueResolverImpl
+from energy_assistant.models.config import AppConfig
 from energy_assistant.models.inputs import InputValueKind
-
-if TYPE_CHECKING:
-    from energy_assistant.ems.horizon import Horizon
-    from energy_assistant.models.config import AppConfig
 
 
 class ResolvedInputsFixture(TypedDict):
@@ -99,10 +97,10 @@ class FrozenFixtureResolverInputProvider:
     def hydrate_all(self) -> None:
         self._base.hydrate_all()
 
-    def resolve_for_horizon(self, *, horizon: Horizon) -> ResolvedInputRegistry:
+    def resolve_for_window(self, *, window: InputWindow) -> ResolvedInputRegistry:
         frozen = None if self._captured_at is None else datetime.fromisoformat(self._captured_at)
         with freeze_hass_source_time(frozen):
-            return self._base.resolve_for_horizon(horizon=horizon)
+            return self._base.resolve_for_window(window=window)
 
     def grid_price_watch_entity_ids(self) -> set[str]:
         return self._base.grid_price_watch_entity_ids()
@@ -191,4 +189,5 @@ def resolve_fixture_input_registry(
         else datetime.now().astimezone()
     )
     horizon = EmsSystemFactory(app_config).horizon_shape.build(now=captured_dt)
-    return input_provider.resolve_for_horizon(horizon=horizon), captured_at
+    window = InputWindow(now=horizon.now, end=horizon.slots[-1].end)
+    return input_provider.resolve_for_window(window=window), captured_at

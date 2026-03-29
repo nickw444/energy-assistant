@@ -4,8 +4,8 @@ from typing import Literal, Protocol
 
 import pulp
 
-from energy_assistant.ems.horizon import Horizon
 from energy_assistant.ems.milp.context import ConstraintSpec
+from energy_assistant.ems.planning.horizon import Horizon
 
 FlowDirection = Literal["a_to_b", "b_to_a"]
 

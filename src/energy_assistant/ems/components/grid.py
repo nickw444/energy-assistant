@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from dataclasses import dataclass
 
-from energy_assistant.ems.horizon import Horizon
-from energy_assistant.ems.input_registry import AppliedInputRegistry
+from energy_assistant.ems.inputs.models import AppliedInputRegistry
 from energy_assistant.ems.milp.context import value_of
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
 from energy_assistant.ems.models import GridTimestepPlan
 from energy_assistant.ems.parameters import SeriesParameter
-from energy_assistant.ems.pricing import PriceSeriesBuilder
-from energy_assistant.ems.time_windows import TimeWindowMatcher
+from energy_assistant.ems.planning.horizon import Horizon
+from energy_assistant.ems.planning.pricing import PriceSeriesBuilder
+from energy_assistant.ems.planning.time_windows import TimeWindowMatcher
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import GraphElement
 from energy_assistant.ems.topology.nodes import Node
@@ -22,23 +23,14 @@ from energy_assistant.models.inputs import InputValueKind
 from energy_assistant.models.plant import GridComponentConfig
 
 
-class GridRun:
-    def __init__(
-        self,
-        *,
-        connection: Connection,
-        price_import_raw: list[float],
-        price_export_raw: list[float],
-        price_import_effective: list[float],
-        price_export_effective: list[float],
-        import_allowed: list[bool],
-    ) -> None:
-        self.connection = connection
-        self.price_import_raw = [float(v) for v in price_import_raw]
-        self.price_export_raw = [float(v) for v in price_export_raw]
-        self.price_import_effective = [float(v) for v in price_import_effective]
-        self.price_export_effective = [float(v) for v in price_export_effective]
-        self.import_allowed = [bool(v) for v in import_allowed]
+@dataclass(frozen=True, slots=True)
+class GridSolveState:
+    connection: Connection
+    price_import_raw: list[float]
+    price_export_raw: list[float]
+    price_import_effective: list[float]
+    price_export_effective: list[float]
+    import_allowed: list[bool]
 
 
 class GridComponent:
@@ -65,7 +57,6 @@ class GridComponent:
         self._price_import_effective = SeriesParameter[float](f"{self.id}_price_import_effective")
         self._price_export_effective = SeriesParameter[float](f"{self.id}_price_export_effective")
         self._import_allowed = SeriesParameter[bool](f"{self.id}_import_allowed")
-        self._latest: GridRun | None = None
 
     def update_inputs(self, *, horizon: Horizon, inputs: AppliedInputRegistry) -> None:
         price_import_raw = inputs.forecast(
@@ -96,7 +87,7 @@ class GridComponent:
         self._price_export_effective.set(price_series.export_effective)
         self._import_allowed.set(import_allowed)
 
-    def graph_elements(self, *, horizon: Horizon) -> list[GraphElement]:
+    def graph_elements(self, *, horizon: Horizon) -> tuple[list[GraphElement], GridSolveState]:
         cfg = self._grid_cfg
         import_eff = self._price_import_effective.get()
         export_eff = self._price_export_effective.get()
@@ -153,7 +144,7 @@ class GridComponent:
             },
         )
 
-        self._latest = GridRun(
+        solve_state = GridSolveState(
             connection=connection,
             price_import_raw=self._price_import_raw.get(),
             price_export_raw=self._price_export_raw.get(),
@@ -161,7 +152,7 @@ class GridComponent:
             price_export_effective=export_eff,
             import_allowed=import_allowed,
         )
-        return [node, connection]
+        return [node, connection], solve_state
 
     def _resolve_import_allowed(self, horizon: Horizon) -> list[bool]:
         forbidden = self._grid_cfg.import_forbidden_periods
@@ -174,36 +165,21 @@ class GridComponent:
             raise ValueError("import_allowed series length mismatch")
         return allowed
 
-    def latest_connection(self) -> Connection:
-        if self._latest is None:
-            raise ValueError("GridComponent has not been built for this run")
-        return self._latest.connection
-
-    def latest_price_import_raw(self) -> list[float]:
-        return self._price_import_raw.get()
-
-    def latest_price_export_raw(self) -> list[float]:
-        return self._price_export_raw.get()
-
-    def latest_price_import_effective(self) -> list[float]:
-        return self._price_import_effective.get()
-
-    def latest_price_export_effective(self) -> list[float]:
-        return self._price_export_effective.get()
-
     def price_export_bias_pct(self) -> float:
         return self._price_series_builder.binding_bias_pct(
             binding=self._grid_cfg.price_export,
             direction="export",
         )
 
-    def iter_timestep_plan(self, snapshot: ModelSnapshot) -> Iterator[GridTimestepPlan]:
-        if self._latest is None:
-            raise ValueError("GridComponent has not been built for this run")
-
+    def iter_timestep_plan(
+        self,
+        snapshot: ModelSnapshot,
+        *,
+        solve_state: GridSolveState,
+    ) -> Iterator[GridTimestepPlan]:
         horizon = snapshot.ctx.horizon
-        connection = self._latest.connection
-        allowed = self._latest.import_allowed
+        connection = solve_state.connection
+        allowed = solve_state.import_allowed
         slack = connection.policy("import_soft_limit", SoftDirectionalLimit).slack_kw(connection)
 
         for t in horizon.T:

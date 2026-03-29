@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from dataclasses import dataclass
 
-from energy_assistant.ems.horizon import Horizon
-from energy_assistant.ems.input_registry import AppliedInputRegistry
+from energy_assistant.ems.inputs.models import AppliedInputRegistry
 from energy_assistant.ems.milp.context import value_of
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
 from energy_assistant.ems.models import InverterTimestepPlan
+from energy_assistant.ems.planning.horizon import Horizon
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import GraphElement
 from energy_assistant.ems.topology.nodes import Node
@@ -18,15 +19,17 @@ from energy_assistant.models.plant import (
     PvComponentConfig,
 )
 
-from .battery import BatteryComponent
-from .pv import PvComponent
+from .battery import BatteryComponent, BatterySolveState
+from .pv import PvComponent, PvSolveState
 
 _CURTAIL_POWER_THRESHOLD_KW = 0.01
 
 
-class InverterRun:
-    def __init__(self, *, inverter_connection: Connection) -> None:
-        self.inverter_connection = inverter_connection
+@dataclass(frozen=True, slots=True)
+class InverterSolveState:
+    inverter_connection: Connection
+    battery_solve_state: BatterySolveState | None
+    pv_solve_state: PvSolveState | None
 
 
 class InverterComponent:
@@ -74,8 +77,6 @@ class InverterComponent:
                 terminal_soc=terminal_soc,
             )
 
-        self._latest: InverterRun | None = None
-
     def update_inputs(
         self,
         *,
@@ -93,7 +94,7 @@ class InverterComponent:
         horizon: Horizon,
         grid_connection: Connection,
         price_import_raw: list[float],
-    ) -> list[GraphElement]:
+    ) -> tuple[list[GraphElement], InverterSolveState]:
         elements: list[GraphElement] = []
 
         elements.append(
@@ -120,43 +121,56 @@ class InverterComponent:
         )
         elements.append(inverter_connection)
 
+        pv_solve_state: PvSolveState | None = None
         if self.pv is not None:
-            elements.extend(self.pv.graph_elements(horizon=horizon))
+            pv_elements, pv_solve_state = self.pv.graph_elements(horizon=horizon)
+            elements.extend(pv_elements)
+
+        battery_solve_state: BatterySolveState | None = None
         if self.battery is not None:
-            elements.extend(
-                self.battery.graph_elements(
-                    horizon=horizon,
-                    grid_connection=grid_connection,
-                    price_import_raw=price_import_raw,
-                )
+            battery_elements, battery_solve_state = self.battery.graph_elements(
+                horizon=horizon,
+                grid_connection=grid_connection,
+                price_import_raw=price_import_raw,
             )
+            elements.extend(battery_elements)
 
-        self._latest = InverterRun(inverter_connection=inverter_connection)
-        return elements
+        solve_state = InverterSolveState(
+            inverter_connection=inverter_connection,
+            battery_solve_state=battery_solve_state,
+            pv_solve_state=pv_solve_state,
+        )
+        return elements, solve_state
 
-    def iter_timestep_plan(self, snapshot: ModelSnapshot) -> Iterator[InverterTimestepPlan]:
+    def iter_timestep_plan(
+        self,
+        snapshot: ModelSnapshot,
+        *,
+        solve_state: InverterSolveState,
+    ) -> Iterator[InverterTimestepPlan]:
         horizon = snapshot.ctx.horizon
 
-        if self._latest is None:
-            raise ValueError("InverterComponent has not been built for this run")
-
-        inverter_connection = self._latest.inverter_connection
+        inverter_connection = solve_state.inverter_connection
 
         batt_conn = None
         batt_node = None
         batt_capacity = None
-        if self.battery is not None:
-            batt_conn = self.battery.latest_connection()
-            batt_node = self.battery.latest_storage()
+        if solve_state.battery_solve_state is not None and self.battery is not None:
+            batt_conn = solve_state.battery_solve_state.connection
+            batt_node = solve_state.battery_solve_state.storage
             batt_capacity = self.battery.capacity_kwh
 
         for t in horizon.T:
             pv_kw = 0.0
             pv_curtail_kw = None
             curtailment_active = None
-            if self.pv is not None:
-                pv_kw = self.pv.pv_kw(snapshot, t)
-                pv_curtail_kw = self.pv.curtail_kw(snapshot, t)
+            if self.pv is not None and solve_state.pv_solve_state is not None:
+                pv_kw = self.pv.pv_kw(snapshot, t, solve_state=solve_state.pv_solve_state)
+                pv_curtail_kw = self.pv.curtail_kw(
+                    snapshot,
+                    t,
+                    solve_state=solve_state.pv_solve_state,
+                )
                 curtailment_active = (
                     None
                     if pv_curtail_kw is None

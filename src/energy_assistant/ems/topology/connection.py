@@ -5,8 +5,8 @@ from typing import TypeVar
 
 import pulp
 
-from energy_assistant.ems.horizon import Horizon
 from energy_assistant.ems.milp.context import ConstraintSpec
+from energy_assistant.ems.planning.horizon import Horizon
 from energy_assistant.ems.topology.policies import ConnectionPolicy, Passthrough
 
 P = TypeVar("P", bound=ConnectionPolicy)
@@ -52,7 +52,7 @@ class _PolicyBinding:
 
 
 class Connection:
-    """Bidirectional run-scoped connection between two nodes.
+    """Bidirectional solve-scoped connection between two nodes.
 
     For each direction we track source-side and sink-side power:
     - `power_in_ab`: power leaving node A toward node B (kW)

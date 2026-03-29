@@ -2,16 +2,17 @@ from __future__ import annotations
 
 import math
 from collections.abc import Iterator
+from dataclasses import dataclass
 
 import pulp
 
-from energy_assistant.ems.horizon import Horizon
-from energy_assistant.ems.input_registry import AppliedInputRegistry
+from energy_assistant.ems.inputs.models import AppliedInputRegistry
 from energy_assistant.ems.milp.context import ConstraintSpec, value_of
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
 from energy_assistant.ems.models import EvTimestepPlan
 from energy_assistant.ems.parameters import ScalarParameter, SeriesParameter
-from energy_assistant.ems.time_windows import TimeWindowMatcher
+from energy_assistant.ems.planning.horizon import Horizon
+from energy_assistant.ems.planning.time_windows import TimeWindowMatcher
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import GraphElement
 from energy_assistant.ems.topology.nodes import StorageNode
@@ -269,11 +270,11 @@ class EvSocIncentivesFragment:
         return self._objective
 
 
-class EvRun:
-    def __init__(self, *, connected: bool, storage: StorageNode, connection: Connection) -> None:
-        self.connected = bool(connected)
-        self.storage = storage
-        self.connection = connection
+@dataclass(frozen=True, slots=True)
+class EvSolveState:
+    connected: bool
+    storage: StorageNode
+    connection: Connection
 
 
 class EvComponent:
@@ -305,7 +306,6 @@ class EvComponent:
         self._realtime_power_kw = ScalarParameter[float](f"{self.id}_realtime_power_kw")
         self._initial_soc_kwh = ScalarParameter[float](f"{self.id}_initial_soc_kwh")
         self._gate_series = SeriesParameter[float](f"{self.id}_gate_series")
-        self._latest: EvRun | None = None
 
     def update_inputs(self, *, horizon: Horizon, inputs: AppliedInputRegistry) -> None:
         connected = inputs.scalar_bool(self._load.connected.key)
@@ -335,7 +335,7 @@ class EvComponent:
         self._initial_soc_kwh.set(max(0.0, min(self.capacity_kwh, initial_soc_kwh)))
         self._gate_series.set(gate_series)
 
-    def graph_elements(self, *, horizon: Horizon) -> list[GraphElement]:
+    def graph_elements(self, *, horizon: Horizon) -> tuple[list[GraphElement], EvSolveState]:
         connected = self._connected.get()
         realtime_power_kw = self._realtime_power_kw.get()
         initial_soc_kwh = self._initial_soc_kwh.get()
@@ -392,12 +392,12 @@ class EvComponent:
                 )
             )
 
-        self._latest = EvRun(
+        solve_state = EvSolveState(
             connected=connected,
             storage=storage,
             connection=connection,
         )
-        return elements
+        return elements, solve_state
 
     def _connected_allowance(
         self,
@@ -426,14 +426,16 @@ class EvComponent:
                 allowed.append(0.0)
         return allowed
 
-    def iter_timestep_plan(self, snapshot: ModelSnapshot) -> Iterator[EvTimestepPlan]:
-        if self._latest is None:
-            raise ValueError("EvComponent has not been built for this run")
-
+    def iter_timestep_plan(
+        self,
+        snapshot: ModelSnapshot,
+        *,
+        solve_state: EvSolveState,
+    ) -> Iterator[EvTimestepPlan]:
         horizon = snapshot.ctx.horizon
-        connected = bool(self._latest.connected)
-        storage = self._latest.storage
-        connection = self._latest.connection
+        connected = bool(solve_state.connected)
+        storage = solve_state.storage
+        connection = solve_state.connection
         for t in horizon.T:
             charge_kw = value_of(connection.flow_into_node(self.node_id).get(t))
             soc_kwh = value_of(storage.E_by_i.get(t))

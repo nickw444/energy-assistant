@@ -7,7 +7,7 @@ from energy_assistant.ems.topology.graph import EnergyGraph
 
 
 class ModelSnapshot:
-    """A solved MILP instance for a single EMS planning run."""
+    """A solved MILP instance for a single EMS planning solve."""
 
     def __init__(self, *, ctx: ModelContext, graph: EnergyGraph) -> None:
         self.ctx = ctx
