@@ -11,8 +11,9 @@ wheels/
 
 # Local config files
 data/
-config.dev.yaml
-config.dev.new.yaml
+config.yaml
+config.*.yaml
+!config.example.yaml
 .worktrees/
 
 
