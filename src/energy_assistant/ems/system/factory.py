@@ -90,7 +90,6 @@ class EmsSystemFactory:
                 pv_id=pv_id,
                 pv=pv_cfg,
                 grid_max_export_kw=float(grid_cfg.constraints.max_export_kw),
-                terminal_soc=self._app_config.ems.terminal_soc,
             )
 
         evs: dict[str, EvComponent] = {}

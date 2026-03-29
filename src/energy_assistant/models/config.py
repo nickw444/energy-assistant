@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any, cast
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from energy_assistant.lib.home_assistant import HomeAssistantConfig
 from energy_assistant.models.inputs import (
@@ -27,30 +27,11 @@ from energy_assistant.models.plant import (
 )
 
 
-class TerminalSocConfig(BaseModel):
-    mode: Literal["hard", "adaptive"] = "adaptive"
-    penalty_per_kwh: float | Literal["mean", "median"] | None = Field(default="median")
-
-    model_config = ConfigDict(extra="forbid")
-
-    @field_validator("penalty_per_kwh")
-    @classmethod
-    def _validate_penalty_per_kwh(
-        cls, value: float | Literal["mean", "median"] | None
-    ) -> float | Literal["mean", "median"] | None:
-        if value is None or value in {"mean", "median"}:
-            return value
-        if float(value) < 0:
-            raise ValueError("penalty_per_kwh must be >= 0")
-        return value
-
-
 class EmsConfig(BaseModel):
     timestep_minutes: int = Field(default=5, ge=1, le=1440)
     horizon_minutes: int = Field(default=120, ge=1, le=525600)
     high_res_timestep_minutes: int | None = Field(default=None, ge=1, le=1440)
     high_res_horizon_minutes: int | None = Field(default=None, ge=1, le=525600)
-    terminal_soc: TerminalSocConfig = Field(default_factory=TerminalSocConfig)
 
     model_config = ConfigDict(extra="forbid")
 

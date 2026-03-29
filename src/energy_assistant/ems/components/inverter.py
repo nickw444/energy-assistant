@@ -17,7 +17,6 @@ from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import GraphElement
 from energy_assistant.ems.topology.nodes import Node
 from energy_assistant.ems.topology.policies import DirectionalLimit
-from energy_assistant.models.config import TerminalSocConfig
 from energy_assistant.models.plant import (
     BatteryComponentConfig,
     InverterComponentConfig,
@@ -47,7 +46,6 @@ class InverterComponent:
         pv_id: str | None,
         pv: PvComponentConfig | None,
         grid_max_export_kw: float,
-        terminal_soc: TerminalSocConfig,
     ) -> None:
         self.id = str(component_id)
         self.name = str(inverter.name)
@@ -78,7 +76,6 @@ class InverterComponent:
                 inverter_peak_kw=self.peak_power_kw,
                 battery=battery,
                 grid_max_export_kw=float(grid_max_export_kw),
-                terminal_soc=terminal_soc,
             )
 
     def update_inputs(

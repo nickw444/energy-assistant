@@ -12,9 +12,6 @@ ems:
   horizon_minutes: 1260
   high_res_timestep_minutes: 5
   high_res_horizon_minutes: 120
-  terminal_soc:
-    mode: adaptive
-    penalty_per_kwh: median
 inputs:
   grid_price_import:
     type: forecast
@@ -171,6 +168,9 @@ plant:
     min_soc_pct: 10.0
     max_soc_pct: 100.0
     reserve_soc_pct: 30.0
+    terminal_soc:
+      mode: adaptive
+      penalty_per_kwh: median
     max_charge_kw: 11.0
     max_discharge_kw: 10.0
     state_of_charge_pct: inputs.battery_primary_soc
