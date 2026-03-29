@@ -16,8 +16,11 @@ Key behavior in v6:
   coverage.
 - EMS config is split into a typed `inputs` registry and a flat logical `plant` registry.
 - Layer 1 components are **persistent definitions** that own input parameter boxes and consume a
-  per-run `ResolvedInputRegistry`.
-- Input resolution happens outside the EMS component layer in `input_provider.py`.
+  per-run `AppliedInputRegistry`.
+- Input resolution happens outside the EMS component layer in `input_provider.py`, which produces
+  raw resolved inputs.
+- Forecast alignment, slot-0 realtime replacement, coverage validation, and price tail extension
+  application happen inside EMS in `input_application.py`.
 - At solve time, components **update their input boxes** from resolved inputs, then **emit
   run-scoped topology elements** for the current horizon.
 - PuLP problems and topology objects remain run-scoped in v6; persistent reuse is at the component and
@@ -29,15 +32,16 @@ Key behavior in v6:
 
 1. Build the current solve window from the configured rolling `HorizonShape`.
 2. Get persistent component definitions from `EmsSystemFactory`.
-3. Resolve the configured `inputs` registry into a per-run `ResolvedInputRegistry`.
-4. Call `EmsSystem.update_inputs(horizon, inputs)`.
-5. Call `EmsSystem.build_snapshot(horizon)`:
+3. Resolve the configured `inputs` registry into a per-run raw `ResolvedInputRegistry`.
+4. Apply raw inputs to the current horizon to produce `AppliedInputRegistry`.
+5. Call `EmsSystem.update_inputs(horizon, inputs)`.
+6. Call `EmsSystem.build_snapshot(horizon)`:
    - create a fresh `EnergyGraph`,
    - call each component's `graph_elements(...)` method (returns run-scoped topology elements),
    - add all returned elements through `EnergyGraph.add_elements(...)`,
    - collect fragment constraints/objective into `ModelSnapshot`.
-6. Solve PuLP model.
-7. Ask each component to iterate plan output from solved vars.
+7. Solve PuLP model.
+8. Ask each component to iterate plan output from solved vars.
 
 ## Layer 1 Component Contract
 
@@ -52,8 +56,9 @@ Components keep configuration and helper objects persistently, while run-scoped 
 to the latest run-scoped topology objects only, alongside the latest resolved input parameters.
 
 Input hydration is not performed by EMS components directly. The input provider walks the typed
-`inputs` config, uses the source resolver when running live, and returns resolved scalar/forecast
-series ready for EMS consumption.
+`inputs` config, uses the source resolver when running live, and returns resolved scalar values plus
+raw forecast point maps. EMS then applies those raw forecasts to the current horizon before
+components consume the aligned series.
 
 ## Layer 0 Topology Model
 
@@ -90,11 +95,12 @@ Transfer mapping is segment-defined within the connection policy chain:
 - `policies` is a named map (`dict[str, ConnectionPolicy]`), so components can retrieve
   specific policies by name with typed lookups.
 - each policy segment sees its own `flow_in_*` / `flow_out_*` variables.
-- the default segment transfer is passthrough
+- the default segment transfer is passthrough and is expressed through the
+  normal policy `constraints(...)` interface
   (`flow_in_ab == flow_out_ab` and `flow_in_ba == flow_out_ba`).
 - `DirectionalEfficiency` is lossy
   (`flow_out_ab = eta_a_to_b * flow_in_ab`, `flow_out_ba = eta_b_to_a * flow_in_ba`).
-- multiple transfer-like policies compose by chaining segment outputs into the next segment inputs.
+- multiple policies compose by chaining segment outputs into the next segment inputs.
 
 ### Nodes
 
@@ -112,7 +118,7 @@ Transfer mapping is segment-defined within the connection policy chain:
 Current primitives:
 
 - `DirectionalLimit` (`None` means unbounded; `exclusive=True` requires finite bounds)
-- `Passthrough` (optional explicit no-op; default transfer behavior is already lossless)
+- `Passthrough` (optional explicit no-op; injected automatically when no policies are defined)
 - `DirectionalEfficiency`
 - `LinearCost`
 - `SoftDirectionalLimit`

@@ -6,6 +6,7 @@ from energy_assistant.ems.components.grid import GridComponent
 from energy_assistant.ems.components.inverter import InverterComponent
 from energy_assistant.ems.components.switchboard import SwitchboardComponent
 from energy_assistant.ems.horizon import HorizonShape, build_horizon_shape
+from energy_assistant.ems.input_application import EmsInputApplicator
 from energy_assistant.ems.system.system import EmsSystem
 from energy_assistant.models.config import AppConfig
 from energy_assistant.models.plant import (
@@ -31,6 +32,7 @@ class EmsSystemFactory:
             high_res_timestep_minutes=app_config.ems.high_res_timestep_minutes,
             high_res_horizon_minutes=app_config.ems.high_res_horizon_minutes,
         )
+        self._input_applicator = EmsInputApplicator(input_configs=app_config.inputs)
         self._system = self._build_system()
 
     @property
@@ -40,6 +42,10 @@ class EmsSystemFactory:
     @property
     def system(self) -> EmsSystem:
         return self._system
+
+    @property
+    def input_applicator(self) -> EmsInputApplicator:
+        return self._input_applicator
 
     def _build_system(self) -> EmsSystem:
         switchboard_id, _switchboard_cfg = _single_component(

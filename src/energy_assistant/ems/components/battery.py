@@ -3,7 +3,7 @@ from __future__ import annotations
 import pulp
 
 from energy_assistant.ems.horizon import Horizon
-from energy_assistant.ems.input_registry import ResolvedInputRegistry
+from energy_assistant.ems.input_registry import AppliedInputRegistry
 from energy_assistant.ems.milp.context import ConstraintSpec
 from energy_assistant.ems.parameters import ScalarParameter
 from energy_assistant.ems.topology.connection import Connection
@@ -149,7 +149,7 @@ class BatteryComponent:
         self,
         *,
         horizon: Horizon,
-        inputs: ResolvedInputRegistry,
+        inputs: AppliedInputRegistry,
     ) -> None:
         _ = horizon
         initial_soc_pct = inputs.scalar_float(

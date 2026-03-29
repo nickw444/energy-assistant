@@ -6,7 +6,7 @@ from collections.abc import Iterator
 import pulp
 
 from energy_assistant.ems.horizon import Horizon
-from energy_assistant.ems.input_registry import ResolvedInputRegistry
+from energy_assistant.ems.input_registry import AppliedInputRegistry
 from energy_assistant.ems.milp.context import ConstraintSpec, value_of
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
 from energy_assistant.ems.models import EvTimestepPlan
@@ -94,7 +94,7 @@ class EvChargeControl(ConnectionPolicy):
         P_charge = connection.flow_out_ab
         charge_on = self.charge_on(connection)
 
-        constraints: list[ConstraintSpec] = []
+        constraints = list(self._passthrough_constraints(connection))
 
         min_power = float(self.min_power_kw)
         if min_power <= 0 and self.switch_penalty > 0:
@@ -307,7 +307,7 @@ class EvComponent:
         self._gate_series = SeriesParameter[float](f"{self.id}_gate_series")
         self._latest: EvRun | None = None
 
-    def update_inputs(self, *, horizon: Horizon, inputs: ResolvedInputRegistry) -> None:
+    def update_inputs(self, *, horizon: Horizon, inputs: AppliedInputRegistry) -> None:
         connected = inputs.scalar_bool(self._load.connected.key)
         can_connect = True
         if self._load.can_connect is not None:

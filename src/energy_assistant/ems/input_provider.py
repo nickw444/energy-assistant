@@ -1,13 +1,9 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from datetime import timedelta
 from typing import Any, Protocol, cast
 
-from energy_assistant.ems.forecast_alignment import (
-    PowerForecastAligner,
-    PriceForecastAligner,
-    validate_forecast_coverage,
-)
 from energy_assistant.ems.horizon import Horizon, floor_to_interval_boundary
 from energy_assistant.ems.input_registry import (
     ResolvedForecastInput,
@@ -15,12 +11,15 @@ from energy_assistant.ems.input_registry import (
     ResolvedScalarInput,
 )
 from energy_assistant.lib.source_resolver.hass_source import (
+    HomeAssistantAmberElectricForecastSource,
     HomeAssistantBinarySensorEntitySource,
     HomeAssistantCurrencyEntitySource,
     HomeAssistantEntitySource,
+    HomeAssistantHistoricalAverageForecastSource,
     HomeAssistantHistoricalAveragePriceForecastSource,
     HomeAssistantPercentageEntitySource,
     HomeAssistantPowerKwEntitySource,
+    HomeAssistantSolcastForecastSource,
 )
 from energy_assistant.lib.source_resolver.models import (
     PowerForecastInterval,
@@ -29,7 +28,6 @@ from energy_assistant.lib.source_resolver.models import (
 from energy_assistant.lib.source_resolver.resolver import ValueResolver
 from energy_assistant.models.config import AppConfig
 from energy_assistant.models.inputs import (
-    ForecastExpansionConfig,
     ForecastInputConfig,
     ForecastSource,
     InputValueKind,
@@ -53,8 +51,6 @@ class ResolverBackedInputProvider:
     def __init__(self, *, app_config: AppConfig, resolver: ValueResolver) -> None:
         self._app_config = app_config
         self._resolver = resolver
-        self._power_aligner = PowerForecastAligner()
-        self._price_aligner = PriceForecastAligner()
 
     def mark_for_hydration(self) -> None:
         for input_config in self._app_config.inputs.values():
@@ -102,14 +98,26 @@ class ResolverBackedInputProvider:
                     value=self._resolve_scalar(input_config),
                 )
                 continue
+            forecast_intervals = self._resolve_forecast_intervals(input_config.forecast)
             forecasts[key] = ResolvedForecastInput(
                 key=key,
                 kind=kind,
-                series=self._resolve_forecast(
-                    key=key,
+                points=self._intervals_to_point_map(forecast_intervals),
+                interval_minutes=self._forecast_fallback_interval_minutes(
+                    intervals=forecast_intervals,
+                    forecast=input_config.forecast,
+                ),
+                realtime_value=self._resolve_optional_realtime_value(
+                    realtime=input_config.realtime,
+                    kind=kind,
+                ),
+                extension_points=self._resolve_extension_point_map(
                     input_config=input_config,
                     horizon=horizon,
                     kind=kind,
+                ),
+                extension_interval_minutes=self._resolve_extension_interval_minutes(
+                    input_config=input_config,
                 ),
             )
         return ResolvedInputRegistry(scalars=scalars, forecasts=forecasts)
@@ -144,75 +152,47 @@ class ResolverBackedInputProvider:
             return value
         return float(value)
 
-    def _resolve_forecast(
-        self,
-        *,
-        key: str,
-        input_config: ForecastInputConfig,
-        horizon: Horizon,
-        kind: InputValueKind,
-    ) -> list[float]:
-        intervals = self._resolve_forecast_intervals(
-            forecast=input_config.forecast,
-            realtime=input_config.realtime,
-            horizon=horizon,
-            expansion=input_config.forecast_expansion,
-            kind=kind,
-        )
-        validate_forecast_coverage(
-            label=f"Input {key}",
-            horizon=horizon,
-            intervals=intervals,
-            allow_first_slot_missing=input_config.realtime is not None,
-        )
-        first_slot_override: float | None = None
-        if input_config.realtime is not None:
-            try:
-                realtime_value = self._resolver.resolve(
-                    self._scalar_entity_source(
-                        entity=input_config.realtime.entity,
-                        value_kind=kind,
-                    )
-                )
-            except ValueError:
-                realtime_value = None
-            if realtime_value is not None:
-                first_slot_override = float(realtime_value)
-        if kind is InputValueKind.PRICE:
-            return [
-                float(value)
-                for value in self._price_aligner.align(
-                    horizon,
-                    cast(list[PriceForecastInterval], intervals),
-                    first_slot_override=first_slot_override,
-                )
-            ]
-        return [
-            float(value)
-            for value in self._power_aligner.align(
-                horizon,
-                cast(list[PowerForecastInterval], intervals),
-                first_slot_override=first_slot_override,
-            )
-        ]
-
     def _resolve_forecast_intervals(
         self,
-        *,
         forecast: ForecastSource,
-        realtime: HomeAssistantCurrencyEntitySource | object,
-        horizon: Horizon,
-        expansion: ForecastExpansionConfig | None,
-        kind: InputValueKind,
     ) -> list[PowerForecastInterval] | list[PriceForecastInterval]:
-        intervals = cast(
+        return cast(
             list[PowerForecastInterval] | list[PriceForecastInterval],
             cast(Any, self._resolver).resolve(forecast),
         )
-        if kind is not InputValueKind.PRICE or expansion is None:
-            return intervals
+
+    def _resolve_optional_realtime_value(
+        self,
+        *,
+        realtime: HomeAssistantCurrencyEntitySource | object | None,
+        kind: InputValueKind,
+    ) -> float | None:
+        if realtime is None:
+            return None
+        try:
+            value = self._resolver.resolve(
+                self._scalar_entity_source(
+                    entity=cast(HomeAssistantCurrencyEntitySource, realtime).entity,
+                    value_kind=kind,
+                )
+            )
+        except ValueError:
+            return None
+        return float(value)
+
+    def _resolve_extension_point_map(
+        self,
+        *,
+        input_config: ForecastInputConfig,
+        horizon: Horizon,
+        kind: InputValueKind,
+    ) -> dict[str, float] | None:
+        expansion = input_config.forecast_expansion
+        realtime = input_config.realtime
+        if kind is not InputValueKind.PRICE or expansion is None or realtime is None:
+            return None
         extension_source = self._build_price_extension_source(
-            realtime_entity=cast(HomeAssistantCurrencyEntitySource, realtime).entity,
+            realtime_entity=realtime.entity,
             forecast_horizon_hours=self._price_extension_horizon_hours(
                 horizon=horizon,
                 interval_duration=expansion.interval_duration,
@@ -221,10 +201,17 @@ class ResolverBackedInputProvider:
             interval_duration=expansion.interval_duration,
         )
         extension_intervals = self._resolver.resolve(extension_source)
-        return _merge_price_intervals(
-            base_intervals=cast(list[PriceForecastInterval], intervals),
-            extension_intervals=extension_intervals,
-        )
+        return self._intervals_to_point_map(extension_intervals)
+
+    def _resolve_extension_interval_minutes(
+        self,
+        *,
+        input_config: ForecastInputConfig,
+    ) -> int | None:
+        expansion = input_config.forecast_expansion
+        if expansion is None:
+            return None
+        return int(expansion.interval_duration)
 
     def _build_price_extension_source(
         self,
@@ -249,6 +236,32 @@ class ResolverBackedInputProvider:
         required_minutes = int((horizon_end - forecast_start).total_seconds() / 60.0)
         hours, remainder = divmod(required_minutes, 60)
         return max(1, hours + (1 if remainder else 0))
+
+    def _intervals_to_point_map(
+        self,
+        intervals: list[PowerForecastInterval] | list[PriceForecastInterval],
+    ) -> dict[str, float]:
+        ordered = sorted(intervals, key=lambda interval: interval.start)
+        _validate_point_reconstruction(ordered)
+        return {
+            interval.start.isoformat(): float(interval.value)
+            for interval in ordered
+        }
+
+    def _forecast_fallback_interval_minutes(
+        self,
+        *,
+        intervals: list[PowerForecastInterval] | list[PriceForecastInterval],
+        forecast: ForecastSource,
+    ) -> int:
+        ordered = sorted(intervals, key=lambda interval: interval.start)
+        if not ordered:
+            return _default_forecast_interval_minutes(forecast)
+        last_duration = ordered[-1].end - ordered[-1].start
+        minutes = int(round(last_duration.total_seconds() / 60.0))
+        if minutes <= 0:
+            raise ValueError("forecast intervals must have positive duration")
+        return minutes
 
     def _scalar_entity_source(
         self,
@@ -282,49 +295,11 @@ class FixtureResolvedInputProvider:
         return
 
     def resolve_for_horizon(self, *, horizon: Horizon) -> ResolvedInputRegistry:
-        expected_length = horizon.num_intervals
-        for key, value in self._registry.to_payload().items():
-            if value.get("type") != "forecast":
-                continue
-            raw_series = value.get("series")
-            if not isinstance(raw_series, list):
-                raise ValueError(
-                    f"Resolved fixture forecast {key} length does not match horizon intervals"
-                )
-            series = cast(list[object], raw_series)
-            if len(series) != expected_length:
-                raise ValueError(
-                    f"Resolved fixture forecast {key} length does not match horizon intervals"
-                )
+        _ = horizon
         return self._registry
 
     def grid_price_watch_entity_ids(self) -> set[str]:
         return set(self._price_watch_entity_ids)
-
-
-def _merge_price_intervals(
-    *,
-    base_intervals: list[PriceForecastInterval],
-    extension_intervals: list[PriceForecastInterval],
-) -> list[PriceForecastInterval]:
-    if not base_intervals:
-        return list(extension_intervals)
-    merged = list(base_intervals)
-    last_end = max(interval.end for interval in base_intervals)
-    for interval in extension_intervals:
-        if interval.end <= last_end:
-            continue
-        start = interval.start if interval.start >= last_end else last_end
-        if interval.end <= start:
-            continue
-        merged.append(
-            PriceForecastInterval(
-                start=start,
-                end=interval.end,
-                value=float(interval.value),
-            )
-        )
-    return merged
 
 
 def _grid_component(app_config: AppConfig) -> GridComponentConfig:
@@ -332,3 +307,36 @@ def _grid_component(app_config: AppConfig) -> GridComponentConfig:
         if isinstance(component, GridComponentConfig):
             return component
     raise ValueError("plant must define exactly one grid component")
+
+
+def _validate_point_reconstruction(
+    intervals: tuple[PowerForecastInterval | PriceForecastInterval, ...]
+    | list[PowerForecastInterval | PriceForecastInterval],
+) -> None:
+    if not intervals:
+        return
+    for interval in intervals:
+        if interval.end <= interval.start:
+            raise ValueError("forecast intervals must have positive duration")
+    for prev, curr in zip(intervals, intervals[1:], strict=False):
+        gap = curr.start - prev.end
+        if abs(gap.total_seconds()) > timedelta(seconds=1).total_seconds():
+            raise ValueError(
+                "forecast intervals must be contiguous to be represented as raw point maps"
+            )
+
+
+def _default_forecast_interval_minutes(forecast: ForecastSource) -> int:
+    if isinstance(
+        forecast,
+        (
+            HomeAssistantHistoricalAverageForecastSource,
+            HomeAssistantHistoricalAveragePriceForecastSource,
+        ),
+    ):
+        return int(forecast.interval_duration)
+    if isinstance(forecast, HomeAssistantSolcastForecastSource):
+        return 30
+    if isinstance(forecast, HomeAssistantAmberElectricForecastSource):
+        return 30
+    return 5

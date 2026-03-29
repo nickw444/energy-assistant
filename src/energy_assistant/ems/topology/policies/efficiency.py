@@ -20,7 +20,7 @@ class DirectionalEfficiency(ConnectionPolicy):
         self.eta_a_to_b = validate_eta("eta_a_to_b", float(eta_a_to_b))
         self.eta_b_to_a = validate_eta("eta_b_to_a", float(eta_b_to_a))
 
-    def transfer_constraints(self, connection: ConnectionBinding) -> list[ConstraintSpec]:
+    def constraints(self, connection: ConnectionBinding) -> list[ConstraintSpec]:
         constraints: list[ConstraintSpec] = []
         for t in connection.horizon.T:
             constraints.append(

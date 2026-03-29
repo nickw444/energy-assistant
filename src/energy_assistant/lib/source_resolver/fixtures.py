@@ -30,6 +30,21 @@ def load_hass_fixture(path: Path) -> HassFixture:
     return data  # type: ignore[return-value]
 
 
+def save_hass_fixture(
+    *,
+    path: Path,
+    captured_at: str,
+    states: dict[str, HomeAssistantStateDict],
+    history: dict[str, list[HomeAssistantHistoryStateDict]],
+) -> None:
+    payload: HassFixture = {
+        "captured_at": captured_at,
+        "states": states,
+        "history": history,
+    }
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True))
+
+
 @dataclass(slots=True)
 class FixtureHassDataProvider(HassDataProvider):
     states: dict[str, HomeAssistantStateDict]

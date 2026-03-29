@@ -10,8 +10,9 @@ plotting and inspection. Canonical implementation notes live in
 Key files:
 - `src/energy_assistant/ems/planner.py` orchestrates build, solve, and plan extraction.
 - `src/energy_assistant/ems/system/factory.py` wires the flat `plant` registry into a persistent `EmsSystem` plus the configured rolling `HorizonShape`.
-- `src/energy_assistant/ems/input_provider.py` resolves the typed `inputs` registry into a per-run `ResolvedInputRegistry`.
-- `src/energy_assistant/ems/system/system.py` updates component inputs from the resolved registry, builds the run-scoped MILP snapshot, and merges per-component plans.
+- `src/energy_assistant/ems/input_provider.py` resolves the typed `inputs` registry into a per-run raw `ResolvedInputRegistry`.
+- `src/energy_assistant/ems/input_application.py` applies raw forecast inputs to the current horizon and produces the aligned `AppliedInputRegistry` consumed by components.
+- `src/energy_assistant/ems/system/system.py` updates component inputs from the applied registry, builds the run-scoped MILP snapshot, and merges per-component plans.
 - `src/energy_assistant/ems/topology/*` contains Layer 0 topology primitives (nodes, connections, policies).
 - `src/energy_assistant/ems/components/*` contains Layer 1 logical components (Grid, PV, Battery, EV, etc).
 - `src/energy_assistant/ems/horizon.py` defines the persistent rolling `HorizonShape` and per-solve `Horizon`.

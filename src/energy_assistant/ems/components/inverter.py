@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 from energy_assistant.ems.horizon import Horizon
-from energy_assistant.ems.input_registry import ResolvedInputRegistry
+from energy_assistant.ems.input_registry import AppliedInputRegistry
 from energy_assistant.ems.milp.context import value_of
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
 from energy_assistant.ems.models import InverterTimestepPlan
@@ -80,7 +80,7 @@ class InverterComponent:
         self,
         *,
         horizon: Horizon,
-        inputs: ResolvedInputRegistry,
+        inputs: AppliedInputRegistry,
     ) -> None:
         if self.pv is not None:
             self.pv.update_inputs(horizon=horizon, inputs=inputs)

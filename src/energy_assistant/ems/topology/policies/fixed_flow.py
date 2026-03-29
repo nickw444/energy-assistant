@@ -28,7 +28,7 @@ class FixedFlow(ConnectionPolicy):
         values = _series_for_connection(self.values_kw, connection, name=self.name)
         flow = connection.flow_in_ab if self.direction == "a_to_b" else connection.flow_in_ba
 
-        constraints: list[ConstraintSpec] = []
+        constraints = list(self._passthrough_constraints(connection))
         for t in connection.horizon.T:
             constraints.append(
                 ConstraintSpec(

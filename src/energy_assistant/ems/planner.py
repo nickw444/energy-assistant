@@ -78,8 +78,12 @@ class EmsMilpPlanner:
         )
         build_start = time.perf_counter()
         resolved_inputs = self._input_provider.resolve_for_horizon(horizon=horizon)
+        applied_inputs = self._system_factory.input_applicator.apply_to_horizon(
+            horizon=horizon,
+            inputs=resolved_inputs,
+        )
         system = self._system_factory.system
-        system.update_inputs(horizon=horizon, inputs=resolved_inputs)
+        system.update_inputs(horizon=horizon, inputs=applied_inputs)
         snapshot = system.build_snapshot(horizon=horizon)
         build_seconds = time.perf_counter() - build_start
 

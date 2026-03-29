@@ -6,7 +6,7 @@ import pulp
 
 from energy_assistant.ems.forecast_multiplier import ForecastMultiplier
 from energy_assistant.ems.horizon import Horizon
-from energy_assistant.ems.input_registry import ResolvedInputRegistry
+from energy_assistant.ems.input_registry import AppliedInputRegistry
 from energy_assistant.ems.milp.context import ConstraintSpec, value_of
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
 from energy_assistant.ems.parameters import SeriesParameter
@@ -63,7 +63,7 @@ class PvCurtailTracking(ConnectionPolicy):
             )
         flow = connection.flow_in_ab if self.direction == "a_to_b" else connection.flow_in_ba
         curtail = self.curtail_kw(connection)
-        return [
+        return list(self._passthrough_constraints(connection)) + [
             ConstraintSpec(
                 f"pv_curtail_track_{self.name}_{connection.segment_key}_t{t}",
                 curtail[t] == float(self.available_kw[t]) - flow[t],
@@ -106,7 +106,7 @@ class PvBinaryCurtailment(ConnectionPolicy):
             )
         flow = connection.flow_in_ab if self.direction == "a_to_b" else connection.flow_in_ba
         curtail = self.curtail_binary(connection)
-        return [
+        return list(self._passthrough_constraints(connection)) + [
             ConstraintSpec(
                 f"pv_binary_{self.name}_{connection.segment_key}_t{t}",
                 flow[t] == float(self.available_kw[t]) * (1 - curtail[t]),
@@ -150,7 +150,7 @@ class PvComponent:
         self._available_kw = SeriesParameter[float](f"{self.id}_available_kw")
         self._latest: PvRun | None = None
 
-    def update_inputs(self, *, horizon: Horizon, inputs: ResolvedInputRegistry) -> None:
+    def update_inputs(self, *, horizon: Horizon, inputs: AppliedInputRegistry) -> None:
         pv_series = inputs.forecast(self._pv_cfg.forecast.key, kind=InputValueKind.POWER)
         if len(pv_series) != horizon.num_intervals:
             raise ValueError("PV forecast series length does not match horizon")

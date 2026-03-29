@@ -61,7 +61,7 @@ class Connection:
     - `power_out_ba`: power arriving at node A from node B (kW)
 
     Policies are composed as ordered segments. Each policy sees its own
-    directional input/output variables, so multiple transfer-like policies can
+    directional input/output variables, so multiple segment-like policies can
     be chained without special handling.
     """
 
@@ -150,7 +150,7 @@ class Connection:
         ab_points: list[dict[int, pulp.LpVariable]] = [self.power_in_ab]
         ba_points: list[dict[int, pulp.LpVariable]] = [self.power_in_ba]
 
-        # Intermediate segment boundaries let policy transfer laws compose.
+        # Intermediate segment boundaries let policy-defined flow laws compose.
         for idx in range(1, policy_count):
             ab_points.append(
                 pulp.LpVariable.dicts(
@@ -215,7 +215,6 @@ class Connection:
             self._policy_bindings,
             strict=True,
         ):
-            constraints.extend(policy.transfer_constraints(binding))
             constraints.extend(policy.constraints(binding))
         return constraints
 

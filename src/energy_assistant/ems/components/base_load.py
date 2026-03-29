@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from energy_assistant.ems.horizon import Horizon
-from energy_assistant.ems.input_registry import ResolvedInputRegistry
+from energy_assistant.ems.input_registry import AppliedInputRegistry
 from energy_assistant.ems.parameters import SeriesParameter
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import GraphElement
@@ -40,7 +40,7 @@ class BaseLoadComponent:
         self,
         *,
         horizon: Horizon,
-        inputs: ResolvedInputRegistry,
+        inputs: AppliedInputRegistry,
     ) -> None:
         series = inputs.forecast(self._power_input_key, kind=InputValueKind.POWER)
         if len(series) != horizon.num_intervals:

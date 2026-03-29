@@ -8,7 +8,7 @@ from energy_assistant.ems.components.grid import GridComponent
 from energy_assistant.ems.components.inverter import InverterComponent
 from energy_assistant.ems.components.switchboard import SwitchboardComponent
 from energy_assistant.ems.horizon import Horizon
-from energy_assistant.ems.input_registry import ResolvedInputRegistry
+from energy_assistant.ems.input_registry import AppliedInputRegistry
 from energy_assistant.ems.milp.context import ModelContext
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
 from energy_assistant.ems.models import (
@@ -44,7 +44,7 @@ class EmsSystem:
     def switchboard_bus_id(self) -> str:
         return str(self.switchboard.bus_id)
 
-    def update_inputs(self, *, horizon: Horizon, inputs: ResolvedInputRegistry) -> None:
+    def update_inputs(self, *, horizon: Horizon, inputs: AppliedInputRegistry) -> None:
         self.base_load.update_inputs(horizon=horizon, inputs=inputs)
         self.grid.update_inputs(horizon=horizon, inputs=inputs)
         for inv in self.inverters.values():

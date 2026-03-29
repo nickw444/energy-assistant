@@ -42,13 +42,13 @@ class DirectionalLimit(ConnectionPolicy):
         return self._dir_select_by_segment[connection.segment_key]
 
     def constraints(self, connection: ConnectionBinding) -> list[ConstraintSpec]:
+        constraints = list(self._passthrough_constraints(connection))
         dir_select = None
         if self.exclusive:
             dir_select = self.dir_select(connection)
         flow_ab = connection.flow_out_ab
         flow_ba = connection.flow_out_ba
 
-        constraints: list[ConstraintSpec] = []
         for t in connection.horizon.T:
             if self.max_a_to_b_kw is not None:
                 constraints.append(

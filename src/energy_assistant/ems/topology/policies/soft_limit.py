@@ -46,7 +46,7 @@ class SoftDirectionalLimit(ConnectionPolicy):
         slack = self.slack_kw(connection)
         flow = connection.flow_out_ab if self.direction == "a_to_b" else connection.flow_out_ba
 
-        constraints: list[ConstraintSpec] = []
+        constraints = list(self._passthrough_constraints(connection))
         for t in connection.horizon.T:
             constraints.append(
                 ConstraintSpec(

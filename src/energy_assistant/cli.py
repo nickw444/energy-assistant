@@ -10,6 +10,7 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from threading import Event
+from typing import cast
 
 import click
 import uvicorn
@@ -24,18 +25,21 @@ from energy_assistant.ems.fixture_harness import (
     summarize_plan,
 )
 from energy_assistant.ems.fixture_inputs import (
-    load_resolved_input_registry,
+    load_fixture_input_provider,
+    resolve_fixture_input_registry,
     save_resolved_inputs_fixture,
 )
-from energy_assistant.ems.input_provider import (
-    FixtureResolvedInputProvider,
-    ResolverBackedInputProvider,
-)
+from energy_assistant.ems.input_provider import ResolverBackedInputProvider
 from energy_assistant.ems.planner import EmsMilpPlanner
 from energy_assistant.ems.system.factory import EmsSystemFactory
 from energy_assistant.lib.home_assistant import HomeAssistantClient
 from energy_assistant.lib.home_assistant_ws import HomeAssistantWebSocketClientImpl
-from energy_assistant.lib.source_resolver.hass_provider import HassDataProviderImpl
+from energy_assistant.lib.source_resolver.fixtures import save_hass_fixture
+from energy_assistant.lib.source_resolver.hass_provider import (
+    HassDataProviderImpl,
+    HomeAssistantHistoryStateDict,
+    HomeAssistantStateDict,
+)
 from energy_assistant.lib.source_resolver.resolver import ValueResolverImpl
 from energy_assistant.models.config import AppConfig
 from energy_assistant.plotting import (
@@ -257,9 +261,11 @@ def ems_solve(
         if use_fixture:
             if paths is None:
                 raise click.ClickException("Fixture paths not resolved.")
-            registry, captured_at = load_resolved_input_registry(paths.fixture_path)
+            input_provider, captured_at = load_fixture_input_provider(
+                path=paths.fixture_path,
+                app_config=app_config,
+            )
             now = datetime.fromisoformat(captured_at) if captured_at else None
-            input_provider = FixtureResolvedInputProvider(registry=registry)
             planner = EmsMilpPlanner(app_config, input_provider=input_provider)
 
             click.echo("Solving EMS MILP (fixture replay)...")
@@ -376,12 +382,12 @@ def ems_record_scenario(
         planner.hydrate_all()
 
         captured_at = datetime.now().astimezone()
-        horizon = EmsSystemFactory(app_config).horizon_shape.build(now=captured_at)
-        resolved_inputs = input_provider.resolve_for_horizon(horizon=horizon)
-        save_resolved_inputs_fixture(
+        snapshot = hass_data_provider.snapshot()
+        save_hass_fixture(
             path=paths.fixture_path,
             captured_at=captured_at.isoformat(),
-            inputs=resolved_inputs,
+            states=cast(dict[str, HomeAssistantStateDict], snapshot["states"]),
+            history=cast(dict[str, list[HomeAssistantHistoryStateDict]], snapshot["history"]),
         )
         click.echo(f"Wrote EMS fixture to {paths.fixture_path}")
 
@@ -393,8 +399,9 @@ def ems_record_scenario(
             click.echo(f"EMS config already exists at {config_write_path}, skipping.")
 
         if write_plan:
-            fixture_input_provider = FixtureResolvedInputProvider(
-                registry=resolved_inputs,
+            fixture_input_provider, _ = load_fixture_input_provider(
+                path=paths.fixture_path,
+                app_config=app_config,
             )
             fixture_planner = EmsMilpPlanner(app_config, input_provider=fixture_input_provider)
             plan = fixture_planner.generate_ems_plan(
@@ -413,6 +420,68 @@ def ems_record_scenario(
             click.echo(f"Wrote plan hash to {paths.hash_path}")
     except Exception as exc:
         raise click.ClickException(traceback.format_exc()) from exc
+
+
+@ems.command("export-resolved-inputs")
+@click.option(
+    "--fixture",
+    type=str,
+    required=True,
+    help="Fixture name (supports 'fixture/scenario' format).",
+)
+@click.option(
+    "--name",
+    type=str,
+    default=None,
+    help="Scenario name within the fixture (optional subdirectory).",
+)
+@click.option(
+    "--scenario-dir",
+    type=click.Path(path_type=Path, file_okay=False),
+    default=Path("tests/fixtures/ems"),
+    show_default=True,
+    help="Base directory containing fixture bundles.",
+)
+@click.option(
+    "--output",
+    type=click.Path(path_type=Path, dir_okay=False),
+    default=None,
+    help="Optional output path for the resolved-input payload.",
+)
+@click.pass_context
+def ems_export_resolved_inputs(
+    ctx: click.Context,
+    fixture: str,
+    name: str | None,
+    scenario_dir: Path,
+    output: Path | None,
+) -> None:
+    """Convert a raw EMS fixture bundle into resolved EMS inputs."""
+    _configure_logging(str(ctx.obj.get("log_level", "INFO")))
+
+    fixture_parsed, name = _parse_fixture_scenario(fixture, name)
+    if fixture_parsed is None:
+        raise click.ClickException("--fixture is required.")
+    paths = resolve_ems_fixture_paths(scenario_dir, fixture_parsed, name)
+    if not paths.fixture_path.exists() or not paths.config_path.exists():
+        raise click.ClickException(
+            "Fixture/config not found. "
+            f"Expected {paths.fixture_path} and {paths.config_path}."
+        )
+
+    app_config = load_app_config(paths.config_path)
+    registry, captured_at = resolve_fixture_input_registry(
+        path=paths.fixture_path,
+        app_config=app_config,
+    )
+    output_path = output or paths.scenario_dir / "resolved_inputs.json"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    save_resolved_inputs_fixture(
+        path=output_path,
+        captured_at=(captured_at or datetime.now().astimezone().isoformat()),
+        inputs=registry,
+    )
+    click.echo(f"Wrote resolved EMS inputs to {output_path}")
 
 
 @ems.command("refresh-baseline")
@@ -517,12 +586,12 @@ def _refresh_baseline_bundle(
         )
 
     app_config = load_app_config(paths.config_path)
-    registry, captured_at = load_resolved_input_registry(paths.fixture_path)
-    now = datetime.fromisoformat(captured_at) if captured_at else None
-    planner = EmsMilpPlanner(
-        app_config,
-        input_provider=FixtureResolvedInputProvider(registry=registry),
+    input_provider, captured_at = load_fixture_input_provider(
+        path=paths.fixture_path,
+        app_config=app_config,
     )
+    now = datetime.fromisoformat(captured_at) if captured_at else None
+    planner = EmsMilpPlanner(app_config, input_provider=input_provider)
     plan = planner.generate_ems_plan(
         now=now,
         solver_msg=solver_msg,
@@ -649,12 +718,12 @@ def ems_scenario_report(
         label = f"{fixture_name}/{scenario_name}" if scenario_name else fixture_name
         try:
             app_config = load_app_config(paths.config_path)
-            registry, captured_at = load_resolved_input_registry(paths.fixture_path)
-            now = datetime.fromisoformat(captured_at) if captured_at else None
-            planner = EmsMilpPlanner(
-                app_config,
-                input_provider=FixtureResolvedInputProvider(registry=registry),
+            input_provider, captured_at = load_fixture_input_provider(
+                path=paths.fixture_path,
+                app_config=app_config,
             )
+            now = datetime.fromisoformat(captured_at) if captured_at else None
+            planner = EmsMilpPlanner(app_config, input_provider=input_provider)
             plan = planner.generate_ems_plan(
                 now=now,
                 solver_msg=solver_msg,
@@ -703,12 +772,17 @@ def hydrate_load_forecast(ctx: click.Context, limit: int) -> None:
         input_provider = ResolverBackedInputProvider(app_config=app_config, resolver=resolver)
         input_provider.mark_for_hydration()
         input_provider.hydrate_all()
-        horizon = EmsSystemFactory(app_config).horizon_shape.build(now=datetime.now().astimezone())
+        system_factory = EmsSystemFactory(app_config)
+        horizon = system_factory.horizon_shape.build(now=datetime.now().astimezone())
         resolved = input_provider.resolve_for_horizon(horizon=horizon)
+        applied = system_factory.input_applicator.apply_to_horizon(
+            horizon=horizon,
+            inputs=resolved,
+        )
     except Exception as exc:
         raise click.ClickException(str(exc)) from exc
 
-    series = resolved.forecast("base_load_power")
+    series = applied.forecast("base_load_power")
     click.echo(f"Resolved {len(series)} aligned intervals for inputs.base_load_power")
     show = series[: max(limit, 0)]
     for index, value in enumerate(show):

@@ -577,7 +577,7 @@
     "load_base_kwh": 29.416,
     "load_total_kwh": 39.645,
     "pv_kwh": 51.398,
-    "segment_cost_total": -0.121,
+    "segment_cost_total": -0.12,
     "total_cost": -0.121
   }
 }

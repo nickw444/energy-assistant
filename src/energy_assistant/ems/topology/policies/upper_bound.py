@@ -28,7 +28,7 @@ class UpperBound(ConnectionPolicy):
         ub = _series_for_connection(self.upper_bounds_kw, connection, name=self.name)
         flow = connection.flow_out_ab if self.direction == "a_to_b" else connection.flow_out_ba
 
-        constraints: list[ConstraintSpec] = []
+        constraints = list(self._passthrough_constraints(connection))
         for t in connection.horizon.T:
             constraints.append(
                 ConstraintSpec(

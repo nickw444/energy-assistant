@@ -136,7 +136,7 @@ def test_soft_limit_penalty_can_dominate_reward() -> None:
     assert value_of(soft.slack_kw(conn)[0]) == pytest.approx(0.0)
 
 
-def test_connection_defaults_to_passthrough_when_no_transfer_policy_is_defined() -> None:
+def test_connection_defaults_to_passthrough_when_no_policies_are_defined() -> None:
     now = datetime(2026, 1, 1, tzinfo=UTC)
     horizon = build_horizon(now=now, timestep_minutes=60, num_intervals=1)
 
@@ -162,7 +162,7 @@ def test_connection_defaults_to_passthrough_when_no_transfer_policy_is_defined()
     assert value_of(conn.power_out_ba[0]) == pytest.approx(0.0)
 
 
-def test_connection_composes_multiple_transfer_like_policies() -> None:
+def test_connection_composes_multiple_policies_as_segments() -> None:
     now = datetime(2026, 1, 1, tzinfo=UTC)
     horizon = build_horizon(now=now, timestep_minutes=60, num_intervals=1)
 

@@ -36,10 +36,15 @@ class ConnectionPolicy:
     Policies are composed as an ordered chain within a connection. Each policy
     sees a segment-scoped input/output flow pair per direction, can define how
     flow transfers across that segment, and can also add extra constraints or
-    objective terms.
+    objective terms. The default segment law is passthrough, so every policy
+    participates through the same `constraints(...)` interface regardless of
+    whether it is lossless, lossy, limiting, or purely economic.
     """
 
-    def transfer_constraints(self, connection: ConnectionBinding) -> list[ConstraintSpec]:
+    def _passthrough_constraints(
+        self,
+        connection: ConnectionBinding,
+    ) -> list[ConstraintSpec]:
         return [
             ConstraintSpec(
                 f"policy_transfer_{connection.segment_key}_a_to_b_t{t}",
@@ -55,8 +60,7 @@ class ConnectionPolicy:
         ]
 
     def constraints(self, connection: ConnectionBinding) -> list[ConstraintSpec]:
-        _ = connection
-        return []
+        return self._passthrough_constraints(connection)
 
     def objective(self, connection: ConnectionBinding) -> pulp.LpAffineExpression:
         _ = connection
