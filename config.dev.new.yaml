@@ -4,7 +4,7 @@ server:
   data_dir: ./data
 homeassistant:
   base_url: https://hass.nickwhyte.com
-  token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiIyN2Y5N2MwZjg3YWI0ZDg0OGJhZDY5YjE3OGQzZDBjMSIsImlhdCI6MTc3MDI4NTk1OSwiZXhwIjoyMDg1NjQ1OTU5fQ.8Xf0KD4m1WYzTD4ofURWvtBi00V15fi2ocZkLkbypbE
+  token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI5NTg0MDk5ODcyZTk0ZDVlODk4NTY4NTRmZTNlOTAzYSIsImlhdCI6MTc3NDc2MTA0NiwiZXhwIjoyMDkwMTIxMDQ2fQ.ThMNKKoP1el2_VsMKavw5qcm28coibkJGDIRPEId9C4
   verify_tls: true
   timeout_seconds: 30.0
 ems:
