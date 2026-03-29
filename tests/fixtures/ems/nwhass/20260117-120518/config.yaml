@@ -1,0 +1,204 @@
+server:
+  host: 127.0.0.1
+  port: 6070
+  data_dir: ./data
+homeassistant:
+  base_url: http://example.invalid
+  token: fixture-token
+  verify_tls: true
+  timeout_seconds: 30.0
+ems:
+  timestep_minutes: 30
+  horizon_minutes: 1015
+  high_res_timestep_minutes: 5
+  high_res_horizon_minutes: 120
+  terminal_soc:
+    mode: adaptive
+    penalty_per_kwh: median
+inputs:
+  grid_price_import:
+    type: forecast
+    forecast:
+      type: home_assistant
+      entity: sensor.amber_general_forecast
+      platform: amberelectric
+      price_forecast_mode: spot
+    realtime:
+      type: home_assistant
+      entity: sensor.amber_general_price_non_estimate
+  grid_price_export:
+    type: forecast
+    forecast:
+      type: home_assistant
+      entity: sensor.amber_feed_in_forecast
+      platform: amberelectric
+      price_forecast_mode: spot
+    realtime:
+      type: home_assistant
+      entity: sensor.amber_feed_in_price_non_estimate
+  base_load_power:
+    type: forecast
+    forecast:
+      type: home_assistant
+      entity: sensor.hass_energy_load_power_uncontrolled_smoothed_15m
+      history_days: 3
+      platform: historical_average
+      unit: W
+      interval_duration: 5
+      forecast_horizon_hours: 18
+      realtime_window_minutes: 180
+    realtime:
+      type: home_assistant
+      entity: sensor.hass_energy_load_power_uncontrolled_smoothed_1m
+  pv_primary_forecast:
+    type: forecast
+    forecast:
+      type: home_assistant
+      entities:
+      - sensor.solcast_pv_forecast_forecast_today
+      - sensor.solcast_pv_forecast_forecast_tomorrow
+      - sensor.solcast_pv_forecast_forecast_day_3
+      platform: solcast
+    realtime:
+      type: home_assistant
+      entity: sensor.hass_energy_pv_power_smoothed_1m
+  battery_primary_soc:
+    type: scalar
+    source:
+      type: home_assistant
+      entity: sensor.inverter_battery_soc
+    value_kind: percentage
+  battery_primary_realtime_power:
+    type: scalar
+    source:
+      type: home_assistant
+      entity: sensor.hass_energy_battery_power_smoothed_1m
+    value_kind: power
+  tessie_connected:
+    type: scalar
+    source:
+      type: home_assistant
+      entity: binary_sensor.hass_energy_tessie_connected_at_home
+    value_kind: boolean
+  tessie_can_connect:
+    type: scalar
+    source:
+      type: home_assistant
+      entity: binary_sensor.hass_energy_tessie_can_connect
+    value_kind: boolean
+  tessie_realtime_power:
+    type: scalar
+    source:
+      type: home_assistant
+      entity: sensor.tesla_wall_connector_power
+    value_kind: power
+  tessie_soc:
+    type: scalar
+    source:
+      type: home_assistant
+      entity: sensor.tessie_battery
+    value_kind: percentage
+plant:
+  switchboard:
+    type: switchboard
+  grid:
+    type: grid
+    connection: switchboard
+    constraints:
+      max_import_kw: 13.0
+      max_export_kw: 13.0
+    price_import:
+      source: inputs.grid_price_import
+      filters:
+      - type: bias
+        bias_pct: 25.0
+      - type: risk
+        bias_pct: 20.0
+        ramp_start_after_minutes: 30
+        ramp_duration_minutes: 90
+        curve: linear
+        export_price_ceiling: 5.0
+    price_export:
+      source: inputs.grid_price_export
+      filters:
+      - type: bias
+        bias_pct: 25.0
+      - type: risk
+        bias_pct: 20.0
+        ramp_start_after_minutes: 30
+        ramp_duration_minutes: 90
+        curve: linear
+        export_price_ceiling: 5.0
+    zero_price_export_preference: export
+    import_forbidden_periods:
+    - start: '14:55'
+      end: '21:05'
+      months:
+      - jan
+      - feb
+      - mar
+      - jun
+      - jul
+      - aug
+      - nov
+      - dec
+  base_load:
+    type: load
+    connection: switchboard
+    name: Base Load
+    power: inputs.base_load_power
+  primary:
+    type: inverter
+    connection: switchboard
+    name: Primary
+    peak_power_kw: 10.0
+    curtailment: load-aware
+  pv_primary:
+    type: pv
+    connection: primary
+    name: PV primary
+    forecast: inputs.pv_primary_forecast
+    forecast_multiplier: 0.95
+  battery_primary:
+    type: battery
+    connection: primary
+    name: Battery Primary
+    capacity_kwh: 41.9
+    storage_efficiency_pct: 95.0
+    charge_cost_per_kwh: 0.02
+    discharge_cost_per_kwh: 0.02
+    soc_value_per_kwh: 0.08
+    min_soc_pct: 10.0
+    max_soc_pct: 100.0
+    reserve_soc_pct: 30.0
+    max_charge_kw: 11.0
+    max_discharge_kw: 10.0
+    state_of_charge_pct: inputs.battery_primary_soc
+    realtime_power: inputs.battery_primary_realtime_power
+  tessie:
+    type: load_controlled_ev
+    connection: switchboard
+    name: Tessie
+    min_power_kw: 2.4
+    max_power_kw: 7.4
+    energy_kwh: 78.0
+    connected: inputs.tessie_connected
+    allowed_connect_times:
+    - start: 08:00
+      end: '21:00'
+    connect_grace_minutes: 60
+    realtime_power: inputs.tessie_realtime_power
+    state_of_charge_pct: inputs.tessie_soc
+    soc_incentives:
+    - target_soc_pct: 40.0
+      incentive: 0.16
+    - target_soc_pct: 50.0
+      incentive: 0.1
+    - target_soc_pct: 60.0
+      incentive: 0.08
+    - target_soc_pct: 80.0
+      incentive: 0.04
+    - target_soc_pct: 100.0
+      incentive: 0.005
+    switch_penalty: 0.02
+    can_connect: inputs.tessie_can_connect
