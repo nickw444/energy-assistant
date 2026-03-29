@@ -14,6 +14,7 @@ data/
 config.yaml
 config.*.yaml
 !config.example.yaml
+!tests/fixtures/**/config.yaml
 .worktrees/
 
 
