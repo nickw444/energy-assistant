@@ -4,12 +4,9 @@ from typing import Literal
 
 import pulp
 
-from energy_assistant.ems.forecast_alignment import (
-    PowerForecastAligner,
-    validate_forecast_coverage,
-)
 from energy_assistant.ems.forecast_multiplier import ForecastMultiplier
 from energy_assistant.ems.horizon import Horizon
+from energy_assistant.ems.input_registry import ResolvedInputRegistry
 from energy_assistant.ems.milp.context import ConstraintSpec, value_of
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
 from energy_assistant.ems.parameters import SeriesParameter
@@ -26,8 +23,8 @@ from energy_assistant.ems.topology.policies.connection_policy import (
     ConnectionBinding,
     FlowDirection,
 )
-from energy_assistant.lib.source_resolver.resolver import ValueResolver
-from energy_assistant.models.plant import InverterConfig
+from energy_assistant.models.inputs import InputValueKind
+from energy_assistant.models.plant import InverterComponentConfig, PvComponentConfig
 
 CurtailmentMode = Literal["load-aware", "binary"] | None
 
@@ -133,54 +130,34 @@ class PvComponent:
     def __init__(
         self,
         *,
-        inverter: InverterConfig,
+        component_id: str,
+        inverter_id: str,
+        inverter: InverterComponentConfig,
+        pv: PvComponentConfig,
         dc_bus_id: str,
     ) -> None:
-        self.inverter_id = str(inverter.id)
+        self.id = str(component_id)
+        self.inverter_id = str(inverter_id)
         self.name = str(inverter.name)
         self.dc_bus_id = str(dc_bus_id)
         self.peak_power_kw = float(inverter.peak_power_kw)
         self.curtailment: CurtailmentMode = inverter.curtailment
-        self._pv_cfg = inverter.pv
+        self._pv_cfg = pv
 
-        self.node_id = f"pv_{self.inverter_id}"
-        self.connection_id = f"pv_{self.inverter_id}_link"
+        self.node_id = self.id
+        self.connection_id = f"{self.id}_link"
 
-        self._aligner = PowerForecastAligner()
-        self._available_kw = SeriesParameter[float](f"{self.inverter_id}_pv_available_kw")
+        self._available_kw = SeriesParameter[float](f"{self.id}_available_kw")
         self._latest: PvRun | None = None
 
-    def mark_for_hydration(self, resolver: ValueResolver) -> None:
-        if self._pv_cfg.realtime_power is not None:
-            resolver.mark_for_hydration(self._pv_cfg.realtime_power)
-        resolver.mark_for_hydration(self._pv_cfg.forecast)
-
-    def validate_forecast_coverage(self, *, horizon: Horizon, resolver: ValueResolver) -> None:
-        intervals = resolver.resolve(self._pv_cfg.forecast)
-        allow_first_slot_missing = self._pv_cfg.realtime_power is not None
-        validate_forecast_coverage(
-            label=f"PV forecast {self.inverter_id}",
-            horizon=horizon,
-            intervals=intervals,
-            allow_first_slot_missing=allow_first_slot_missing,
-        )
-
-    def update_inputs(self, *, horizon: Horizon, resolver: ValueResolver) -> None:
-        realtime_pv = None
-        if self._pv_cfg.realtime_power is not None:
-            realtime_pv = float(resolver.resolve(self._pv_cfg.realtime_power))
-
-        intervals = resolver.resolve(self._pv_cfg.forecast)
-        pv_series = self._aligner.align(
-            horizon,
-            intervals,
-            first_slot_override=realtime_pv,
-        )
-
+    def update_inputs(self, *, horizon: Horizon, inputs: ResolvedInputRegistry) -> None:
+        pv_series = inputs.forecast(self._pv_cfg.forecast.key, kind=InputValueKind.POWER)
+        if len(pv_series) != horizon.num_intervals:
+            raise ValueError("PV forecast series length does not match horizon")
         pv_series = [max(0.0, min(float(v), float(self.peak_power_kw))) for v in pv_series]
         pv_series = ForecastMultiplier(self._pv_cfg.forecast_multiplier).apply(
             pv_series,
-            skip_first_slot=realtime_pv is not None,
+            skip_first_slot=False,
         )
         self._available_kw.set([float(x) for x in pv_series])
 
@@ -190,7 +167,7 @@ class PvComponent:
         node = Node(
             horizon=horizon,
             id=self.node_id,
-            name=f"PV {self.inverter_id}",
+            name=self._pv_cfg.name or f"PV {self.inverter_id}",
             node_role="producer",
         )
 

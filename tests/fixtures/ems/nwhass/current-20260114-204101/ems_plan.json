@@ -448,13 +448,13 @@
       "battery_charge_kwh": 10.482,
       "battery_discharge_kwh": 15.061,
       "curtailment_minutes": 0.0,
-      "pv_kwh": 16.437,
+      "pv_kwh": 16.436,
       "soc_kwh_end": 26.28,
       "soc_kwh_max": 34.625,
       "soc_kwh_min": 24.178,
       "soc_pct_end": 62.72,
       "soc_pct_max": 82.636,
-      "soc_pct_min": 57.704
+      "soc_pct_min": 57.703
     }
   },
   "meta": {
@@ -498,7 +498,7 @@
     "grid_net_kwh": 2.478,
     "load_base_kwh": 22.181,
     "load_total_kwh": 22.181,
-    "pv_kwh": 16.437,
+    "pv_kwh": 16.436,
     "segment_cost_total": 0.149,
     "total_cost": 0.149
   }

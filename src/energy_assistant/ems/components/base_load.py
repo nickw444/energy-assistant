@@ -1,17 +1,14 @@
 from __future__ import annotations
 
-from energy_assistant.ems.forecast_alignment import (
-    PowerForecastAligner,
-    validate_forecast_coverage,
-)
 from energy_assistant.ems.horizon import Horizon
+from energy_assistant.ems.input_registry import ResolvedInputRegistry
 from energy_assistant.ems.parameters import SeriesParameter
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import GraphElement
 from energy_assistant.ems.topology.nodes import Node
 from energy_assistant.ems.topology.policies import DirectionalLimit, FixedFlow
-from energy_assistant.lib.source_resolver.resolver import ValueResolver
-from energy_assistant.models.plant import PlantLoadConfig
+from energy_assistant.models.inputs import InputValueKind
+from energy_assistant.models.plant import LoadComponentConfig
 
 
 class BaseLoadRun:
@@ -26,46 +23,29 @@ class BaseLoadComponent:
         self,
         *,
         bus_id: str,
-        load: PlantLoadConfig,
-        node_id: str = "base_load",
-        connection_id: str = "base_load_link",
+        component_id: str,
+        load: LoadComponentConfig,
     ) -> None:
+        self.id = str(component_id)
         self.bus_id = str(bus_id)
-        self.node_id = str(node_id)
-        self.connection_id = str(connection_id)
-        self._load = load
+        self.node_id = self.id
+        self.connection_id = f"{self.id}_link"
+        self.name = str(load.name)
+        self._power_input_key = load.power.key
 
-        self._aligner = PowerForecastAligner()
-        self._base_load_kw = SeriesParameter[float]("base_load_kw")
+        self._base_load_kw = SeriesParameter[float](f"{self.id}_kw")
         self._latest: BaseLoadRun | None = None
-
-    def mark_for_hydration(self, resolver: ValueResolver) -> None:
-        resolver.mark_for_hydration(self._load.realtime_load_power)
-        resolver.mark_for_hydration(self._load.forecast)
-
-    def validate_forecast_coverage(self, *, horizon: Horizon, resolver: ValueResolver) -> None:
-        intervals = resolver.resolve(self._load.forecast)
-        validate_forecast_coverage(
-            label="Base load forecast",
-            horizon=horizon,
-            intervals=intervals,
-            allow_first_slot_missing=True,
-        )
 
     def update_inputs(
         self,
         *,
         horizon: Horizon,
-        resolver: ValueResolver,
+        inputs: ResolvedInputRegistry,
     ) -> None:
-        realtime_load = float(resolver.resolve(self._load.realtime_load_power))
-        intervals = resolver.resolve(self._load.forecast)
-        series = self._aligner.align(
-            horizon,
-            intervals,
-            first_slot_override=realtime_load,
-        )
-        self._base_load_kw.set([float(x) for x in series])
+        series = inputs.forecast(self._power_input_key, kind=InputValueKind.POWER)
+        if len(series) != horizon.num_intervals:
+            raise ValueError("Base load series length does not match horizon")
+        self._base_load_kw.set(series)
 
     def graph_elements(
         self,
@@ -77,7 +57,7 @@ class BaseLoadComponent:
         node = Node(
             horizon=horizon,
             id=self.node_id,
-            name="Base Load",
+            name=self.name,
             node_role="consumer",
         )
         connection = Connection(
@@ -86,7 +66,6 @@ class BaseLoadComponent:
             a_node_id=self.bus_id,
             b_node_id=self.node_id,
             policies={
-                # One-way consumption (AC -> Load).
                 "directional_limit": DirectionalLimit(
                     max_a_to_b_kw=None,
                     max_b_to_a_kw=0.0,
@@ -94,7 +73,7 @@ class BaseLoadComponent:
                 "fixed_flow": FixedFlow(
                     direction="a_to_b",
                     values_kw=base_load_kw,
-                    name="base_load",
+                    name=self.id,
                 ),
             },
         )

@@ -6,6 +6,7 @@ from collections.abc import Iterator
 import pulp
 
 from energy_assistant.ems.horizon import Horizon
+from energy_assistant.ems.input_registry import ResolvedInputRegistry
 from energy_assistant.ems.milp.context import ConstraintSpec, value_of
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
 from energy_assistant.ems.models import EvTimestepPlan
@@ -21,8 +22,8 @@ from energy_assistant.ems.topology.policies import (
 from energy_assistant.ems.topology.policies.connection_policy import (
     ConnectionBinding,
 )
-from energy_assistant.lib.source_resolver.resolver import ValueResolver
-from energy_assistant.models.loads import ControlledEvLoad, SocIncentive
+from energy_assistant.models.inputs import InputValueKind
+from energy_assistant.models.plant import ControlledEvComponentConfig, SocIncentive
 
 _EV_SWITCH_ON_THRESHOLD_KW = 0.1
 
@@ -279,18 +280,19 @@ class EvComponent:
     def __init__(
         self,
         *,
+        component_id: str,
         switchboard_bus_id: str,
-        load: ControlledEvLoad,
-        grid_price_bias_pct: float,
+        load: ControlledEvComponentConfig,
+        grid_export_bias_pct: float,
     ) -> None:
-        self.id = str(load.id)
+        self.id = str(component_id)
         self.name = str(load.name)
         self.capacity_kwh = float(load.energy_kwh)
         self.min_power_kw = float(load.min_power_kw)
         self.max_power_kw = float(load.max_power_kw)
         self.switch_penalty = float(load.switch_penalty)
         self.soc_incentives = list(load.soc_incentives)
-        self._grid_price_bias = float(grid_price_bias_pct) / 100.0
+        self._grid_price_bias = float(grid_export_bias_pct) / 100.0
 
         self._load = load
         self._matcher = TimeWindowMatcher()
@@ -305,22 +307,21 @@ class EvComponent:
         self._gate_series = SeriesParameter[float](f"{self.id}_gate_series")
         self._latest: EvRun | None = None
 
-    def mark_for_hydration(self, resolver: ValueResolver) -> None:
-        resolver.mark_for_hydration(self._load.connected)
-        if self._load.can_connect is not None:
-            resolver.mark_for_hydration(self._load.can_connect)
-        resolver.mark_for_hydration(self._load.realtime_power)
-        resolver.mark_for_hydration(self._load.state_of_charge_pct)
-
-    def update_inputs(self, *, horizon: Horizon, resolver: ValueResolver) -> None:
-        connected = bool(resolver.resolve(self._load.connected))
+    def update_inputs(self, *, horizon: Horizon, inputs: ResolvedInputRegistry) -> None:
+        connected = inputs.scalar_bool(self._load.connected.key)
         can_connect = True
         if self._load.can_connect is not None:
-            can_connect = bool(resolver.resolve(self._load.can_connect))
+            can_connect = inputs.scalar_bool(self._load.can_connect.key)
 
-        realtime_power_kw = float(resolver.resolve(self._load.realtime_power))
+        realtime_power_kw = inputs.scalar_float(
+            self._load.realtime_power.key,
+            kind=InputValueKind.POWER,
+        )
 
-        initial_soc_pct = float(resolver.resolve(self._load.state_of_charge_pct))
+        initial_soc_pct = inputs.scalar_float(
+            self._load.state_of_charge_pct.key,
+            kind=InputValueKind.PERCENTAGE,
+        )
         initial_soc_kwh = self.capacity_kwh * initial_soc_pct / 100.0
         initial_soc_kwh = max(0.0, min(self.capacity_kwh, initial_soc_kwh))
 

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import cast
-
 from energy_assistant.ems.models import (
     EmsPlanOutput,
     InverterPlanIntent,
@@ -10,17 +8,14 @@ from energy_assistant.ems.models import (
     PlanIntentMode,
 )
 from energy_assistant.models.config import AppConfig
-from energy_assistant.models.loads import ControlledEvLoad, LoadConfig
-from energy_assistant.models.plant import BatteryConfig, InverterConfig
+from energy_assistant.models.plant import (
+    BatteryComponentConfig,
+    ControlledEvComponentConfig,
+    GridComponentConfig,
+)
 
 EPSILON_KW = 0.15
 BATTERY_FULL_TOLERANCE_PCT = 1.0
-
-# TODO: This intent layer is a step toward shifting control from HA automations to Energy Assistant
-# Ideally this takes the plan, then sends commands to HA depending on what integration the
-# user has configured.
-# Plan -> Quantize -> Command
-# but for now it instead gets picked up by the HA integration and an automation actions it
 
 
 def build_plan_intent(
@@ -37,14 +32,14 @@ def build_plan_intent(
     grid_export_kw = float(step.grid.export_kw)
     price_export = float(step.economics.price_export)
     no_export = price_export < 0.0
-    export_limit_normal_kw = float(app_config.plant.grid.max_export_kw)
+    grid_cfg = _single_component(app_config, GridComponentConfig)
+    export_limit_normal_kw = float(grid_cfg.constraints.max_export_kw)
 
-    inverter_configs = _inverter_config_map(app_config.plant.inverters)
+    battery_configs = _battery_config_map(app_config)
     inverters: dict[str, InverterPlanIntent] = {}
 
     for inverter_id, inverter in step.inverters.items():
-        config = inverter_configs.get(inverter_id)
-        battery = config.battery if config is not None else None
+        battery = battery_configs.get(inverter_id)
         max_charge_kw = battery.max_charge_kw if battery is not None else None
         max_discharge_kw = battery.max_discharge_kw if battery is not None else None
 
@@ -81,7 +76,7 @@ def build_plan_intent(
             force_discharge_kw=_clamp_kw(discharge_kw, max_discharge_kw),
         )
 
-    load_configs = _load_config_map(app_config.loads)
+    load_configs = _load_config_map(app_config)
     loads: dict[str, LoadPlanIntent] = {}
     for ev_id, ev in step.loads.evs.items():
         ev_config = load_configs.get(ev_id)
@@ -161,7 +156,7 @@ def _safe_kw(value: float | None) -> float:
 
 def _battery_full(
     battery_soc_pct: float | None,
-    battery: BatteryConfig | None,
+    battery: BatteryComponentConfig | None,
 ) -> bool:
     if battery_soc_pct is None or battery is None:
         return False
@@ -169,17 +164,28 @@ def _battery_full(
     return float(battery_soc_pct) >= full_threshold
 
 
-def _inverter_config_map(
-    inverters: list[InverterConfig],
-) -> dict[str, InverterConfig]:
-    return {inv.id: inv for inv in inverters}
-
-
-def _load_config_map(loads: list[LoadConfig]) -> dict[str, ControlledEvLoad]:
-    evs: dict[str, ControlledEvLoad] = {}
-    for load in loads:
-        if getattr(load, "load_type", None) != "controlled_ev":
+def _battery_config_map(app_config: AppConfig) -> dict[str, BatteryComponentConfig]:
+    batteries: dict[str, BatteryComponentConfig] = {}
+    for _key, component in app_config.plant.items():
+        if not isinstance(component, BatteryComponentConfig):
             continue
-        ev = cast(ControlledEvLoad, load)
-        evs[ev.id] = ev
-    return evs
+        batteries[component.connection] = component
+    return batteries
+
+
+def _load_config_map(app_config: AppConfig) -> dict[str, ControlledEvComponentConfig]:
+    return {
+        key: component
+        for key, component in app_config.plant.items()
+        if isinstance(component, ControlledEvComponentConfig)
+    }
+
+
+def _single_component(
+    app_config: AppConfig,
+    expected_type: type[GridComponentConfig],
+) -> GridComponentConfig:
+    for component in app_config.plant.values():
+        if isinstance(component, expected_type):
+            return component
+    raise ValueError(f"Missing component type: {expected_type.__name__}")

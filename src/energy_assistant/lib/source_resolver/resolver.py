@@ -50,17 +50,17 @@ class ValueResolverImpl(ValueResolver):
 
     def resolve(self, source: EntitySource[Q, R]) -> R:
         if isinstance(source, HomeAssistantEntitySource):
-            state = self._hass_data_provider.get(source.entity)
             try:
+                state = self._hass_data_provider.get(source.entity)
                 return source.mapper(state)
             except Exception as exc:
                 raise ValueError(
                     f"Failed to resolve Home Assistant entity {source.entity}: {exc}"
                 ) from exc
         if isinstance(source, HomeAssistantHistoryEntitySource):
-            history = self._hass_data_provider.get_history(source.entity)
-            current_state = self._hass_data_provider.get(source.entity)
             try:
+                history = self._hass_data_provider.get_history(source.entity)
+                current_state = self._hass_data_provider.get(source.entity)
                 payload = HomeAssistantHistoryPayload(
                     history=history,
                     current_state=current_state,
@@ -71,8 +71,8 @@ class ValueResolverImpl(ValueResolver):
                     f"Failed to resolve Home Assistant history for {source.entity}: {exc}"
                 ) from exc
         if isinstance(source, HomeAssistantMultiEntitySource):
-            states = [self._hass_data_provider.get(entity) for entity in source.entities]
             try:
+                states = [self._hass_data_provider.get(entity) for entity in source.entities]
                 return source.mapper(states)
             except Exception as exc:
                 entities = ", ".join(source.entities)

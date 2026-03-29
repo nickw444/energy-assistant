@@ -8,6 +8,7 @@ from energy_assistant.ems.components.grid import GridComponent
 from energy_assistant.ems.components.inverter import InverterComponent
 from energy_assistant.ems.components.switchboard import SwitchboardComponent
 from energy_assistant.ems.horizon import Horizon
+from energy_assistant.ems.input_registry import ResolvedInputRegistry
 from energy_assistant.ems.milp.context import ModelContext
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
 from energy_assistant.ems.models import (
@@ -19,11 +20,10 @@ from energy_assistant.ems.models import (
     TimestepPlan,
 )
 from energy_assistant.ems.topology.graph import EnergyGraph
-from energy_assistant.lib.source_resolver.resolver import ValueResolver
 
 
 class EmsSystem:
-    """Persistent EMS component definitions with per-solve input hydration."""
+    """Persistent EMS component definitions with per-solve resolved inputs."""
 
     def __init__(
         self,
@@ -44,27 +44,13 @@ class EmsSystem:
     def switchboard_bus_id(self) -> str:
         return str(self.switchboard.bus_id)
 
-    def mark_for_hydration(self, resolver: ValueResolver) -> None:
-        self.base_load.mark_for_hydration(resolver)
-        self.grid.mark_for_hydration(resolver)
+    def update_inputs(self, *, horizon: Horizon, inputs: ResolvedInputRegistry) -> None:
+        self.base_load.update_inputs(horizon=horizon, inputs=inputs)
+        self.grid.update_inputs(horizon=horizon, inputs=inputs)
         for inv in self.inverters.values():
-            inv.mark_for_hydration(resolver)
+            inv.update_inputs(horizon=horizon, inputs=inputs)
         for ev in self.evs.values():
-            ev.mark_for_hydration(resolver)
-
-    def validate_forecast_coverage(self, *, horizon: Horizon, resolver: ValueResolver) -> None:
-        self.base_load.validate_forecast_coverage(horizon=horizon, resolver=resolver)
-        self.grid.validate_forecast_coverage(horizon=horizon, resolver=resolver)
-        for inv in self.inverters.values():
-            inv.validate_forecast_coverage(horizon=horizon, resolver=resolver)
-
-    def update_inputs(self, *, horizon: Horizon, resolver: ValueResolver) -> None:
-        self.base_load.update_inputs(horizon=horizon, resolver=resolver)
-        self.grid.update_inputs(horizon=horizon, resolver=resolver)
-        for inv in self.inverters.values():
-            inv.update_inputs(horizon=horizon, resolver=resolver)
-        for ev in self.evs.values():
-            ev.update_inputs(horizon=horizon, resolver=resolver)
+            ev.update_inputs(horizon=horizon, inputs=inputs)
 
     def build_snapshot(self, *, horizon: Horizon) -> ModelSnapshot:
         graph = EnergyGraph()

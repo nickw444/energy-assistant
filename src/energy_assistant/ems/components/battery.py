@@ -3,6 +3,7 @@ from __future__ import annotations
 import pulp
 
 from energy_assistant.ems.horizon import Horizon
+from energy_assistant.ems.input_registry import ResolvedInputRegistry
 from energy_assistant.ems.milp.context import ConstraintSpec
 from energy_assistant.ems.parameters import ScalarParameter
 from energy_assistant.ems.topology.connection import Connection
@@ -13,9 +14,9 @@ from energy_assistant.ems.topology.policies import (
     DirectionalLimit,
     LinearCost,
 )
-from energy_assistant.lib.source_resolver.resolver import ValueResolver
 from energy_assistant.models.config import TerminalSocConfig
-from energy_assistant.models.plant import BatteryConfig
+from energy_assistant.models.inputs import InputValueKind
+from energy_assistant.models.plant import BatteryComponentConfig
 
 
 class BatteryExportReservePolicy:
@@ -98,13 +99,15 @@ class BatteryComponent:
     def __init__(
         self,
         *,
+        component_id: str,
         inverter_id: str,
         dc_bus_id: str,
         inverter_peak_kw: float,
-        battery: BatteryConfig,
+        battery: BatteryComponentConfig,
         grid_max_export_kw: float,
         terminal_soc: TerminalSocConfig,
     ) -> None:
+        self.id = str(component_id)
         self.inverter_id = str(inverter_id)
         self.dc_bus_id = str(dc_bus_id)
         self.capacity_kwh = float(battery.capacity_kwh)
@@ -129,30 +132,30 @@ class BatteryComponent:
         self.reserve_kwh = self.capacity_kwh * float(battery.reserve_soc_pct) / 100.0
         self._eta = float(battery.storage_efficiency_pct) / 100.0
 
-        self.node_id = f"{self.inverter_id}_battery"
-        self.connection_id = f"battery_{self.inverter_id}_link"
+        self.node_id = self.id
+        self.connection_id = f"{self.id}_link"
+        self.name = str(battery.name)
 
         self._battery_cfg = battery
         self._grid_max_export_kw = float(grid_max_export_kw)
         self._terminal_soc = terminal_soc
 
         self._initial_soc_kwh = ScalarParameter[float](
-            f"{self.inverter_id}_battery_initial_soc_kwh"
+            f"{self.id}_initial_soc_kwh"
         )
         self._latest: BatteryRun | None = None
-
-    def mark_for_hydration(self, resolver: ValueResolver) -> None:
-        resolver.mark_for_hydration(self._battery_cfg.state_of_charge_pct)
-        resolver.mark_for_hydration(self._battery_cfg.realtime_power)
 
     def update_inputs(
         self,
         *,
         horizon: Horizon,
-        resolver: ValueResolver,
+        inputs: ResolvedInputRegistry,
     ) -> None:
         _ = horizon
-        initial_soc_pct = float(resolver.resolve(self._battery_cfg.state_of_charge_pct))
+        initial_soc_pct = inputs.scalar_float(
+            self._battery_cfg.state_of_charge_pct.key,
+            kind=InputValueKind.PERCENTAGE,
+        )
         initial_soc_kwh = self.capacity_kwh * initial_soc_pct / 100.0
         self._initial_soc_kwh.set(max(0.0, min(self.capacity_kwh, initial_soc_kwh)))
 
@@ -179,7 +182,7 @@ class BatteryComponent:
         storage = StorageNode(
             horizon=horizon,
             id=self.node_id,
-            name=f"Battery {self.inverter_id}",
+            name=self.name,
             capacity_kwh=self.capacity_kwh,
             soc_min_kwh=self.soc_min_kwh,
             soc_max_kwh=self.soc_max_kwh,

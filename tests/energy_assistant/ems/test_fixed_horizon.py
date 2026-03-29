@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import Any, cast
 
 import yaml
 
 from energy_assistant.ems.components.grid import GridComponent
 from energy_assistant.ems.horizon import build_horizon_shape
+from energy_assistant.ems.input_provider import ResolverBackedInputProvider
+from energy_assistant.ems.input_registry import (
+    ResolvedForecastInput,
+    ResolvedInputRegistry,
+)
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.nodes import Node
 from energy_assistant.ems.topology.policies import LinearCost
@@ -22,12 +26,14 @@ from energy_assistant.lib.source_resolver.hass_source import (
 from energy_assistant.lib.source_resolver.models import PriceForecastInterval
 from energy_assistant.lib.source_resolver.sources import EntitySource
 from energy_assistant.models.config import AppConfig
-from energy_assistant.models.plant import GridPriceForecastExtensionConfig
+from energy_assistant.models.inputs import ForecastInputConfig, InputValueKind
+from energy_assistant.models.plant import GridComponentConfig
 
 
 class StubResolver:
     def __init__(self) -> None:
         self._values: dict[int, object] = {}
+        self._entity_values: dict[str, object] = {}
         self._states: dict[str, HomeAssistantStateDict] = {}
         self._history: dict[str, list[HomeAssistantHistoryStateDict]] = {}
 
@@ -43,8 +49,14 @@ class StubResolver:
     def hydrate_states(self) -> None:
         return None
 
+    def mark(self, source: EntitySource[object, object]) -> None:
+        _ = source
+
     def set(self, source: object, value: object) -> None:
         self._values[id(source)] = value
+        entity = getattr(source, "entity", None)
+        if isinstance(entity, str):
+            self._entity_values[entity] = value
 
     def set_state(self, entity_id: str, state: HomeAssistantStateDict) -> None:
         self._states[entity_id] = state
@@ -59,17 +71,88 @@ class StubResolver:
                 current_state=self._states[source.entity],
             )
             return cast(R, source.mapper(payload))
+        entity = getattr(source, "entity", None)
+        if isinstance(entity, str) and entity in self._entity_values:
+            return cast(R, self._entity_values[entity])
         return cast(R, self._values[id(source)])
-
-    def mark(self, source: EntitySource[object, object]) -> None:
-        _ = source
 
 
 def _load_fixture_config() -> AppConfig:
-    fixture_path = Path("tests/fixtures/ems/nwhass/ems_config.yaml")
-    loaded_raw: Any = yaml.safe_load(fixture_path.read_text())
+    fixture_path = "/Users/nickw/repos/energy-assistant/tests/fixtures/ems/nwhass/ems_config.yaml"
+    loaded_raw: Any = yaml.safe_load(open(fixture_path).read())
     assert isinstance(loaded_raw, dict)
     return AppConfig.model_validate(cast(dict[str, Any], loaded_raw))
+
+
+def _minimal_grid_app_config(*, forecast_expansion: dict[str, int]) -> AppConfig:
+    return AppConfig.model_validate(
+        {
+            "server": {
+                "host": "127.0.0.1",
+                "port": 6070,
+                "data_dir": "./data",
+            },
+            "homeassistant": {
+                "base_url": "https://hass.example.com",
+                "token": "test-token",
+            },
+            "inputs": {
+                "grid_price_import": {
+                    "type": "forecast",
+                    "forecast": {
+                        "type": "home_assistant",
+                        "platform": "amber_express",
+                        "entity": "sensor.price_import_forecast",
+                    },
+                    "realtime": {
+                        "type": "home_assistant",
+                        "entity": "sensor.price_import",
+                    },
+                    "forecast_expansion": forecast_expansion,
+                },
+                "grid_price_export": {
+                    "type": "forecast",
+                    "forecast": {
+                        "type": "home_assistant",
+                        "platform": "amber_express",
+                        "entity": "sensor.price_export_forecast",
+                    },
+                    "realtime": {
+                        "type": "home_assistant",
+                        "entity": "sensor.price_export",
+                    },
+                    "forecast_expansion": forecast_expansion,
+                },
+                "base_load_power": {
+                    "type": "forecast",
+                    "forecast": {
+                        "type": "home_assistant",
+                        "platform": "solcast",
+                        "entities": [
+                            "sensor.base_load_forecast_today",
+                            "sensor.base_load_forecast_tomorrow",
+                        ],
+                    },
+                },
+            },
+            "plant": {
+                "switchboard": {"type": "switchboard"},
+                "grid": {
+                    "type": "grid",
+                    "connection": "switchboard",
+                    "constraints": {"max_import_kw": 10.0, "max_export_kw": 10.0},
+                    "price_import": {"source": "inputs.grid_price_import"},
+                    "price_export": {"source": "inputs.grid_price_export"},
+                },
+                "base_load": {
+                    "type": "load",
+                    "connection": "switchboard",
+                    "name": "Base Load",
+                    "power": "inputs.base_load_power",
+                },
+            },
+        }
+    )
 
 
 def _price_intervals(
@@ -94,23 +177,38 @@ def _history_point(*, ts: datetime, value: float) -> HomeAssistantHistoryStateDi
     }
 
 
-def test_grid_validate_forecast_coverage_uses_fixed_horizon() -> None:
+def _grid_component(config: AppConfig) -> GridComponentConfig:
+    component = config.plant["grid"]
+    assert isinstance(component, GridComponentConfig)
+    return component
+
+
+def _forecast_input(config: AppConfig, key: str) -> ForecastInputConfig:
+    input_config = config.inputs[key]
+    assert isinstance(input_config, ForecastInputConfig)
+    return input_config
+
+
+def test_input_provider_uses_fixed_horizon_for_coverage_validation() -> None:
     config = _load_fixture_config()
     resolver = StubResolver()
-    component = GridComponent(bus_id="ac_bus", grid=config.plant.grid)
+    provider = ResolverBackedInputProvider(app_config=config, resolver=resolver)
     horizon = build_horizon_shape(timestep_minutes=60, horizon_minutes=180).build(
         now=datetime(2025, 1, 1, 0, 0, tzinfo=UTC)
     )
+    grid = _grid_component(config)
     short_intervals = _price_intervals(
         start=horizon.start,
         interval_minutes=60,
         values=[0.10, 0.11],
     )
-    resolver.set(config.plant.grid.price_import_forecast, short_intervals)
-    resolver.set(config.plant.grid.price_export_forecast, short_intervals)
+    import_input = _forecast_input(config, grid.price_import.source.key)
+    export_input = _forecast_input(config, grid.price_export.source.key)
+    resolver.set(import_input.forecast, short_intervals)
+    resolver.set(export_input.forecast, short_intervals)
 
     try:
-        component.validate_forecast_coverage(horizon=horizon, resolver=resolver)
+        provider.resolve_for_horizon(horizon=horizon)
     except ValueError as exc:
         assert "required=180 minutes" in str(exc)
         assert "available=120 minutes" in str(exc)
@@ -120,28 +218,29 @@ def test_grid_validate_forecast_coverage_uses_fixed_horizon() -> None:
 
 def test_grid_rebinds_inputs_without_changing_topology_ids() -> None:
     config = _load_fixture_config()
-    resolver = StubResolver()
-    component = GridComponent(bus_id="ac_bus", grid=config.plant.grid)
+    grid_cfg = _grid_component(config)
+    component = GridComponent(bus_id="switchboard", component_id="grid", grid=grid_cfg)
     horizon = build_horizon_shape(timestep_minutes=60, horizon_minutes=120).build(
         now=datetime(2025, 1, 1, 0, 0, tzinfo=UTC)
     )
 
-    import_source = config.plant.grid.price_import_forecast
-    export_source = config.plant.grid.price_export_forecast
-    realtime_import = config.plant.grid.realtime_price_import
-    realtime_export = config.plant.grid.realtime_price_export
-
-    resolver.set(realtime_import, 0.20)
-    resolver.set(realtime_export, 0.05)
-    resolver.set(
-        import_source,
-        _price_intervals(start=horizon.start, interval_minutes=60, values=[0.20, 0.21]),
+    component.update_inputs(
+        horizon=horizon,
+        inputs=ResolvedInputRegistry(
+            forecasts={
+                "grid_price_import": ResolvedForecastInput(
+                    key="grid_price_import",
+                    kind=InputValueKind.PRICE,
+                    series=[0.20, 0.21],
+                ),
+                "grid_price_export": ResolvedForecastInput(
+                    key="grid_price_export",
+                    kind=InputValueKind.PRICE,
+                    series=[0.05, 0.06],
+                ),
+            }
+        ),
     )
-    resolver.set(
-        export_source,
-        _price_intervals(start=horizon.start, interval_minutes=60, values=[0.05, 0.06]),
-    )
-    component.update_inputs(horizon=horizon, resolver=resolver)
     first_elements = component.graph_elements(horizon=horizon)
     first_node = next(element for element in first_elements if isinstance(element, Node))
     first_connection = next(
@@ -153,17 +252,23 @@ def test_grid_rebinds_inputs_without_changing_topology_ids() -> None:
     ).cost_b_to_a_per_kwh
     first_effective = component.latest_price_import_effective()
 
-    resolver.set(realtime_import, 0.30)
-    resolver.set(realtime_export, 0.08)
-    resolver.set(
-        import_source,
-        _price_intervals(start=horizon.start, interval_minutes=60, values=[0.30, 0.31]),
+    component.update_inputs(
+        horizon=horizon,
+        inputs=ResolvedInputRegistry(
+            forecasts={
+                "grid_price_import": ResolvedForecastInput(
+                    key="grid_price_import",
+                    kind=InputValueKind.PRICE,
+                    series=[0.30, 0.31],
+                ),
+                "grid_price_export": ResolvedForecastInput(
+                    key="grid_price_export",
+                    kind=InputValueKind.PRICE,
+                    series=[0.08, 0.09],
+                ),
+            }
+        ),
     )
-    resolver.set(
-        export_source,
-        _price_intervals(start=horizon.start, interval_minutes=60, values=[0.08, 0.09]),
-    )
-    component.update_inputs(horizon=horizon, resolver=resolver)
     second_elements = component.graph_elements(horizon=horizon)
     second_node = next(element for element in second_elements if isinstance(element, Node))
     second_connection = next(
@@ -183,37 +288,41 @@ def test_grid_rebinds_inputs_without_changing_topology_ids() -> None:
     assert component.latest_price_import_raw() == [0.30, 0.31]
 
 
-def test_grid_can_extend_short_price_forecast_from_history() -> None:
-    config = _load_fixture_config()
-    now = datetime.now(UTC).replace(minute=30, second=0, microsecond=0)
-    grid_cfg = config.plant.grid.model_copy(
-        update={
-            "price_forecast_extension": GridPriceForecastExtensionConfig(
-                history_days=2,
-                interval_duration=60,
-            )
-        }
+def test_input_provider_can_extend_short_price_forecast_from_history() -> None:
+    config = _minimal_grid_app_config(
+        forecast_expansion={"history_days": 2, "interval_duration": 60}
     )
+    now = datetime.now(UTC).replace(minute=30, second=0, microsecond=0)
     resolver = StubResolver()
-    component = GridComponent(bus_id="ac_bus", grid=grid_cfg)
-    horizon = build_horizon_shape(timestep_minutes=60, horizon_minutes=180).build(
-        now=now
+    provider = ResolverBackedInputProvider(app_config=config, resolver=resolver)
+    horizon = build_horizon_shape(timestep_minutes=60, horizon_minutes=180).build(now=now)
+
+    grid = _grid_component(config)
+    import_input = _forecast_input(config, grid.price_import.source.key)
+    export_input = _forecast_input(config, grid.price_export.source.key)
+    base_load_input = _forecast_input(config, "base_load_power")
+    assert import_input.realtime is not None
+    assert export_input.realtime is not None
+
+    resolver.set(
+        base_load_input.forecast,
+        _price_intervals(start=horizon.start, interval_minutes=60, values=[1.0, 1.0, 1.0]),
     )
 
-    resolver.set(grid_cfg.realtime_price_import, 0.20)
-    resolver.set(grid_cfg.realtime_price_export, 0.05)
+    resolver.set(import_input.realtime, 0.20)
+    resolver.set(export_input.realtime, 0.05)
     resolver.set(
-        grid_cfg.price_import_forecast,
+        import_input.forecast,
         _price_intervals(start=horizon.start, interval_minutes=60, values=[0.20]),
     )
     resolver.set(
-        grid_cfg.price_export_forecast,
+        export_input.forecast,
         _price_intervals(start=horizon.start, interval_minutes=60, values=[0.05]),
     )
     resolver.set_state(
-        grid_cfg.realtime_price_import.entity,
+        import_input.realtime.entity,
         {
-            "entity_id": grid_cfg.realtime_price_import.entity,
+            "entity_id": import_input.realtime.entity,
             "state": 0.20,
             "attributes": {},
             "last_changed": now.isoformat(),
@@ -222,9 +331,9 @@ def test_grid_can_extend_short_price_forecast_from_history() -> None:
         },
     )
     resolver.set_state(
-        grid_cfg.realtime_price_export.entity,
+        export_input.realtime.entity,
         {
-            "entity_id": grid_cfg.realtime_price_export.entity,
+            "entity_id": export_input.realtime.entity,
             "state": 0.05,
             "attributes": {},
             "last_changed": now.isoformat(),
@@ -233,7 +342,7 @@ def test_grid_can_extend_short_price_forecast_from_history() -> None:
         },
     )
     resolver.set_history(
-        grid_cfg.realtime_price_import.entity,
+        import_input.realtime.entity,
         [
             _history_point(ts=now - timedelta(days=2) + timedelta(minutes=30), value=0.30),
             _history_point(ts=now - timedelta(days=2) + timedelta(minutes=90), value=0.40),
@@ -242,7 +351,7 @@ def test_grid_can_extend_short_price_forecast_from_history() -> None:
         ],
     )
     resolver.set_history(
-        grid_cfg.realtime_price_export.entity,
+        export_input.realtime.entity,
         [
             _history_point(ts=now - timedelta(days=2) + timedelta(minutes=30), value=0.10),
             _history_point(ts=now - timedelta(days=2) + timedelta(minutes=90), value=0.15),
@@ -251,26 +360,18 @@ def test_grid_can_extend_short_price_forecast_from_history() -> None:
         ],
     )
 
-    component.validate_forecast_coverage(horizon=horizon, resolver=resolver)
-    component.update_inputs(horizon=horizon, resolver=resolver)
-
-    assert component.latest_price_import_raw() == [0.20, 0.30, 0.40]
-    assert component.latest_price_export_raw() == [0.05, 0.10, 0.15]
+    inputs = provider.resolve_for_horizon(horizon=horizon)
+    assert inputs.forecast("grid_price_import", kind=InputValueKind.PRICE) == [0.20, 0.30, 0.40]
+    assert inputs.forecast("grid_price_export", kind=InputValueKind.PRICE) == [0.05, 0.10, 0.15]
 
 
-def test_grid_price_extension_covers_unaligned_multi_resolution_horizon() -> None:
-    config = _load_fixture_config()
-    now = datetime(2025, 1, 1, 12, 38, tzinfo=UTC)
-    grid_cfg = config.plant.grid.model_copy(
-        update={
-            "price_forecast_extension": GridPriceForecastExtensionConfig(
-                history_days=2,
-                interval_duration=30,
-            )
-        }
+def test_price_extension_covers_unaligned_multi_resolution_horizon() -> None:
+    config = _minimal_grid_app_config(
+        forecast_expansion={"history_days": 3, "interval_duration": 30}
     )
+    now = datetime(2025, 1, 1, 12, 38, tzinfo=UTC)
     resolver = StubResolver()
-    component = GridComponent(bus_id="ac_bus", grid=grid_cfg)
+    provider = ResolverBackedInputProvider(app_config=config, resolver=resolver)
     horizon = build_horizon_shape(
         timestep_minutes=30,
         horizon_minutes=2880,
@@ -278,21 +379,36 @@ def test_grid_price_extension_covers_unaligned_multi_resolution_horizon() -> Non
         high_res_horizon_minutes=120,
     ).build(now=now)
 
-    forecast_start = datetime(2025, 1, 1, 12, 30, tzinfo=UTC)
-    resolver.set(grid_cfg.realtime_price_import, 0.20)
-    resolver.set(grid_cfg.realtime_price_export, 0.05)
+    grid = _grid_component(config)
+    import_input = _forecast_input(config, grid.price_import.source.key)
+    export_input = _forecast_input(config, grid.price_export.source.key)
+    base_load_input = _forecast_input(config, "base_load_power")
+    assert import_input.realtime is not None
+    assert export_input.realtime is not None
+
     resolver.set(
-        grid_cfg.price_import_forecast,
-        _price_intervals(start=forecast_start, interval_minutes=30, values=[0.20]),
+        base_load_input.forecast,
+        _price_intervals(
+            start=horizon.start,
+            interval_minutes=30,
+            values=[1.0] * horizon.num_intervals,
+        ),
+    )
+
+    resolver.set(import_input.realtime, 0.20)
+    resolver.set(export_input.realtime, 0.05)
+    resolver.set(
+        import_input.forecast,
+        _price_intervals(start=horizon.start, interval_minutes=30, values=[0.20]),
     )
     resolver.set(
-        grid_cfg.price_export_forecast,
-        _price_intervals(start=forecast_start, interval_minutes=30, values=[0.05]),
+        export_input.forecast,
+        _price_intervals(start=horizon.start, interval_minutes=30, values=[0.05]),
     )
     resolver.set_state(
-        grid_cfg.realtime_price_import.entity,
+        import_input.realtime.entity,
         {
-            "entity_id": grid_cfg.realtime_price_import.entity,
+            "entity_id": import_input.realtime.entity,
             "state": 0.20,
             "attributes": {},
             "last_changed": now.isoformat(),
@@ -301,9 +417,9 @@ def test_grid_price_extension_covers_unaligned_multi_resolution_horizon() -> Non
         },
     )
     resolver.set_state(
-        grid_cfg.realtime_price_export.entity,
+        export_input.realtime.entity,
         {
-            "entity_id": grid_cfg.realtime_price_export.entity,
+            "entity_id": export_input.realtime.entity,
             "state": 0.05,
             "attributes": {},
             "last_changed": now.isoformat(),
@@ -311,27 +427,24 @@ def test_grid_price_extension_covers_unaligned_multi_resolution_horizon() -> Non
             "last_updated": now.isoformat(),
         },
     )
-    resolver.set_history(
-        grid_cfg.realtime_price_import.entity,
-        [
-            _history_point(ts=datetime(2024, 12, 30, 12, 30, tzinfo=UTC), value=0.30),
-            _history_point(ts=datetime(2024, 12, 30, 13, 0, tzinfo=UTC), value=0.40),
-            _history_point(ts=datetime(2024, 12, 31, 12, 30, tzinfo=UTC), value=0.30),
-            _history_point(ts=datetime(2024, 12, 31, 13, 0, tzinfo=UTC), value=0.40),
-        ],
-    )
-    resolver.set_history(
-        grid_cfg.realtime_price_export.entity,
-        [
-            _history_point(ts=datetime(2024, 12, 30, 12, 30, tzinfo=UTC), value=0.10),
-            _history_point(ts=datetime(2024, 12, 30, 13, 0, tzinfo=UTC), value=0.15),
-            _history_point(ts=datetime(2024, 12, 31, 12, 30, tzinfo=UTC), value=0.10),
-            _history_point(ts=datetime(2024, 12, 31, 13, 0, tzinfo=UTC), value=0.15),
-        ],
-    )
+    repeated_import_history: list[HomeAssistantHistoryStateDict] = []
+    repeated_export_history: list[HomeAssistantHistoryStateDict] = []
+    forecast_start = datetime(2025, 1, 1, 12, 30, tzinfo=UTC)
+    for day in (1, 2, 3):
+        cursor = forecast_start - timedelta(days=day)
+        while cursor < forecast_start - timedelta(days=day) + timedelta(hours=49):
+            repeated_import_history.append(_history_point(ts=cursor, value=0.25))
+            repeated_export_history.append(_history_point(ts=cursor, value=0.07))
+            cursor += timedelta(minutes=30)
+    resolver.set_history(import_input.realtime.entity, repeated_import_history)
+    resolver.set_history(export_input.realtime.entity, repeated_export_history)
 
-    component.validate_forecast_coverage(horizon=horizon, resolver=resolver)
-    component.update_inputs(horizon=horizon, resolver=resolver)
-
-    assert len(component.latest_price_import_raw()) == horizon.num_intervals
-    assert len(component.latest_price_export_raw()) == horizon.num_intervals
+    inputs = provider.resolve_for_horizon(horizon=horizon)
+    import_series = inputs.forecast("grid_price_import", kind=InputValueKind.PRICE)
+    export_series = inputs.forecast("grid_price_export", kind=InputValueKind.PRICE)
+    assert len(import_series) == horizon.num_intervals
+    assert len(export_series) == horizon.num_intervals
+    assert import_series[0] == 0.20
+    assert export_series[0] == 0.05
+    assert import_series[-1] == 0.25
+    assert export_series[-1] == 0.07

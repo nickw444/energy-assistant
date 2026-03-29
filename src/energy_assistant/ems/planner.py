@@ -7,6 +7,7 @@ from typing import get_args
 
 import pulp
 
+from energy_assistant.ems.input_provider import EmsInputProvider, ResolverBackedInputProvider
 from energy_assistant.ems.models import (
     EmsPlanOutput,
     EmsPlanStatus,
@@ -20,14 +21,31 @@ logger = logging.getLogger(__name__)
 
 
 class EmsMilpPlanner:
-    def __init__(self, app_config: AppConfig, *, resolver: ValueResolver) -> None:
+    def __init__(
+        self,
+        app_config: AppConfig,
+        *,
+        input_provider: EmsInputProvider | None = None,
+        resolver: ValueResolver | None = None,
+    ) -> None:
         self._app_config = app_config
-        self._resolver = resolver
+        if input_provider is not None:
+            self._input_provider = input_provider
+        elif resolver is not None:
+            self._input_provider = ResolverBackedInputProvider(
+                app_config=app_config,
+                resolver=resolver,
+            )
+        else:
+            raise ValueError("EmsMilpPlanner requires an input_provider or resolver")
         self._last_timings: EmsPlanTimings | None = None
-        self._system_factory = EmsSystemFactory(app_config, resolver=resolver)
+        self._system_factory = EmsSystemFactory(app_config)
 
     def mark_for_hydration(self) -> None:
-        self._system_factory.mark_for_hydration()
+        self._input_provider.mark_for_hydration()
+
+    def hydrate_all(self) -> None:
+        self._input_provider.hydrate_all()
 
     def generate_ems_plan(
         self,
@@ -47,12 +65,11 @@ class EmsMilpPlanner:
             horizon_shape.high_res_horizon_minutes,
             horizon_shape.timestep_minutes,
         )
-        horizon_msg = (
-            "EMS horizon: intervals=%s base_interval_minutes=%s total_minutes=%s "
-            "start=%s schedule=%s"
-        )
         logger.info(
-            horizon_msg,
+            (
+                "EMS horizon: intervals=%s base_interval_minutes=%s "
+                "total_minutes=%s start=%s schedule=%s"
+            ),
             horizon.num_intervals,
             horizon.interval_minutes,
             horizon_shape.horizon_minutes,
@@ -60,9 +77,9 @@ class EmsMilpPlanner:
             schedule_info,
         )
         build_start = time.perf_counter()
+        resolved_inputs = self._input_provider.resolve_for_horizon(horizon=horizon)
         system = self._system_factory.system
-        system.validate_forecast_coverage(horizon=horizon, resolver=self._resolver)
-        system.update_inputs(horizon=horizon, resolver=self._resolver)
+        system.update_inputs(horizon=horizon, inputs=resolved_inputs)
         snapshot = system.build_snapshot(horizon=horizon)
         build_seconds = time.perf_counter() - build_start
 

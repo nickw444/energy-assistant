@@ -16,12 +16,9 @@ from energy_assistant.ems.fixture_harness import (
     resolve_ems_fixture_paths,
     summarize_plan,
 )
+from energy_assistant.ems.fixture_inputs import load_resolved_input_registry
+from energy_assistant.ems.input_provider import FixtureResolvedInputProvider
 from energy_assistant.ems.planner import EmsMilpPlanner
-from energy_assistant.lib.source_resolver.fixtures import (
-    FixtureHassDataProvider,
-    freeze_hass_source_time,
-)
-from energy_assistant.lib.source_resolver.resolver import ValueResolverImpl
 
 FIXTURE_BASE = Path("tests/fixtures/ems")
 
@@ -80,16 +77,13 @@ def test_fixture_baseline_up_to_date(fixture: str, scenario: str) -> None:
         pytest.skip("EMS fixture scenario not recorded.")
 
     app_config = load_app_config(paths.config_path)
-    provider, captured_at = FixtureHassDataProvider.from_path(paths.fixture_path)
+    registry, captured_at = load_resolved_input_registry(paths.fixture_path)
     now = datetime.fromisoformat(captured_at) if captured_at else None
 
-    with freeze_hass_source_time(now):
-        resolver = ValueResolverImpl(hass_data_provider=provider)
-        resolver.mark_for_hydration(app_config)
-        resolver.hydrate_all()
-        plan = EmsMilpPlanner(app_config, resolver=resolver).generate_ems_plan(
-            now=now,
-        )
+    plan = EmsMilpPlanner(
+        app_config,
+        input_provider=FixtureResolvedInputProvider(registry=registry),
+    ).generate_ems_plan(now=now)
 
     actual = summarize_plan(plan)
     expected = json.loads(paths.plan_path.read_text())

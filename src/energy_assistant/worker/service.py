@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Literal
 
+from energy_assistant.ems.input_provider import ResolverBackedInputProvider
 from energy_assistant.ems.models import EmsPlanOutput
 from energy_assistant.ems.planner import EmsMilpPlanner
 from energy_assistant.lib.home_assistant_ws import HomeAssistantWebSocketClient
@@ -47,9 +48,11 @@ class Worker:
     ) -> None:
         self._app_config = app_config
         self._resolver = resolver
-        # Keep the worker lightweight at construction time (tests use partial mocks).
-        # We still do the standard two-pass workflow: mark once, hydrate each run.
-        self._resolver.mark_for_hydration(app_config)
+        self._input_provider = ResolverBackedInputProvider(
+            app_config=app_config,
+            resolver=resolver,
+        )
+        self._input_provider.mark_for_hydration()
         self._planner: EmsMilpPlanner | None = None
 
         self._condition = asyncio.Condition()
@@ -67,10 +70,7 @@ class Worker:
         self._run_requested = asyncio.Event()
         self._last_run_finished_at: datetime | None = None
 
-        self._price_entity_ids = {
-            app_config.plant.grid.realtime_price_import.entity,
-            app_config.plant.grid.realtime_price_export.entity,
-        }
+        self._price_entity_ids = self._input_provider.grid_price_watch_entity_ids()
         self._ha_ws_client = ha_ws_client
 
     def start(self, *, start_scheduler: bool = True, start_price_watcher: bool = True) -> None:
@@ -231,9 +231,11 @@ class Worker:
 
     def _solve_once_blocking(self) -> EmsPlanOutput:
         if self._planner is None:
-            self._planner = EmsMilpPlanner(self._app_config, resolver=self._resolver)
-            self._planner.mark_for_hydration()
-        self._resolver.hydrate_all()
+            self._planner = EmsMilpPlanner(
+                self._app_config,
+                input_provider=self._input_provider,
+            )
+        self._planner.hydrate_all()
         return self._planner.generate_ems_plan()
 
     async def _run_scheduler(self) -> None:

@@ -8,8 +8,9 @@ from energy_assistant.ems.topology.nodes import Node
 class SwitchboardComponent:
     """AC bus representing the main switchboard."""
 
-    def __init__(self, *, bus_id: str = "ac_bus") -> None:
-        self.bus_id = str(bus_id)
+    def __init__(self, *, component_id: str) -> None:
+        self.id = str(component_id)
+        self.bus_id = self.id
         self._latest_bus: Node | None = None
 
     def graph_elements(self, *, horizon: Horizon) -> list[GraphElement]:

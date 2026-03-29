@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 from energy_assistant.ems.horizon import Horizon
+from energy_assistant.ems.input_registry import ResolvedInputRegistry
 from energy_assistant.ems.milp.context import value_of
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
 from energy_assistant.ems.models import InverterTimestepPlan
@@ -10,9 +11,12 @@ from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import GraphElement
 from energy_assistant.ems.topology.nodes import Node
 from energy_assistant.ems.topology.policies import DirectionalLimit
-from energy_assistant.lib.source_resolver.resolver import ValueResolver
 from energy_assistant.models.config import TerminalSocConfig
-from energy_assistant.models.plant import GridConfig, InverterConfig
+from energy_assistant.models.plant import (
+    BatteryComponentConfig,
+    InverterComponentConfig,
+    PvComponentConfig,
+)
 
 from .battery import BatteryComponent
 from .pv import PvComponent
@@ -29,56 +33,59 @@ class InverterComponent:
     def __init__(
         self,
         *,
+        component_id: str,
         switchboard_bus_id: str,
-        inverter: InverterConfig,
-        grid_cfg: GridConfig,
+        inverter: InverterComponentConfig,
+        battery_id: str | None,
+        battery: BatteryComponentConfig | None,
+        pv_id: str | None,
+        pv: PvComponentConfig | None,
+        grid_max_export_kw: float,
         terminal_soc: TerminalSocConfig,
     ) -> None:
-        self.id = str(inverter.id)
+        self.id = str(component_id)
         self.name = str(inverter.name)
         self.peak_power_kw = float(inverter.peak_power_kw)
         self.curtailment = inverter.curtailment
 
         self.ac_bus_id = str(switchboard_bus_id)
         self.dc_bus_id = f"{self.id}_dc"
-        self.inverter_link_id = f"inverter_{self.id}_acdc"
+        self.inverter_link_id = f"{self.id}_acdc"
 
-        self.pv = PvComponent(
-            inverter=inverter,
-            dc_bus_id=self.dc_bus_id,
-        )
+        self.pv: PvComponent | None = None
+        if pv is not None:
+            self.pv = PvComponent(
+                component_id=pv_id or f"{self.id}_pv",
+                inverter_id=self.id,
+                inverter=inverter,
+                pv=pv,
+                dc_bus_id=self.dc_bus_id,
+            )
 
         self.battery: BatteryComponent | None = None
-        if inverter.battery is not None:
+        if battery is not None:
             self.battery = BatteryComponent(
+                component_id=battery_id or f"{self.id}_battery",
                 inverter_id=self.id,
                 dc_bus_id=self.dc_bus_id,
                 inverter_peak_kw=self.peak_power_kw,
-                battery=inverter.battery,
-                grid_max_export_kw=float(grid_cfg.max_export_kw),
+                battery=battery,
+                grid_max_export_kw=float(grid_max_export_kw),
                 terminal_soc=terminal_soc,
             )
 
         self._latest: InverterRun | None = None
 
-    def mark_for_hydration(self, resolver: ValueResolver) -> None:
-        self.pv.mark_for_hydration(resolver)
-        if self.battery is not None:
-            self.battery.mark_for_hydration(resolver)
-
-    def validate_forecast_coverage(self, *, horizon: Horizon, resolver: ValueResolver) -> None:
-        # Inverters only contribute PV forecast coverage (battery + inverter are realtime-only).
-        self.pv.validate_forecast_coverage(horizon=horizon, resolver=resolver)
-
     def update_inputs(
         self,
         *,
         horizon: Horizon,
-        resolver: ValueResolver,
+        inputs: ResolvedInputRegistry,
     ) -> None:
-        self.pv.update_inputs(horizon=horizon, resolver=resolver)
+        if self.pv is not None:
+            self.pv.update_inputs(horizon=horizon, inputs=inputs)
         if self.battery is not None:
-            self.battery.update_inputs(horizon=horizon, resolver=resolver)
+            self.battery.update_inputs(horizon=horizon, inputs=inputs)
 
     def graph_elements(
         self,
@@ -98,7 +105,6 @@ class InverterComponent:
             )
         )
 
-        # a_to_b is DC -> AC (inverting), b_to_a is AC -> DC (rectifying)
         inverter_connection = Connection(
             horizon=horizon,
             id=self.inverter_link_id,
@@ -114,7 +120,8 @@ class InverterComponent:
         )
         elements.append(inverter_connection)
 
-        elements.extend(self.pv.graph_elements(horizon=horizon))
+        if self.pv is not None:
+            elements.extend(self.pv.graph_elements(horizon=horizon))
         if self.battery is not None:
             elements.extend(
                 self.battery.graph_elements(
@@ -144,13 +151,17 @@ class InverterComponent:
             batt_capacity = self.battery.capacity_kwh
 
         for t in horizon.T:
-            pv_kw = self.pv.pv_kw(snapshot, t)
-            pv_curtail_kw = self.pv.curtail_kw(snapshot, t)
-            curtailment_active = (
-                None
-                if pv_curtail_kw is None
-                else bool(float(pv_curtail_kw) > _CURTAIL_POWER_THRESHOLD_KW)
-            )
+            pv_kw = 0.0
+            pv_curtail_kw = None
+            curtailment_active = None
+            if self.pv is not None:
+                pv_kw = self.pv.pv_kw(snapshot, t)
+                pv_curtail_kw = self.pv.curtail_kw(snapshot, t)
+                curtailment_active = (
+                    None
+                    if pv_curtail_kw is None
+                    else bool(float(pv_curtail_kw) > _CURTAIL_POWER_THRESHOLD_KW)
+                )
 
             ac_into = value_of(inverter_connection.flow_into_node(self.ac_bus_id).get(t))
             ac_out = value_of(inverter_connection.flow_out_of_node(self.ac_bus_id).get(t))
