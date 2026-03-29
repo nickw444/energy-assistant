@@ -3,8 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from energy_assistant.ems.inputs.models import AppliedInputRegistry
+from energy_assistant.ems.models import LoadComponentPlan
 from energy_assistant.ems.parameters import SeriesParameter
 from energy_assistant.ems.planning.horizon import Horizon
+from energy_assistant.ems.series import interval_series_points
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import GraphElement
 from energy_assistant.ems.topology.nodes import Node
@@ -81,3 +83,13 @@ class BaseLoadComponent:
         )
         solve_state = BaseLoadSolveState(connection=connection, base_load_kw=base_load_kw)
         return [node, connection], solve_state
+
+    def build_plan(
+        self,
+        snapshot_horizon: Horizon,
+        *,
+        solve_state: BaseLoadSolveState,
+    ) -> LoadComponentPlan:
+        return LoadComponentPlan(
+            power_kw=interval_series_points(snapshot_horizon, solve_state.base_load_kw),
+        )

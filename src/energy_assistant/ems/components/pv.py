@@ -9,8 +9,10 @@ from energy_assistant.ems.inputs.models import AppliedInputRegistry
 from energy_assistant.ems.inputs.transforms import ForecastMultiplier
 from energy_assistant.ems.milp.context import ConstraintSpec, value_of
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
+from energy_assistant.ems.models import PvComponentPlan
 from energy_assistant.ems.parameters import SeriesParameter
 from energy_assistant.ems.planning.horizon import Horizon
+from energy_assistant.ems.series import bool_series, interval_series_points
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import GraphElement
 from energy_assistant.ems.topology.nodes import Node
@@ -249,3 +251,25 @@ class PvComponent:
         if curtail_kw is None:
             return None
         return bool(float(curtail_kw) > _CURTAIL_POWER_THRESHOLD_KW)
+
+    def build_plan(
+        self,
+        snapshot: ModelSnapshot,
+        *,
+        solve_state: PvSolveState,
+    ) -> PvComponentPlan:
+        horizon = snapshot.ctx.horizon
+        actual_kw = [self.pv_kw(snapshot, t, solve_state=solve_state) for t in horizon.T]
+        curtail_kw = [
+            self.curtail_kw(snapshot, t, solve_state=solve_state) or 0.0 for t in horizon.T
+        ]
+        curtailment = [
+            self.curtailment_active(snapshot, t, solve_state=solve_state) or False
+            for t in horizon.T
+        ]
+        return PvComponentPlan(
+            available_kw=interval_series_points(horizon, solve_state.available_kw),
+            actual_kw=interval_series_points(horizon, actual_kw),
+            curtail_kw=interval_series_points(horizon, curtail_kw),
+            curtailment=interval_series_points(horizon, bool_series(curtailment)),
+        )

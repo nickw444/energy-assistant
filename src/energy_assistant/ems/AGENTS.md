@@ -18,14 +18,14 @@ Key files:
 - `src/energy_assistant/ems/planning/horizon.py` defines the persistent rolling `HorizonShape` and per-solve `Horizon`.
 - `src/energy_assistant/ems/inputs/alignment.py` aligns forecast intervals to horizon slots.
 - `src/energy_assistant/ems/planning/pricing.py` applies price transforms used by the objective (bias, risk, etc).
-- `src/energy_assistant/ems/intent.py` maps a plan into a higher-level intent used by API consumers.
+- `src/energy_assistant/ems/intent.py` contains component-local intent helpers used while building typed component plans.
 - `src/energy_assistant/ems/fixtures/harness.py` supports offline plan baselines and reports.
 - `src/energy_assistant/inputs/fixtures.py` supports raw resolved-input fixture capture and replay.
 
 Testing workflow:
 - EMS tests live under `tests/energy_assistant/ems/`.
 - Fixture baselines live under `tests/fixtures/ems/<fixture>/<scenario>/`.
-- Record a new scenario: `uv run energy-assistant ems record-scenario --fixture <fixture> --name <scenario>`
+- Record a new scenario: `uv run energy-assistant ems record-scenario --fixture <fixture> --name <scenario>`; this writes canonical resolved planner inputs to `input.json`.
 - Replay a fixture: `uv run energy-assistant ems solve --fixture <fixture> --scenario <scenario>`
 - Refresh baselines: `uv run energy-assistant ems refresh-baseline [--fixture ...] [--name ...]`
 - Render a report: `uv run energy-assistant ems scenario-report [--fixture ...]`

@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from energy_assistant.ems.models import EmsPlanOutput, PlanIntent
+from energy_assistant.ems.models import EmsPlanOutput
 
 
 class PlanRunStateDto(BaseModel):
@@ -29,7 +29,6 @@ class PlanRunResponseDto(BaseModel):
 class PlanLatestResponseDto(BaseModel):
     run: PlanRunStateDto
     plan: EmsPlanOutput
-    intent: PlanIntent
 
     model_config = ConfigDict(extra="forbid")
 
@@ -37,6 +36,5 @@ class PlanLatestResponseDto(BaseModel):
 class PlanAwaitResponseDto(BaseModel):
     run: PlanRunStateDto
     plan: EmsPlanOutput
-    intent: PlanIntent
 
     model_config = ConfigDict(extra="forbid")

@@ -45,6 +45,7 @@ Key behavior in v6:
    - return a typed `EmsSystemSolveState` containing solve-bound component context.
 7. Solve PuLP model.
 8. Ask each component to iterate plan output from solved vars using the explicit solve-state artifacts.
+9. Ask each logical component to export its typed component plan payload keyed by plant component id.
 
 ## Layer 1 Component Contract
 
@@ -57,6 +58,12 @@ Each component supports:
 Components keep configuration and helper objects persistently, while solve-scoped MILP objects
 (nodes/connections/connection fragments) are rebuilt per solve. For plan extraction they keep references
 to explicit solve-scoped topology objects in `EmsSystemSolveState`, alongside the resolved input parameters.
+
+The primary machine-readable EMS export is a flat `components` map on `EmsPlanOutput`. The keys match
+the flat logical `plant` registry directly. Each value is a typed component-plan union carrying
+component-specific `series` and, where applicable, immediate component-local `intent`. Time series
+remain exported as `{time, value}` points, with no ownership tree or merged hierarchy introduced on
+top of the plant model.
 
 Input hydration is not performed by EMS components directly. The input provider walks the typed
 `inputs` config, uses the source resolver when running live, and returns resolved scalar values plus

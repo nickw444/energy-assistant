@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
 from dataclasses import dataclass
 
 from energy_assistant.ems.components.base_load import BaseLoadComponent, BaseLoadSolveState
@@ -12,12 +11,7 @@ from energy_assistant.ems.inputs.models import AppliedInputRegistry
 from energy_assistant.ems.milp.context import ModelContext
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
 from energy_assistant.ems.models import (
-    EconomicsTimestepPlan,
-    EvTimestepPlan,
-    GridTimestepPlan,
-    InverterTimestepPlan,
-    LoadsTimestepPlan,
-    TimestepPlan,
+    ComponentPlan,
 )
 from energy_assistant.ems.planning.horizon import Horizon
 from energy_assistant.ems.topology.graph import EnergyGraph
@@ -88,79 +82,43 @@ class EmsSystem:
             evs=ev_solve_states,
         )
 
-    def build_timestep_plans(
+    def build_component_plans(
         self,
         snapshot: ModelSnapshot,
         *,
         solve_state: EmsSystemSolveState,
-    ) -> list[TimestepPlan]:
-        horizon = snapshot.ctx.horizon
+    ) -> dict[str, ComponentPlan]:
+        grid_plan = self.grid.build_plan(snapshot, solve_state=solve_state.grid)
+        grid_import_kw = [float(point.value) for point in grid_plan.import_kw]
+        grid_export_kw = [float(point.value) for point in grid_plan.export_kw]
+        grid_price_export = [float(point.value) for point in grid_plan.price_export_raw]
+        export_limit_normal_kw = self.grid.max_export_kw
 
-        base_load_series = solve_state.base_load.base_load_kw
-        price_import = solve_state.grid.price_import_raw
-        price_export = solve_state.grid.price_export_raw
-        price_import_eff = solve_state.grid.price_import_effective
-        price_export_eff = solve_state.grid.price_export_effective
-
-        grid_iter: Iterator[GridTimestepPlan] = self.grid.iter_timestep_plan(
-            snapshot,
-            solve_state=solve_state.grid,
-        )
-        inverter_iters: dict[str, Iterator[InverterTimestepPlan]] = {
-            inv_id: inv.iter_timestep_plan(snapshot, solve_state=solve_state.inverters[inv_id])
-            for inv_id, inv in self.inverters.items()
+        component_plans: dict[str, ComponentPlan] = {
+            self.switchboard.id: self.switchboard.build_plan(),
+            self.base_load.id: self.base_load.build_plan(
+                snapshot.ctx.horizon,
+                solve_state=solve_state.base_load,
+            ),
+            self.grid.id: grid_plan,
         }
-        ev_iters: dict[str, Iterator[EvTimestepPlan]] = {
-            ev_id: ev.iter_timestep_plan(snapshot, solve_state=solve_state.evs[ev_id])
-            for ev_id, ev in self.evs.items()
-        }
-
-        cumulative_cost = 0.0
-        timesteps: list[TimestepPlan] = []
-        for t, slot in enumerate(horizon.slots):
-            grid_plan = next(grid_iter)
-
-            inverter_plans: dict[str, InverterTimestepPlan] = {
-                inv_id: next(it) for inv_id, it in sorted(inverter_iters.items())
-            }
-            ev_plans: dict[str, EvTimestepPlan] = {
-                ev_id: next(it) for ev_id, it in sorted(ev_iters.items())
-            }
-
-            base_kw = float(base_load_series[t]) if t < len(base_load_series) else 0.0
-            ev_kw_total = sum(float(ev.charge_kw) for ev in ev_plans.values())
-            total_kw = base_kw + ev_kw_total
-
-            segment_cost = (
-                float(grid_plan.import_kw) * float(price_import[t])
-                - float(grid_plan.export_kw) * float(price_export[t])
-            ) * float(slot.duration_h)
-            cumulative_cost += float(segment_cost)
-
-            timesteps.append(
-                TimestepPlan(
-                    index=t,
-                    start=slot.start,
-                    end=slot.end,
-                    duration_s=(slot.end - slot.start).total_seconds(),
-                    grid=grid_plan,
-                    inverters=inverter_plans,
-                    loads=LoadsTimestepPlan(
-                        base_kw=base_kw,
-                        evs=ev_plans,
-                        total_kw=total_kw,
-                    ),
-                    economics=EconomicsTimestepPlan(
-                        price_import=float(price_import[t]),
-                        price_export=float(price_export[t]),
-                        price_import_effective=float(price_import_eff[t]),
-                        price_export_effective=float(price_export_eff[t]),
-                        segment_cost=float(segment_cost),
-                        cumulative_cost=float(cumulative_cost),
-                    ),
+        for inverter_id, inverter in self.inverters.items():
+            component_plans.update(
+                inverter.build_component_plans(
+                    snapshot,
+                    solve_state=solve_state.inverters[inverter_id],
+                    grid_import_kw=grid_import_kw,
+                    grid_export_kw=grid_export_kw,
+                    grid_price_export=grid_price_export,
+                    export_limit_normal_kw=export_limit_normal_kw,
                 )
             )
-        return timesteps
+        for ev_id, ev in self.evs.items():
+            component_plans[ev_id] = ev.build_plan(
+                snapshot,
+                solve_state=solve_state.evs[ev_id],
+            )
+        return component_plans
 
 
 @dataclass(frozen=True, slots=True)

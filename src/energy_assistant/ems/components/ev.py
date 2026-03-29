@@ -1,18 +1,21 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Iterator
 from dataclasses import dataclass
 
 import pulp
 
 from energy_assistant.ems.inputs.models import AppliedInputRegistry
+from energy_assistant.ems.intent import build_load_controlled_ev_intent
 from energy_assistant.ems.milp.context import ConstraintSpec, value_of
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
-from energy_assistant.ems.models import EvTimestepPlan
+from energy_assistant.ems.models import (
+    LoadControlledEvComponentPlan,
+)
 from energy_assistant.ems.parameters import ScalarParameter, SeriesParameter
 from energy_assistant.ems.planning.horizon import Horizon
 from energy_assistant.ems.planning.time_windows import TimeWindowMatcher
+from energy_assistant.ems.series import bool_series, interval_series_points, state_series_points
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import GraphElement
 from energy_assistant.ems.topology.nodes import StorageNode
@@ -275,6 +278,7 @@ class EvSolveState:
     connected: bool
     storage: StorageNode
     connection: Connection
+    gate_series: list[float]
 
 
 class EvComponent:
@@ -396,6 +400,7 @@ class EvComponent:
             connected=connected,
             storage=storage,
             connection=connection,
+            gate_series=gate_series,
         )
         return elements, solve_state
 
@@ -426,24 +431,34 @@ class EvComponent:
                 allowed.append(0.0)
         return allowed
 
-    def iter_timestep_plan(
+    def build_plan(
         self,
         snapshot: ModelSnapshot,
         *,
         solve_state: EvSolveState,
-    ) -> Iterator[EvTimestepPlan]:
+    ) -> LoadControlledEvComponentPlan:
         horizon = snapshot.ctx.horizon
-        connected = bool(solve_state.connected)
         storage = solve_state.storage
         connection = solve_state.connection
-        for t in horizon.T:
-            charge_kw = value_of(connection.flow_into_node(self.node_id).get(t))
-            soc_kwh = value_of(storage.E_by_i.get(t))
-            soc_pct = (soc_kwh / float(self.capacity_kwh)) * 100.0 if self.capacity_kwh else None
-            yield EvTimestepPlan(
-                name=str(self.name),
-                charge_kw=charge_kw,
-                soc_kwh=soc_kwh,
-                soc_pct=soc_pct,
-                connected=connected,
-            )
+        charge_kw = [value_of(connection.flow_into_node(self.node_id).get(t)) for t in horizon.T]
+        soc_kwh = [value_of(storage.E_by_i.get(t)) for t in range(horizon.num_intervals + 1)]
+        soc_pct = [
+            (float(value) / float(self.capacity_kwh)) * 100.0 if self.capacity_kwh else 0.0
+            for value in soc_kwh
+        ]
+        connected = [bool(solve_state.connected)] * horizon.num_intervals
+        charge_allowed = [value > 0 for value in solve_state.gate_series]
+        first_charge_kw = float(charge_kw[0]) if charge_kw else 0.0
+        first_connected = bool(connected[0]) if connected else False
+        return LoadControlledEvComponentPlan(
+            charge_kw=interval_series_points(horizon, charge_kw),
+            soc_kwh=state_series_points(horizon, soc_kwh),
+            soc_pct=state_series_points(horizon, soc_pct),
+            connected=interval_series_points(horizon, bool_series(connected)),
+            charge_allowed=interval_series_points(horizon, bool_series(charge_allowed)),
+            intent=build_load_controlled_ev_intent(
+                charge_kw=first_charge_kw,
+                connected=first_connected,
+                ev_config=self._load,
+            ),
+        )

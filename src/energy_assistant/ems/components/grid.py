@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
 from dataclasses import dataclass
 
 from energy_assistant.ems.inputs.models import AppliedInputRegistry
 from energy_assistant.ems.milp.context import value_of
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
-from energy_assistant.ems.models import GridTimestepPlan
+from energy_assistant.ems.models import GridComponentPlan
 from energy_assistant.ems.parameters import SeriesParameter
 from energy_assistant.ems.planning.horizon import Horizon
 from energy_assistant.ems.planning.pricing import PriceSeriesBuilder
 from energy_assistant.ems.planning.time_windows import TimeWindowMatcher
+from energy_assistant.ems.series import bool_series, interval_series_points
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import GraphElement
 from energy_assistant.ems.topology.nodes import Node
@@ -171,24 +171,36 @@ class GridComponent:
             direction="export",
         )
 
-    def iter_timestep_plan(
+    @property
+    def max_export_kw(self) -> float:
+        return float(self._grid_cfg.constraints.max_export_kw)
+
+    def build_plan(
         self,
         snapshot: ModelSnapshot,
         *,
         solve_state: GridSolveState,
-    ) -> Iterator[GridTimestepPlan]:
+    ) -> GridComponentPlan:
         horizon = snapshot.ctx.horizon
         connection = solve_state.connection
-        allowed = solve_state.import_allowed
-        slack = connection.policy("import_soft_limit", SoftDirectionalLimit).slack_kw(connection)
-
-        for t in horizon.T:
-            export_kw = value_of(connection.flow_out_of_node(self.bus_id).get(t))
-            import_kw = value_of(connection.flow_into_node(self.bus_id).get(t))
-            yield GridTimestepPlan(
-                import_kw=import_kw,
-                export_kw=export_kw,
-                net_kw=float(import_kw) - float(export_kw),
-                import_allowed=bool(allowed[t]) if t < len(allowed) else None,
-                import_violation_kw=value_of(slack.get(t)),
-            )
+        import_kw = [
+            value_of(connection.flow_into_node(self.bus_id).get(t)) for t in horizon.T
+        ]
+        export_kw = [
+            value_of(connection.flow_out_of_node(self.bus_id).get(t)) for t in horizon.T
+        ]
+        net_kw = [float(import_kw[t]) - float(export_kw[t]) for t in horizon.T]
+        return GridComponentPlan(
+            price_import_raw=interval_series_points(horizon, solve_state.price_import_raw),
+            price_export_raw=interval_series_points(horizon, solve_state.price_export_raw),
+            price_import_effective=interval_series_points(
+                horizon, solve_state.price_import_effective
+            ),
+            price_export_effective=interval_series_points(
+                horizon, solve_state.price_export_effective
+            ),
+            import_allowed=interval_series_points(horizon, bool_series(solve_state.import_allowed)),
+            import_kw=interval_series_points(horizon, import_kw),
+            export_kw=interval_series_points(horizon, export_kw),
+            net_kw=interval_series_points(horizon, net_kw),
+        )

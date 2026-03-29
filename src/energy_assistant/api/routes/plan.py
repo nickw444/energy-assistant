@@ -5,15 +5,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
-from energy_assistant.api.dependencies import get_config, get_worker
+from energy_assistant.api.dependencies import get_worker
 from energy_assistant.api.routes.plan_dto import (
     PlanAwaitResponseDto,
     PlanLatestResponseDto,
     PlanRunResponseDto,
     PlanRunStateDto,
 )
-from energy_assistant.ems.intent import build_plan_intent
-from energy_assistant.models.config import AppConfig
 from energy_assistant.worker import PlanRunState, Worker
 
 router = APIRouter(prefix="/plan", tags=["plan"])
@@ -41,7 +39,6 @@ async def run_plan(
 @router.get("/latest", response_model=PlanLatestResponseDto)
 async def latest_plan(
     worker: Annotated[Worker, Depends(get_worker)],
-    app_config: Annotated[AppConfig, Depends(get_config)],
 ) -> PlanLatestResponseDto:
     latest = await worker.get_latest()
     if latest is None:
@@ -50,7 +47,6 @@ async def latest_plan(
     return PlanLatestResponseDto(
         run=_run_to_dto(run_state),
         plan=plan,
-        intent=build_plan_intent(plan, app_config),
     )
 
 
@@ -73,7 +69,6 @@ def _parse_since(value: str | None) -> float:
 @router.get("/await", response_model=PlanAwaitResponseDto)
 async def await_plan(
     worker: Annotated[Worker, Depends(get_worker)],
-    app_config: Annotated[AppConfig, Depends(get_config)],
     since: str | None = None,
     timeout: int = 30,
 ) -> PlanAwaitResponseDto | Response:
@@ -91,5 +86,4 @@ async def await_plan(
     return PlanAwaitResponseDto(
         run=_run_to_dto(run_state),
         plan=plan,
-        intent=build_plan_intent(plan, app_config),
     )

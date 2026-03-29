@@ -96,7 +96,7 @@ class EmsMilpPlanner:
 
         objective_value = _objective_value(snapshot.problem)
         status = _map_status(pulp.LpStatus.get(snapshot.problem.status, "Unknown"))
-        timesteps = system.build_timestep_plans(snapshot, solve_state=solve_state)
+        components = system.build_component_plans(snapshot, solve_state=solve_state)
         total_seconds = time.perf_counter() - total_start
         timings = EmsPlanTimings(
             build_seconds=build_seconds,
@@ -115,7 +115,7 @@ class EmsMilpPlanner:
             status=status,
             objective_value=objective_value,
             timings=timings,
-            timesteps=timesteps,
+            components=components,
         )
 
     @property

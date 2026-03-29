@@ -5,9 +5,12 @@ from dataclasses import dataclass
 import pulp
 
 from energy_assistant.ems.inputs.models import AppliedInputRegistry
-from energy_assistant.ems.milp.context import ConstraintSpec
+from energy_assistant.ems.milp.context import ConstraintSpec, value_of
+from energy_assistant.ems.milp.snapshot import ModelSnapshot
+from energy_assistant.ems.models import BatteryComponentPlan
 from energy_assistant.ems.parameters import ScalarParameter
 from energy_assistant.ems.planning.horizon import Horizon
+from energy_assistant.ems.series import interval_series_points, state_series_points
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import GraphElement
 from energy_assistant.ems.topology.nodes import StorageNode
@@ -236,3 +239,26 @@ class BatteryComponent:
 
         solve_state = BatterySolveState(storage=storage, connection=connection)
         return [storage, connection, reserve_policy], solve_state
+
+    def build_plan(
+        self,
+        snapshot: ModelSnapshot,
+        *,
+        solve_state: BatterySolveState,
+    ) -> BatteryComponentPlan:
+        horizon = snapshot.ctx.horizon
+        storage = solve_state.storage
+        connection = solve_state.connection
+        charge_kw = [value_of(connection.flow_into_node(storage.id).get(t)) for t in horizon.T]
+        discharge_kw = [value_of(connection.flow_out_of_node(storage.id).get(t)) for t in horizon.T]
+        soc_kwh = [value_of(storage.E_by_i.get(t)) for t in range(horizon.num_intervals + 1)]
+        soc_pct = [
+            (float(value) / float(self.capacity_kwh)) * 100.0 if self.capacity_kwh else 0.0
+            for value in soc_kwh
+        ]
+        return BatteryComponentPlan(
+            charge_kw=interval_series_points(horizon, charge_kw),
+            discharge_kw=interval_series_points(horizon, discharge_kw),
+            soc_kwh=state_series_points(horizon, soc_kwh),
+            soc_pct=state_series_points(horizon, soc_pct),
+        )

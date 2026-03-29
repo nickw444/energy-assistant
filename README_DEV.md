@@ -31,7 +31,7 @@ See `QUICKSTART.md` for a full, current configuration example.
 - Entry point: `uv run energy-assistant`
 
 ### EMS fixture workflows
-- Capture a new scenario: `uv run energy-assistant ems record-scenario --name <scenario-name>`
+- Capture a new scenario: `uv run energy-assistant ems record-scenario --name <scenario-name>`; this writes resolved EMS inputs to `input.json`
 - Replay a recorded fixture: `uv run energy-assistant ems solve --scenario <name-or-path>`
 - Refresh fixture baselines: `uv run energy-assistant ems refresh-baseline [--name <name-or-path>]`
 - Generate a single-page report of all fixtures: `uv run energy-assistant ems scenario-report`

@@ -1,4 +1,4 @@
-"""Validate that ems_plan.json baselines in fixture directories stay in sync."""
+"""Validate that output.json baselines in fixture directories stay in sync."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from energy_assistant.ems.fixtures.harness import (
     EmsFixturePaths,
     compute_plan_hash,
     resolve_ems_fixture_paths,
-    summarize_plan,
+    serialize_plan,
 )
 from energy_assistant.ems.planner import EmsMilpPlanner
 from energy_assistant.inputs.fixtures import load_fixture_input_provider
@@ -70,26 +70,23 @@ def _discover_fixture_scenarios() -> list[tuple[str, str]]:
     ids=[f"{f}/{s}" for f, s in _discover_fixture_scenarios()],
 )
 def test_fixture_baseline_up_to_date(fixture: str, scenario: str) -> None:
-    """Re-solve each fixture and assert it matches the stored ems_plan.json."""
+    """Re-solve each fixture and assert it matches the stored output.json."""
     paths = resolve_ems_fixture_paths(FIXTURE_BASE, fixture, scenario)
     if not _is_complete_bundle(paths):
         pytest.skip("EMS fixture scenario not recorded.")
 
     app_config = load_app_config(paths.config_path)
-    input_provider, captured_at = load_fixture_input_provider(
-        path=paths.fixture_path,
-        app_config=app_config,
-    )
+    input_provider, captured_at = load_fixture_input_provider(path=paths.fixture_path)
     now = datetime.fromisoformat(captured_at) if captured_at else None
 
     plan = EmsMilpPlanner(app_config, input_provider=input_provider).generate_ems_plan(now=now)
 
-    actual = summarize_plan(plan)
+    actual = serialize_plan(plan)
     expected = json.loads(paths.plan_path.read_text())
 
     record_hint = f"energy-assistant ems refresh-baseline --fixture {fixture} --name {scenario}"
     assert actual == expected, (
-        f"Fixture {fixture}/{scenario!r} ems_plan.json is out of date. "
+        f"Fixture {fixture}/{scenario!r} output.json is out of date. "
         "Re-record with: " + record_hint
     )
 
@@ -100,7 +97,7 @@ def test_fixture_baseline_up_to_date(fixture: str, scenario: str) -> None:
     ids=[f"{f}/{s}" for f, s in _discover_fixture_scenarios()],
 )
 def test_fixture_plot_up_to_date(fixture: str, scenario: str) -> None:
-    """Assert the stored ems_plan.jpeg matches the current plan hash."""
+    """Assert the stored output.jpeg matches the current plan hash."""
     paths = resolve_ems_fixture_paths(FIXTURE_BASE, fixture, scenario)
     if not _is_complete_bundle(paths):
         pytest.skip("EMS fixture scenario not recorded.")
@@ -109,25 +106,25 @@ def test_fixture_plot_up_to_date(fixture: str, scenario: str) -> None:
 
     if paths.hash_path.exists() and not paths.plot_path.exists():
         pytest.fail(
-            f"Fixture {fixture}/{scenario!r} has ems_plan.hash without ems_plan.jpeg. "
+            f"Fixture {fixture}/{scenario!r} has output.json.hash without output.jpeg. "
             f"Re-record with: {record_hint}"
         )
 
     if paths.plot_path.exists() and not paths.hash_path.exists():
         pytest.fail(
-            f"Fixture {fixture}/{scenario!r} has ems_plan.jpeg without ems_plan.hash. "
+            f"Fixture {fixture}/{scenario!r} has output.jpeg without output.json.hash. "
             f"Re-record with: {record_hint}"
         )
 
     if not paths.hash_path.exists():
         pytest.fail(
-            f"Fixture {fixture}/{scenario!r} missing ems_plan.hash. "
+            f"Fixture {fixture}/{scenario!r} missing output.json.hash. "
             f"Re-record with: {record_hint}"
         )
 
     if not paths.plot_path.exists():
         pytest.fail(
-            f"Fixture {fixture}/{scenario!r} missing ems_plan.jpeg. "
+            f"Fixture {fixture}/{scenario!r} missing output.jpeg. "
             f"Re-record with: {record_hint}"
         )
 
@@ -136,7 +133,7 @@ def test_fixture_plot_up_to_date(fixture: str, scenario: str) -> None:
     actual_hash = compute_plan_hash(expected)
 
     assert stored_hash == actual_hash, (
-        f"Fixture {fixture}/{scenario!r} ems_plan.jpeg is out of date "
+        f"Fixture {fixture}/{scenario!r} output.jpeg is out of date "
         f"(hash mismatch: stored={stored_hash}, expected={actual_hash}). "
         "Re-record with: " + record_hint
     )

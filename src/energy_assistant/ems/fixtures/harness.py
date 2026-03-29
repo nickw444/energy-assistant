@@ -4,11 +4,20 @@ import hashlib
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 
-from energy_assistant.ems.models import EmsPlanOutput
+from energy_assistant.ems.models import (
+    BatteryComponentPlan,
+    EmsPlanOutput,
+    EmsSeriesPoint,
+    GridComponentPlan,
+    InverterComponentPlan,
+    LoadComponentPlan,
+    LoadControlledEvComponentPlan,
+    PvComponentPlan,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,8 +38,8 @@ def resolve_ems_fixture_paths(
 ) -> EmsFixturePaths:
     fixture_dir = base_dir / fixture
     scenario_dir = fixture_dir if scenario is None else fixture_dir / scenario
-    fixture_config_path = fixture_dir / "ems_config.yaml"
-    scenario_config_path = scenario_dir / "ems_config.yaml"
+    fixture_config_path = fixture_dir / "config.yaml"
+    scenario_config_path = scenario_dir / "config.yaml"
     if scenario is not None and scenario_config_path.exists():
         config_path = scenario_config_path
     else:
@@ -38,25 +47,90 @@ def resolve_ems_fixture_paths(
     return EmsFixturePaths(
         fixture_dir=fixture_dir,
         scenario_dir=scenario_dir,
-        fixture_path=scenario_dir / "ems_fixture.json",
+        fixture_path=scenario_dir / "input.json",
         fixture_config_path=fixture_config_path,
         scenario_config_path=scenario_config_path,
         config_path=config_path,
-        plan_path=scenario_dir / "ems_plan.json",
-        plot_path=scenario_dir / "ems_plan.jpeg",
-        hash_path=scenario_dir / "ems_plan.hash",
+        plan_path=scenario_dir / "output.json",
+        plot_path=scenario_dir / "output.jpeg",
+        hash_path=scenario_dir / "output.json.hash",
     )
 
 
 def compute_plan_hash(plan_summary: dict[str, Any]) -> str:
     """Compute a stable hash from the plan summary for change detection."""
     normalized = dict(plan_summary)
+    normalized.pop("generated_at", None)
     if "meta" in normalized:
         meta = dict(normalized["meta"])
         meta.pop("generated_at", None)
         normalized["meta"] = meta
     serialized = json.dumps(normalized, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(serialized.encode()).hexdigest()[:16]
+
+
+def render_fixture_json(payload: dict[str, Any]) -> str:
+    """Render fixture JSON with compact scalar objects inside arrays."""
+    return _render_json_value(payload, indent=0, inline_scalar_object=False) + "\n"
+
+
+def _render_json_value(value: Any, *, indent: int, inline_scalar_object: bool) -> str:
+    if isinstance(value, Mapping):
+        mapping = cast(dict[str, Any], value)
+        if inline_scalar_object and _is_inline_scalar_object(mapping):
+            return json.dumps(mapping, sort_keys=True)
+        return _render_json_object(mapping, indent=indent)
+    if isinstance(value, list):
+        list_value = cast(list[Any], value)
+        return _render_json_array(list_value, indent=indent)
+    return json.dumps(value)
+
+
+def _render_json_object(value: dict[str, Any], *, indent: int) -> str:
+    if not value:
+        return "{}"
+
+    items = sorted(value.items())
+    lines = ["{"]
+    for index, (key, item) in enumerate(items):
+        rendered = _render_json_value(item, indent=indent + 2, inline_scalar_object=False)
+        rendered_lines = rendered.splitlines()
+        suffix = "," if index < len(items) - 1 else ""
+        lines.append(" " * (indent + 2) + f"{json.dumps(key)}: {rendered_lines[0]}")
+        if len(rendered_lines) > 1:
+            lines.extend(rendered_lines[1:-1])
+            lines.append(rendered_lines[-1] + suffix)
+        else:
+            lines[-1] += suffix
+    lines.append(" " * indent + "}")
+    return "\n".join(lines)
+
+
+def _render_json_array(value: list[Any], *, indent: int) -> str:
+    if not value:
+        return "[]"
+
+    lines = ["["]
+    for index, item in enumerate(value):
+        rendered = _render_json_value(item, indent=indent + 2, inline_scalar_object=True)
+        rendered_lines = rendered.splitlines()
+        suffix = "," if index < len(value) - 1 else ""
+        lines.append(" " * (indent + 2) + rendered_lines[0])
+        if len(rendered_lines) > 1:
+            lines.extend(rendered_lines[1:-1])
+            lines.append(rendered_lines[-1] + suffix)
+        else:
+            lines[-1] += suffix
+    lines.append(" " * indent + "]")
+    return "\n".join(lines)
+
+
+def _is_inline_scalar_object(value: dict[str, Any]) -> bool:
+    return all(_is_json_scalar(item) for item in value.values())
+
+
+def _is_json_scalar(value: Any) -> bool:
+    return value is None or isinstance(value, str | int | float | bool)
 
 
 def _round_floats(value: Any) -> Any:
@@ -69,32 +143,6 @@ def _round_floats(value: Any) -> Any:
         list_value = cast(list[Any], value)
         return [_round_floats(item) for item in list_value]
     return value
-
-
-def _update_min_max(
-    current_min: float | None,
-    current_max: float | None,
-    value: float | None,
-) -> tuple[float | None, float | None]:
-    if value is None:
-        return current_min, current_max
-    if current_min is None or value < current_min:
-        current_min = value
-    if current_max is None or value > current_max:
-        current_max = value
-    return current_min, current_max
-
-
-def _update_max(current: float | None, value: float) -> float:
-    if current is None or value > current:
-        return value
-    return current
-
-
-def _update_min(current: float | None, value: float) -> float:
-    if current is None or value < current:
-        return value
-    return current
 
 
 def normalize_plan_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -116,9 +164,14 @@ def summarize_plan(plan: EmsPlanOutput, *, bucket_minutes: int = 60) -> dict[str
 def _summarize_plan(plan: EmsPlanOutput, *, bucket_minutes: int) -> dict[str, Any]:
     if bucket_minutes <= 0:
         raise ValueError("bucket_minutes must be positive.")
+    grid = _single_component(plan, GridComponentPlan, "grid")
+    load = _single_component(plan, LoadComponentPlan, "load", optional=True)
+    inverters = _components_of_type(plan, InverterComponentPlan)
+    pvs = _components_of_type(plan, PvComponentPlan)
+    batteries = _components_of_type(plan, BatteryComponentPlan)
+    evs = _components_of_type(plan, LoadControlledEvComponentPlan)
 
-    timesteps = plan.timesteps
-    if not timesteps:
+    if grid is None or not grid.import_kw:
         summary: dict[str, Any] = {
             "meta": {
                 "generated_at": plan.generated_at.isoformat(),
@@ -126,246 +179,54 @@ def _summarize_plan(plan: EmsPlanOutput, *, bucket_minutes: int) -> dict[str, An
                 "objective_value": plan.objective_value,
                 "horizon_start": None,
                 "horizon_end": None,
-                "timesteps": 0,
+                "intervals": 0,
                 "duration_minutes": 0.0,
-                "timestep_minutes": {"min": None, "max": None, "avg": None, "unique": []},
                 "bucket_minutes": bucket_minutes,
             },
             "totals": {},
             "prices": {},
             "inverters": {},
+            "pvs": {},
+            "batteries": {},
             "evs": {},
             "buckets": [],
         }
         return _round_floats(summary)
 
-    horizon_start = timesteps[0].start
-    horizon_end = timesteps[-1].end
-    total_seconds = sum(step.duration_s for step in timesteps)
+    interval_end_times = _interval_end_times(plan, grid.import_kw)
+    horizon_start = grid.import_kw[0].time
+    horizon_end = interval_end_times[-1]
+    total_seconds = (horizon_end - horizon_start).total_seconds()
     total_minutes = total_seconds / 60.0
-    timestep_minutes = [step.duration_s / 60.0 for step in timesteps]
+    interval_minutes = [
+        (end - point.time).total_seconds() / 60.0
+        for point, end in zip(grid.import_kw, interval_end_times, strict=True)
+    ]
 
-    grid_import_kwh = 0.0
-    grid_export_kwh = 0.0
-    grid_net_kwh = 0.0
-    grid_import_violation_kwh = 0.0
-    grid_import_kw_max: float | None = None
-    grid_export_kw_max: float | None = None
-    grid_net_kw_max: float | None = None
-    grid_net_kw_min: float | None = None
-
-    load_base_kwh = 0.0
-    load_total_kwh = 0.0
-    ev_charge_kwh = 0.0
-    pv_kwh = 0.0
-    battery_charge_kwh = 0.0
-    battery_discharge_kwh = 0.0
-
-    segment_cost_total = 0.0
-    price_import_min: float | None = None
-    price_import_max: float | None = None
-    price_export_min: float | None = None
-    price_export_max: float | None = None
-    price_import_weighted = 0.0
-    price_export_weighted = 0.0
-
-    inverter_stats: dict[str, dict[str, float | None]] = {}
-    ev_stats: dict[str, dict[str, float | None]] = {}
-
-    for step in timesteps:
-        duration_hours = step.duration_s / 3600.0
-        duration_minutes = step.duration_s / 60.0
-
-        grid_import_kwh += step.grid.import_kw * duration_hours
-        grid_export_kwh += step.grid.export_kw * duration_hours
-        grid_net_kwh += step.grid.net_kw * duration_hours
-        if step.grid.import_violation_kw is not None:
-            grid_import_violation_kwh += step.grid.import_violation_kw * duration_hours
-        grid_import_kw_max = _update_max(grid_import_kw_max, step.grid.import_kw)
-        grid_export_kw_max = _update_max(grid_export_kw_max, step.grid.export_kw)
-        grid_net_kw_max = _update_max(grid_net_kw_max, step.grid.net_kw)
-        grid_net_kw_min = _update_min(grid_net_kw_min, step.grid.net_kw)
-
-        load_base_kwh += step.loads.base_kw * duration_hours
-        load_total_kwh += step.loads.total_kw * duration_hours
-
-        segment_cost_total += step.economics.segment_cost
-        price_import_min, price_import_max = _update_min_max(
-            price_import_min,
-            price_import_max,
-            step.economics.price_import,
-        )
-        price_export_min, price_export_max = _update_min_max(
-            price_export_min,
-            price_export_max,
-            step.economics.price_export,
-        )
-        price_import_weighted += step.economics.price_import * duration_hours
-        price_export_weighted += step.economics.price_export * duration_hours
-
-        step_pv_kw = 0.0
-        step_battery_charge_kw = 0.0
-        step_battery_discharge_kw = 0.0
-
-        for inverter_id, inverter in step.inverters.items():
-            stats = inverter_stats.setdefault(
-                inverter_id,
-                {
-                    "pv_kwh": 0.0,
-                    "ac_net_kwh": 0.0,
-                    "battery_charge_kwh": 0.0,
-                    "battery_discharge_kwh": 0.0,
-                    "soc_pct_min": None,
-                    "soc_pct_max": None,
-                    "soc_pct_end": None,
-                    "soc_kwh_min": None,
-                    "soc_kwh_max": None,
-                    "soc_kwh_end": None,
-                    "curtailment_minutes": 0.0,
-                },
-            )
-
-            pv_kw = inverter.pv_kw or 0.0
-            battery_charge_kw = inverter.battery_charge_kw or 0.0
-            battery_discharge_kw = inverter.battery_discharge_kw or 0.0
-            stats["pv_kwh"] = (stats["pv_kwh"] or 0.0) + pv_kw * duration_hours
-            stats["ac_net_kwh"] = (stats["ac_net_kwh"] or 0.0) + inverter.ac_net_kw * duration_hours
-            stats["battery_charge_kwh"] = (
-                stats["battery_charge_kwh"] or 0.0
-            ) + battery_charge_kw * duration_hours
-            stats["battery_discharge_kwh"] = (
-                stats["battery_discharge_kwh"] or 0.0
-            ) + battery_discharge_kw * duration_hours
-
-            stats["soc_pct_min"], stats["soc_pct_max"] = _update_min_max(
-                stats.get("soc_pct_min"),
-                stats.get("soc_pct_max"),
-                inverter.battery_soc_pct,
-            )
-            stats["soc_kwh_min"], stats["soc_kwh_max"] = _update_min_max(
-                stats.get("soc_kwh_min"),
-                stats.get("soc_kwh_max"),
-                inverter.battery_soc_kwh,
-            )
-            if inverter.battery_soc_pct is not None:
-                stats["soc_pct_end"] = inverter.battery_soc_pct
-            if inverter.battery_soc_kwh is not None:
-                stats["soc_kwh_end"] = inverter.battery_soc_kwh
-            if inverter.curtailment:
-                stats["curtailment_minutes"] = (
-                    stats.get("curtailment_minutes") or 0.0
-                ) + duration_minutes
-
-            step_pv_kw += pv_kw
-            step_battery_charge_kw += battery_charge_kw
-            step_battery_discharge_kw += battery_discharge_kw
-
-        step_ev_charge_kw = 0.0
-        for ev_id, ev in step.loads.evs.items():
-            stats = ev_stats.setdefault(
-                ev_id,
-                {
-                    "charge_kwh": 0.0,
-                    "soc_kwh_min": None,
-                    "soc_kwh_max": None,
-                    "soc_kwh_end": None,
-                    "soc_pct_min": None,
-                    "soc_pct_max": None,
-                    "soc_pct_end": None,
-                    "connected_minutes": 0.0,
-                },
-            )
-            stats["charge_kwh"] = (stats["charge_kwh"] or 0.0) + ev.charge_kw * duration_hours
-            stats["soc_kwh_min"], stats["soc_kwh_max"] = _update_min_max(
-                stats.get("soc_kwh_min"),
-                stats.get("soc_kwh_max"),
-                ev.soc_kwh,
-            )
-            stats["soc_pct_min"], stats["soc_pct_max"] = _update_min_max(
-                stats.get("soc_pct_min"),
-                stats.get("soc_pct_max"),
-                ev.soc_pct,
-            )
-            stats["soc_kwh_end"] = ev.soc_kwh
-            if ev.soc_pct is not None:
-                stats["soc_pct_end"] = ev.soc_pct
-            if ev.connected:
-                stats["connected_minutes"] = (
-                    stats.get("connected_minutes") or 0.0
-                ) + duration_minutes
-
-            step_ev_charge_kw += ev.charge_kw
-
-        pv_kwh += step_pv_kw * duration_hours
-        battery_charge_kwh += step_battery_charge_kw * duration_hours
-        battery_discharge_kwh += step_battery_discharge_kw * duration_hours
-        ev_charge_kwh += step_ev_charge_kw * duration_hours
-
-    bucket_seconds = bucket_minutes * 60
-    horizon_seconds = (horizon_end - horizon_start).total_seconds()
-    bucket_count = max(1, int((horizon_seconds + bucket_seconds - 1) // bucket_seconds))
-    bucket_spans: list[tuple[Any, Any]] = []
-    bucket_payloads: list[dict[str, Any]] = []
-    for index in range(bucket_count):
-        bucket_start = horizon_start + timedelta(seconds=index * bucket_seconds)
-        bucket_end = min(bucket_start + timedelta(seconds=bucket_seconds), horizon_end)
-        bucket_spans.append((bucket_start, bucket_end))
-        bucket_payloads.append(
-            {
-                "start": bucket_start.isoformat(),
-                "end": bucket_end.isoformat(),
-                "grid_import_kwh": 0.0,
-                "grid_export_kwh": 0.0,
-                "grid_net_kwh": 0.0,
-                "load_kwh": 0.0,
-                "pv_kwh": 0.0,
-                "battery_charge_kwh": 0.0,
-                "battery_discharge_kwh": 0.0,
-                "ev_charge_kwh": 0.0,
-                "curtailment_minutes": 0.0,
-            }
-        )
-
-    for step in timesteps:
-        step_start = step.start
-        step_end = step.end
-        step_seconds = step.duration_s
-
-        step_pv_kw = sum((inv.pv_kw or 0.0) for inv in step.inverters.values())
-        step_battery_charge_kw = sum(
-            (inv.battery_charge_kw or 0.0) for inv in step.inverters.values()
-        )
-        step_battery_discharge_kw = sum(
-            (inv.battery_discharge_kw or 0.0) for inv in step.inverters.values()
-        )
-        step_ev_charge_kw = sum(ev.charge_kw for ev in step.loads.evs.values())
-        curtailment_active = any(inv.curtailment for inv in step.inverters.values())
-
-        cursor = step_start
-        while cursor < step_end:
-            bucket_index = int((cursor - horizon_start).total_seconds() // bucket_seconds)
-            bucket_start, bucket_end = bucket_spans[bucket_index]
-            overlap_end = min(step_end, bucket_end)
-            overlap_seconds = (overlap_end - cursor).total_seconds()
-            fraction = overlap_seconds / step_seconds if step_seconds else 0.0
-            duration_hours = (step_seconds * fraction) / 3600.0
-            duration_minutes = (step_seconds * fraction) / 60.0
-            bucket = bucket_payloads[bucket_index]
-            bucket["grid_import_kwh"] += step.grid.import_kw * duration_hours
-            bucket["grid_export_kwh"] += step.grid.export_kw * duration_hours
-            bucket["grid_net_kwh"] += step.grid.net_kw * duration_hours
-            bucket["load_kwh"] += step.loads.total_kw * duration_hours
-            bucket["pv_kwh"] += step_pv_kw * duration_hours
-            bucket["battery_charge_kwh"] += step_battery_charge_kw * duration_hours
-            bucket["battery_discharge_kwh"] += step_battery_discharge_kw * duration_hours
-            bucket["ev_charge_kwh"] += step_ev_charge_kw * duration_hours
-            if curtailment_active:
-                bucket["curtailment_minutes"] += duration_minutes
-            cursor = bucket_end
-
-    total_cost = timesteps[-1].economics.cumulative_cost
-    price_import_avg = price_import_weighted / (total_seconds / 3600.0)
-    price_export_avg = price_export_weighted / (total_seconds / 3600.0)
+    grid_import = _float_series(grid.import_kw)
+    grid_export = _float_series(grid.export_kw)
+    grid_net = _float_series(grid.net_kw)
+    load_base = _float_series(load.power_kw) if load is not None else [0.0] * len(grid_import)
+    ev_charge = _aggregate_series({
+        component_id: _float_series(component.charge_kw)
+        for component_id, component in evs.items()
+    })
+    pv_actual = _aggregate_series({
+        component_id: _float_series(component.actual_kw)
+        for component_id, component in pvs.items()
+    })
+    battery_charge = _aggregate_series(
+        {
+            component_id: _float_series(component.charge_kw)
+            for component_id, component in batteries.items()
+        }
+    )
+    battery_discharge = _aggregate_series(
+        {
+            component_id: _float_series(component.discharge_kw)
+            for component_id, component in batteries.items()
+        }
+    )
 
     summary = {
         "meta": {
@@ -374,47 +235,178 @@ def _summarize_plan(plan: EmsPlanOutput, *, bucket_minutes: int) -> dict[str, An
             "objective_value": plan.objective_value,
             "horizon_start": horizon_start.isoformat(),
             "horizon_end": horizon_end.isoformat(),
-            "timesteps": len(timesteps),
+            "intervals": len(grid.import_kw),
             "duration_minutes": total_minutes,
-            "timestep_minutes": {
-                "min": min(timestep_minutes),
-                "max": max(timestep_minutes),
-                "avg": total_minutes / len(timesteps),
-                "unique": sorted(set(timestep_minutes)),
+            "interval_minutes": {
+                "min": min(interval_minutes),
+                "max": max(interval_minutes),
+                "avg": total_minutes / len(interval_minutes),
+                "unique": sorted(set(interval_minutes)),
             },
             "bucket_minutes": bucket_minutes,
         },
         "totals": {
-            "grid_import_kwh": grid_import_kwh,
-            "grid_export_kwh": grid_export_kwh,
-            "grid_net_kwh": grid_net_kwh,
-            "grid_import_violation_kwh": grid_import_violation_kwh,
-            "grid_import_kw_max": grid_import_kw_max,
-            "grid_export_kw_max": grid_export_kw_max,
-            "grid_net_kw_max": grid_net_kw_max,
-            "grid_net_kw_min": grid_net_kw_min,
-            "load_base_kwh": load_base_kwh,
-            "load_total_kwh": load_total_kwh,
-            "ev_charge_kwh": ev_charge_kwh,
-            "pv_kwh": pv_kwh,
-            "battery_charge_kwh": battery_charge_kwh,
-            "battery_discharge_kwh": battery_discharge_kwh,
-            "segment_cost_total": segment_cost_total,
-            "total_cost": total_cost,
+            "grid_import_kwh": _energy_kwh(grid.import_kw, interval_end_times),
+            "grid_export_kwh": _energy_kwh(grid.export_kw, interval_end_times),
+            "grid_net_kwh": _energy_kwh(grid.net_kw, interval_end_times),
+            "grid_import_kw_max": max(grid_import),
+            "grid_export_kw_max": max(grid_export),
+            "grid_net_kw_max": max(grid_net),
+            "grid_net_kw_min": min(grid_net),
+            "load_base_kwh": (
+                _energy_kwh(load.power_kw, interval_end_times) if load is not None else 0.0
+            ),
+            "load_total_kwh": _energy_values_kwh(
+                [base + ev for base, ev in zip(load_base, ev_charge, strict=True)],
+                grid.import_kw,
+                interval_end_times,
+            ),
+            "ev_charge_kwh": _energy_values_kwh(ev_charge, grid.import_kw, interval_end_times),
+            "pv_kwh": _energy_values_kwh(pv_actual, grid.import_kw, interval_end_times),
+            "battery_charge_kwh": _energy_values_kwh(
+                battery_charge, grid.import_kw, interval_end_times
+            ),
+            "battery_discharge_kwh": _energy_values_kwh(
+                battery_discharge, grid.import_kw, interval_end_times
+            ),
+            "total_cost": float(plan.objective_value or 0.0),
         },
         "prices": {
-            "import_min": price_import_min,
-            "import_max": price_import_max,
-            "import_avg": price_import_avg,
-            "export_min": price_export_min,
-            "export_max": price_export_max,
-            "export_avg": price_export_avg,
+            "import_min": min(_float_series(grid.price_import_raw)),
+            "import_max": max(_float_series(grid.price_import_raw)),
+            "import_avg": _weighted_average(grid.price_import_raw, interval_end_times),
+            "export_min": min(_float_series(grid.price_export_raw)),
+            "export_max": max(_float_series(grid.price_export_raw)),
+            "export_avg": _weighted_average(grid.price_export_raw, interval_end_times),
         },
-        "inverters": inverter_stats,
-        "evs": ev_stats,
-        "buckets": bucket_payloads,
+        "inverters": {
+            component_id: {"ac_net_kwh": _energy_kwh(component.ac_net_kw, interval_end_times)}
+            for component_id, component in inverters.items()
+        },
+        "pvs": {
+            component_id: {
+                "available_kwh": _energy_kwh(component.available_kw, interval_end_times),
+                "actual_kwh": _energy_kwh(component.actual_kw, interval_end_times),
+                "curtail_kwh": _energy_kwh(component.curtail_kw, interval_end_times),
+            }
+            for component_id, component in pvs.items()
+        },
+        "batteries": {
+            component_id: {
+                "charge_kwh": _energy_kwh(component.charge_kw, interval_end_times),
+                "discharge_kwh": _energy_kwh(component.discharge_kw, interval_end_times),
+                "soc_pct_min": min(_float_series(component.soc_pct)),
+                "soc_pct_max": max(_float_series(component.soc_pct)),
+                "soc_pct_end": float(component.soc_pct[-1].value),
+            }
+            for component_id, component in batteries.items()
+        },
+        "evs": {
+            component_id: {
+                "charge_kwh": _energy_kwh(component.charge_kw, interval_end_times),
+                "soc_pct_min": min(_float_series(component.soc_pct)),
+                "soc_pct_max": max(_float_series(component.soc_pct)),
+                "soc_pct_end": float(component.soc_pct[-1].value),
+            }
+            for component_id, component in evs.items()
+        },
+        "buckets": [],
     }
     return _round_floats(summary)
+
+
+def _single_component[T](
+    plan: EmsPlanOutput,
+    model: type[T],
+    component_type: str,
+    *,
+    optional: bool = False,
+) -> T | None:
+    matches = [component for component in plan.components.values() if isinstance(component, model)]
+    if not matches:
+        if optional:
+            return None
+        raise ValueError(f"Plan is missing required {component_type!r} component.")
+    if len(matches) != 1:
+        raise ValueError(f"Expected exactly one {component_type!r} component.")
+    return matches[0]
+
+
+def _components_of_type[T](plan: EmsPlanOutput, model: type[T]) -> dict[str, T]:
+    return {
+        component_id: component
+        for component_id, component in sorted(plan.components.items())
+        if isinstance(component, model)
+    }
+
+
+def _float_series(points: list[EmsSeriesPoint]) -> list[float]:
+    return [float(point.value) for point in points]
+
+
+def _interval_end_times(
+    plan: EmsPlanOutput,
+    interval_points: list[EmsSeriesPoint],
+) -> list[datetime]:
+    starts = [point.time for point in interval_points]
+    if len(starts) == 1:
+        return [_plan_end_time(plan) or (starts[0] + timedelta(minutes=5))]
+    end_times = starts[1:]
+    final_end = _plan_end_time(plan)
+    if final_end is None or final_end <= starts[-1]:
+        final_end = starts[-1] + (starts[-1] - starts[-2])
+    end_times.append(final_end)
+    return end_times
+
+
+def _plan_end_time(plan: EmsPlanOutput) -> datetime | None:
+    state_times = [
+        component.soc_pct[-1].time
+        for component in plan.components.values()
+        if isinstance(component, BatteryComponentPlan | LoadControlledEvComponentPlan)
+        and component.soc_pct
+    ]
+    if state_times:
+        return max(state_times)
+    return None
+
+
+def _energy_kwh(points: list[EmsSeriesPoint], end_times: list[datetime]) -> float:
+    return _energy_values_kwh(_float_series(points), points, end_times)
+
+
+def _energy_values_kwh(
+    values: list[float],
+    reference_points: list[EmsSeriesPoint],
+    end_times: list[datetime],
+) -> float:
+    total = 0.0
+    for value, point, end_time in zip(values, reference_points, end_times, strict=True):
+        total += value * (end_time - point.time).total_seconds() / 3600.0
+    return total
+
+
+def _weighted_average(points: list[EmsSeriesPoint], end_times: list[datetime]) -> float:
+    total_seconds = sum(
+        (end_time - point.time).total_seconds()
+        for point, end_time in zip(points, end_times, strict=True)
+    )
+    if total_seconds <= 0:
+        return 0.0
+    weighted = 0.0
+    for point, end_time in zip(points, end_times, strict=True):
+        weighted += float(point.value) * (end_time - point.time).total_seconds()
+    return weighted / total_seconds
+
+
+def _aggregate_series(series_dict: dict[str, list[float]]) -> list[float]:
+    if not series_dict:
+        return []
+    total = [0.0] * len(next(iter(series_dict.values())))
+    for series in series_dict.values():
+        for index, value in enumerate(series):
+            total[index] += value
+    return total
 
 
 def serialize_plan(plan: EmsPlanOutput, *, normalize_timings: bool = True) -> dict[str, Any]:

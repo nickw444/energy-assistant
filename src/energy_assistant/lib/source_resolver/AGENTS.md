@@ -15,7 +15,7 @@ Rules:
 - When adding a new `EntitySource` implementation:
   - Add support in `ValueResolverImpl.resolve(...)` and `ValueResolverImpl.mark(...)`.
   - Add tests under `tests/energy_assistant/lib/source_resolver/`.
-- Keep fixture tooling using `FixtureHassDataProvider` so EMS and worker logic can be tested offline.
+- Keep time-sensitive source resolution deterministic in tests; use `freeze_hass_source_time(...)` when you need resolver behavior anchored to a captured instant.
 
 ## Continuous learning
 - Update this file when the resolver's dataflow contracts (mark, hydrate, resolve), source patterns, or testing approach change.

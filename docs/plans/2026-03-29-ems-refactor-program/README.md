@@ -43,6 +43,8 @@ This layer is responsible for:
 
 This allows the planner to reason in terms of grid, inverter, battery, PV, EV, load, and switchboard behavior while still solving against a deeper physical model.
 
+Plan and forecast export should also stay aligned with this logical layer. Public/exported EMS data should be shaped by logical plant components rather than by raw solver variable names.
+
 ### 3. Input boundary
 Data resolution is now a separate concern from EMS modeling.
 
@@ -127,6 +129,8 @@ The current EMS should be thought about in this order:
 3. **Logical components** consume that data and expand themselves into a graph.
 4. **Topology** owns the physical constraints, objective terms, and solver variables.
 5. **Plan extraction** maps solved values back into logical outputs.
+
+Those logical outputs now include a flat component-keyed series export that mirrors the flat `plant` registry directly. Time-varying values are exported as ordered `{ time, value }` points rather than as a generic flattened solver-variable map.
 
 This is the core mental model future agent sessions should start from.
 

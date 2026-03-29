@@ -1,4 +1,4 @@
-"""Energy Assistant sensors (proof of concept)."""
+"""Energy Assistant sensors."""
 
 from __future__ import annotations
 
@@ -17,32 +17,36 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from . import EnergyAssistantRuntimeData
 from .coordinator import (
     EnergyAssistantCoordinator,
+    PlanLatestResponse,
     build_plan_series,
-    ev_step_getter,
-    ev_value_getter,
-    get_timestep0,
-    intent_inverter_value_getter,
-    intent_load_value_getter,
-    inverter_step_getter,
-    inverter_value_getter,
-    sorted_items,
+    component_intent_value_getter,
+    component_series_getter,
+    component_value_getter,
+    components_of_type,
+    plan_horizon_hours,
+    single_component,
 )
 from .device import (
+    battery_device_info,
     entity_unique_id,
+    ev_device_info,
     inverter_device_info,
-    load_device_info,
+    pv_device_info,
     root_device_info,
     suggested_object_id,
 )
-from .energy_assistant_client import EmsPlanOutput, PlanLatestResponse, TimestepPlan
+from .energy_assistant_client import (
+    BatteryComponentPlan,
+    EmsPlanOutput,
+    EmsSeriesPoint,
+    GridComponentPlan,
+    InverterComponentPlan,
+    LoadComponentPlan,
+    LoadControlledEvComponentPlan,
+    PvComponentPlan,
+)
 
 
-# NOTE: homeassistant-stubs has several type conflicts that require ignores:
-# 1. type: ignore[misc] on class - conflicting `available` property types between
-#    CoordinatorEntity and Entity (property vs cached_property).
-# 2. pyright: ignore[reportIncompatibleVariableOverride] on properties - stubs define
-#    native_value/extra_state_attributes as cached_property but we override with property.
-# These are stubs issues, not runtime issues. Remove ignores when stubs are fixed.
 class EnergyAssistantPlanSensor(  # type: ignore[misc]
     CoordinatorEntity[EnergyAssistantCoordinator],
     SensorEntity,
@@ -77,12 +81,6 @@ class EnergyAssistantPlanSensor(  # type: ignore[misc]
         return {"plan": payload.plan_dump}
 
 
-# NOTE: homeassistant-stubs has several type conflicts that require ignores:
-# 1. type: ignore[misc] on class - conflicting `available` property types between
-#    CoordinatorEntity and Entity (property vs cached_property).
-# 2. pyright: ignore[reportIncompatibleVariableOverride] on properties - stubs define
-#    native_value as cached_property but we override with property.
-# These are stubs issues, not runtime issues. Remove ignores when stubs are fixed.
 class EnergyAssistantPlanUpdatedSensor(  # type: ignore[misc]
     CoordinatorEntity[EnergyAssistantCoordinator],
     SensorEntity,
@@ -111,12 +109,6 @@ class EnergyAssistantPlanUpdatedSensor(  # type: ignore[misc]
         return payload.response.plan.generated_at
 
 
-# NOTE: homeassistant-stubs has several type conflicts that require ignores:
-# 1. type: ignore[misc] on class - conflicting `available` property types between
-#    CoordinatorEntity and Entity (property vs cached_property).
-# 2. pyright: ignore[reportIncompatibleVariableOverride] on properties - stubs define
-#    native_value/extra_state_attributes as cached_property but we override with property.
-# These are stubs issues, not runtime issues. Remove ignores when stubs are fixed.
 class EnergyAssistantPlanValueSensor(  # type: ignore[misc]
     CoordinatorEntity[EnergyAssistantCoordinator],
     SensorEntity,
@@ -129,10 +121,10 @@ class EnergyAssistantPlanValueSensor(  # type: ignore[misc]
         coordinator: EnergyAssistantCoordinator,
         *,
         unique_id: str,
-        suggested_object_id: str | None,
+        suggested_object_id_value: str | None,
         name: str,
         value_getter: Callable[[PlanLatestResponse], Any],
-        series_getter: Callable[[TimestepPlan], Any] | None,
+        series_getter: Callable[[PlanLatestResponse], list[EmsSeriesPoint]] | None,
         device_info: DeviceInfo | None,
         unit: str | None,
         icon: str | None,
@@ -144,8 +136,8 @@ class EnergyAssistantPlanValueSensor(  # type: ignore[misc]
         self._attr_entity_category = entity_category
         self._value_getter = value_getter
         self._series_getter = series_getter
-        if suggested_object_id is not None:
-            self._attr_suggested_object_id = suggested_object_id
+        if suggested_object_id_value is not None:
+            self._attr_suggested_object_id = suggested_object_id_value
         if device_info is not None:
             self._attr_device_info = device_info
         if unit:
@@ -158,8 +150,7 @@ class EnergyAssistantPlanValueSensor(  # type: ignore[misc]
         payload = self.coordinator.data
         if not payload:
             return None
-        value = self._value_getter(payload.response)
-        return _normalize_value(value)
+        return _normalize_value(self._value_getter(payload.response))
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:  # pyright: ignore[reportIncompatibleVariableOverride]
@@ -168,8 +159,7 @@ class EnergyAssistantPlanValueSensor(  # type: ignore[misc]
             return {}
         return {
             "plan": build_plan_series(
-                payload.response.plan,
-                self._series_getter,
+                self._series_getter(payload.response),
                 _normalize_value,
             ),
         }
@@ -197,447 +187,447 @@ async def async_setup_entry(
             entity_unique_id(base_url, "plan", "updated_at"),
         ),
     ]
-    entities.extend(_build_mpc_entities(coordinator, base_url))
-    entities.extend(_build_intent_entities(coordinator, base_url))
+    payload = coordinator.data
+    if payload is not None:
+        entities.extend(_build_plan_entities(coordinator, payload.response.plan, base_url))
     async_add_entities(entities)
 
 
-def _build_mpc_entities(
-    coordinator: EnergyAssistantCoordinator,
-    base_url: str,
-) -> list[SensorEntity]:
-    payload = coordinator.data
-    if not payload:
-        return []
-    return _build_mpc_entities_for_plan(coordinator, payload.response.plan, base_url)
-
-
-def _build_intent_entities(
-    coordinator: EnergyAssistantCoordinator,
-    base_url: str,
-) -> list[SensorEntity]:
-    payload = coordinator.data
-    if not payload:
-        return []
-    return _build_intent_entities_for_response(coordinator, payload.response, base_url)
-
-
-def _build_intent_entities_for_response(
-    coordinator: EnergyAssistantCoordinator,
-    response: PlanLatestResponse,
-    base_url: str,
-) -> list[SensorEntity]:
-    intent = response.intent
-    entities: list[SensorEntity] = []
-    timestep0 = get_timestep0(response.plan)
-    if timestep0 is not None:
-        base_device = root_device_info(base_url)
-        entities.extend(
-            [
-                EnergyAssistantPlanValueSensor(
-                    coordinator,
-                    unique_id=entity_unique_id(base_url, "grid", "import_power"),
-                    suggested_object_id=suggested_object_id(
-                        "intent",
-                        "grid",
-                        "import_power",
-                    ),
-                    name="Grid Import Power",
-                    value_getter=_timestep0_getter(lambda step: step.grid.import_kw),
-                    series_getter=lambda step: step.grid.import_kw,
-                    device_info=base_device,
-                    unit="kW",
-                    icon="mdi:transmission-tower-import",
-                    entity_category=None,
-                ),
-                EnergyAssistantPlanValueSensor(
-                    coordinator,
-                    unique_id=entity_unique_id(base_url, "grid", "export_power"),
-                    suggested_object_id=suggested_object_id(
-                        "intent",
-                        "grid",
-                        "export_power",
-                    ),
-                    name="Grid Export Power",
-                    value_getter=_timestep0_getter(lambda step: step.grid.export_kw),
-                    series_getter=lambda step: step.grid.export_kw,
-                    device_info=base_device,
-                    unit="kW",
-                    icon="mdi:transmission-tower-export",
-                    entity_category=None,
-                ),
-            ]
-        )
-    for name in sorted(intent.inverters.keys()):
-        inverter_device = inverter_device_info(base_url, name)
-        entities.extend(
-            [
-                EnergyAssistantPlanValueSensor(
-                    coordinator,
-                    unique_id=entity_unique_id(
-                        base_url,
-                        "plan",
-                        "inverter",
-                        name,
-                        "mode",
-                    ),
-                    suggested_object_id=suggested_object_id(
-                        "intent",
-                        "inverter",
-                        name,
-                        "mode",
-                    ),
-                    name="Inverter Mode",
-                    value_getter=intent_inverter_value_getter(name, "mode"),
-                    series_getter=None,
-                    device_info=inverter_device,
-                    unit=None,
-                    icon="mdi:transition",
-                    entity_category=None,
-                ),
-                EnergyAssistantPlanValueSensor(
-                    coordinator,
-                    unique_id=entity_unique_id(
-                        base_url,
-                        "plan",
-                        "inverter",
-                        name,
-                        "force_charge_power",
-                    ),
-                    suggested_object_id=suggested_object_id(
-                        "intent",
-                        "inverter",
-                        name,
-                        "force_charge_power",
-                    ),
-                    name="Battery Charge Power",
-                    value_getter=intent_inverter_value_getter(
-                        name,
-                        "force_charge_kw",
-                    ),
-                    series_getter=inverter_step_getter(name, "battery_charge_kw"),
-                    device_info=inverter_device,
-                    unit="kW",
-                    icon="mdi:battery-charging",
-                    entity_category=None,
-                ),
-                EnergyAssistantPlanValueSensor(
-                    coordinator,
-                    unique_id=entity_unique_id(
-                        base_url,
-                        "plan",
-                        "inverter",
-                        name,
-                        "force_discharge_power",
-                    ),
-                    suggested_object_id=suggested_object_id(
-                        "intent",
-                        "inverter",
-                        name,
-                        "force_discharge_power",
-                    ),
-                    name="Battery Discharge Power",
-                    value_getter=intent_inverter_value_getter(
-                        name,
-                        "force_discharge_kw",
-                    ),
-                    series_getter=inverter_step_getter(name, "battery_discharge_kw"),
-                    device_info=inverter_device,
-                    unit="kW",
-                    icon="mdi:battery-minus",
-                    entity_category=None,
-                ),
-            ]
-        )
-
-    for name in sorted(intent.loads.keys()):
-        load_device = load_device_info(base_url, name)
-        entities.append(
-            EnergyAssistantPlanValueSensor(
-                coordinator,
-                unique_id=entity_unique_id(base_url, "plan", "ev", name, "charge_power"),
-                suggested_object_id=suggested_object_id(
-                    "intent",
-                    "ev",
-                    name,
-                    "charge_power",
-                ),
-                name="Charge Power",
-                value_getter=intent_load_value_getter(name, "charge_kw"),
-                series_getter=None,
-                device_info=load_device,
-                unit="kW",
-                icon="mdi:ev-station",
-                entity_category=None,
-            )
-        )
-
-    return entities
-
-
-def _build_mpc_entities_for_plan(
+def _build_plan_entities(
     coordinator: EnergyAssistantCoordinator,
     plan: EmsPlanOutput,
     base_url: str,
 ) -> list[SensorEntity]:
-    timestep0 = get_timestep0(plan)
-    if not timestep0:
-        return []
-
     base_device = root_device_info(base_url)
-    entities: list[SensorEntity] = [
-        EnergyAssistantPlanValueSensor(
-            coordinator,
-            unique_id=entity_unique_id(base_url, "grid", "net_power"),
-            suggested_object_id=None,
-            name="Grid Net Power",
-            value_getter=_timestep0_getter(lambda step: step.grid.net_kw),
-            series_getter=lambda step: step.grid.net_kw,
-            device_info=base_device,
-            unit="kW",
-            icon="mdi:transmission-tower",
-        ),
-        EnergyAssistantPlanValueSensor(
-            coordinator,
-            unique_id=entity_unique_id(base_url, "load", "base_power"),
-            suggested_object_id=None,
-            name="Load Base Power",
-            value_getter=_timestep0_getter(lambda step: step.loads.base_kw),
-            series_getter=lambda step: step.loads.base_kw,
-            device_info=base_device,
-            unit="kW",
-            icon="mdi:home-lightning-bolt",
-        ),
-        EnergyAssistantPlanValueSensor(
-            coordinator,
-            unique_id=entity_unique_id(base_url, "load", "total_power"),
-            suggested_object_id=None,
-            name="Load Total Power",
-            value_getter=_timestep0_getter(lambda step: step.loads.total_kw),
-            series_getter=lambda step: step.loads.total_kw,
-            device_info=base_device,
-            unit="kW",
-            icon="mdi:home-lightning-bolt",
-        ),
-        EnergyAssistantPlanValueSensor(
-            coordinator,
-            unique_id=entity_unique_id(base_url, "price", "import"),
-            suggested_object_id=None,
-            name="Price Import",
-            value_getter=_timestep0_getter(lambda step: step.economics.price_import),
-            series_getter=lambda step: step.economics.price_import,
-            device_info=base_device,
-            unit=f"{CURRENCY_DOLLAR}/kWh",
-            icon="mdi:cash",
-        ),
-        EnergyAssistantPlanValueSensor(
-            coordinator,
-            unique_id=entity_unique_id(base_url, "price", "import_effective"),
-            suggested_object_id=None,
-            name="Price Import Effective",
-            value_getter=_timestep0_getter(lambda step: step.economics.price_import_effective),
-            series_getter=lambda step: step.economics.price_import_effective,
-            device_info=base_device,
-            unit=f"{CURRENCY_DOLLAR}/kWh",
-            icon="mdi:cash",
-            entity_category=EntityCategory.DIAGNOSTIC,
-        ),
-        EnergyAssistantPlanValueSensor(
-            coordinator,
-            unique_id=entity_unique_id(base_url, "price", "export"),
-            suggested_object_id=None,
-            name="Price Export",
-            value_getter=_timestep0_getter(lambda step: step.economics.price_export),
-            series_getter=lambda step: step.economics.price_export,
-            device_info=base_device,
-            unit=f"{CURRENCY_DOLLAR}/kWh",
-            icon="mdi:cash-minus",
-        ),
-        EnergyAssistantPlanValueSensor(
-            coordinator,
-            unique_id=entity_unique_id(base_url, "price", "export_effective"),
-            suggested_object_id=None,
-            name="Price Export Effective",
-            value_getter=_timestep0_getter(lambda step: step.economics.price_export_effective),
-            series_getter=lambda step: step.economics.price_export_effective,
-            device_info=base_device,
-            unit=f"{CURRENCY_DOLLAR}/kWh",
-            icon="mdi:cash-minus",
-            entity_category=EntityCategory.DIAGNOSTIC,
-        ),
-        EnergyAssistantPlanValueSensor(
-            coordinator,
-            unique_id=entity_unique_id(base_url, "cost", "segment"),
-            suggested_object_id=None,
-            name="Segment Cost",
-            value_getter=_timestep0_getter(lambda step: step.economics.segment_cost),
-            series_getter=lambda step: step.economics.segment_cost,
-            device_info=base_device,
-            unit=CURRENCY_DOLLAR,
-            icon="mdi:cash",
-        ),
-        EnergyAssistantPlanValueSensor(
-            coordinator,
-            unique_id=entity_unique_id(base_url, "cost", "forecast"),
-            suggested_object_id=None,
-            name="Cost Forecast",
-            value_getter=_plan_getter(_plan_last_cumulative_cost),
-            series_getter=lambda step: step.economics.cumulative_cost,
-            device_info=base_device,
-            unit=CURRENCY_DOLLAR,
-            icon="mdi:cash-multiple",
-        ),
-        EnergyAssistantPlanValueSensor(
-            coordinator,
-            unique_id=entity_unique_id(base_url, "horizon", "length"),
-            suggested_object_id=None,
-            name="Horizon Length",
-            value_getter=_plan_getter(_plan_horizon_hours),
-            series_getter=None,
-            device_info=base_device,
-            unit=UnitOfTime.HOURS,
-            icon="mdi:timeline-clock",
-        ),
-    ]
+    entities: list[SensorEntity] = []
 
-    for name, inverter in sorted_items(timestep0.inverters):
-        inverter_device = inverter_device_info(base_url, name)
-        if inverter.pv_kw is not None:
-            entities.append(
-                EnergyAssistantPlanValueSensor(
+    grid_entry = single_component(plan, GridComponentPlan)
+    if grid_entry is not None:
+        grid_id, _grid = grid_entry
+        entities.extend(
+            [
+                _value_sensor(
                     coordinator,
-                    unique_id=entity_unique_id(base_url, "inverter", name, "pv_power"),
-                    suggested_object_id=suggested_object_id(
-                        "inverter",
-                        name,
-                        "pv_power",
-                    ),
-                    name="PV Power",
-                    value_getter=inverter_value_getter(name, "pv_kw"),
-                    series_getter=inverter_step_getter(name, "pv_kw"),
-                    device_info=inverter_device,
-                    unit="kW",
-                    icon="mdi:solar-power",
-                )
-            )
-        entities.append(
-            EnergyAssistantPlanValueSensor(
-                coordinator,
-                unique_id=entity_unique_id(base_url, "inverter", name, "net_power"),
-                suggested_object_id=suggested_object_id(
-                    "inverter",
-                    name,
+                    base_url,
+                    base_device,
+                    "grid",
                     "net_power",
+                    "Grid Net Power",
+                    component_value_getter(grid_id, "net_kw"),
+                    component_series_getter(grid_id, "net_kw"),
+                    "kW",
+                    "mdi:transmission-tower",
+                    entity_category=None,
                 ),
-                name="Inverter Net Power",
-                value_getter=inverter_value_getter(name, "ac_net_kw"),
-                series_getter=inverter_step_getter(name, "ac_net_kw"),
-                device_info=inverter_device,
-                unit="kW",
-                icon="mdi:current-ac",
-            )
+                _value_sensor(
+                    coordinator,
+                    base_url,
+                    base_device,
+                    "grid",
+                    "import_power",
+                    "Grid Import Power",
+                    component_value_getter(grid_id, "import_kw"),
+                    component_series_getter(grid_id, "import_kw"),
+                    "kW",
+                    "mdi:transmission-tower-import",
+                    entity_category=None,
+                ),
+                _value_sensor(
+                    coordinator,
+                    base_url,
+                    base_device,
+                    "grid",
+                    "export_power",
+                    "Grid Export Power",
+                    component_value_getter(grid_id, "export_kw"),
+                    component_series_getter(grid_id, "export_kw"),
+                    "kW",
+                    "mdi:transmission-tower-export",
+                    entity_category=None,
+                ),
+                _value_sensor(
+                    coordinator,
+                    base_url,
+                    base_device,
+                    "price",
+                    "import",
+                    "Price Import",
+                    component_value_getter(grid_id, "price_import_raw"),
+                    component_series_getter(grid_id, "price_import_raw"),
+                    f"{CURRENCY_DOLLAR}/kWh",
+                    "mdi:cash",
+                    entity_category=None,
+                ),
+                _value_sensor(
+                    coordinator,
+                    base_url,
+                    base_device,
+                    "price",
+                    "import_effective",
+                    "Price Import Effective",
+                    component_value_getter(grid_id, "price_import_effective"),
+                    component_series_getter(grid_id, "price_import_effective"),
+                    f"{CURRENCY_DOLLAR}/kWh",
+                    "mdi:cash",
+                ),
+                _value_sensor(
+                    coordinator,
+                    base_url,
+                    base_device,
+                    "price",
+                    "export",
+                    "Price Export",
+                    component_value_getter(grid_id, "price_export_raw"),
+                    component_series_getter(grid_id, "price_export_raw"),
+                    f"{CURRENCY_DOLLAR}/kWh",
+                    "mdi:cash-minus",
+                    entity_category=None,
+                ),
+                _value_sensor(
+                    coordinator,
+                    base_url,
+                    base_device,
+                    "price",
+                    "export_effective",
+                    "Price Export Effective",
+                    component_value_getter(grid_id, "price_export_effective"),
+                    component_series_getter(grid_id, "price_export_effective"),
+                    f"{CURRENCY_DOLLAR}/kWh",
+                    "mdi:cash-minus",
+                ),
+            ]
         )
-        if inverter.battery_soc_kwh is not None:
-            entities.append(
-                EnergyAssistantPlanValueSensor(
-                    coordinator,
-                    unique_id=entity_unique_id(base_url, "inverter", name, "battery_soc"),
-                    suggested_object_id=suggested_object_id(
-                        "inverter",
-                        name,
-                        "battery_soc",
-                    ),
-                    name="Battery Stored Energy",
-                    value_getter=inverter_value_getter(name, "battery_soc_kwh"),
-                    series_getter=inverter_step_getter(name, "battery_soc_kwh"),
-                    device_info=inverter_device,
-                    unit=UnitOfEnergy.KILO_WATT_HOUR,
-                    icon="mdi:battery",
-                )
-            )
-        if inverter.battery_soc_pct is not None:
-            entities.append(
-                EnergyAssistantPlanValueSensor(
-                    coordinator,
-                    unique_id=entity_unique_id(
-                        base_url,
-                        "inverter",
-                        name,
-                        "battery_soc_pct",
-                    ),
-                    suggested_object_id=suggested_object_id(
-                        "inverter",
-                        name,
-                        "battery_soc_pct",
-                    ),
-                    name="Battery SoC",
-                    value_getter=inverter_value_getter(name, "battery_soc_pct"),
-                    series_getter=inverter_step_getter(name, "battery_soc_pct"),
-                    device_info=inverter_device,
-                    unit=PERCENTAGE,
-                    icon="mdi:battery",
-                )
-            )
 
-    for name, ev in sorted_items(timestep0.loads.evs):
-        load_device = load_device_info(base_url, name)
+    load_entry = single_component(plan, LoadComponentPlan)
+    if load_entry is not None:
+        load_id, _load = load_entry
         entities.append(
-            EnergyAssistantPlanValueSensor(
+            _value_sensor(
                 coordinator,
-                unique_id=entity_unique_id(base_url, "ev", name, "charge_power"),
-                suggested_object_id=suggested_object_id(
-                    "ev",
-                    name,
-                    "charge_power",
-                ),
-                name="Charge Power",
-                value_getter=ev_value_getter(name, "charge_kw"),
-                series_getter=ev_step_getter(name, "charge_kw"),
-                device_info=load_device,
-                unit="kW",
-                icon="mdi:ev-station",
+                base_url,
+                base_device,
+                "load",
+                "base_power",
+                "Load Base Power",
+                component_value_getter(load_id, "power_kw"),
+                component_series_getter(load_id, "power_kw"),
+                "kW",
+                "mdi:home-lightning-bolt",
+                entity_category=None,
             )
         )
-        entities.append(
+
+    entities.extend(
+        [
             EnergyAssistantPlanValueSensor(
                 coordinator,
-                unique_id=entity_unique_id(base_url, "ev", name, "soc"),
-                suggested_object_id=suggested_object_id("ev", name, "soc"),
-                name="Stored Energy",
-                value_getter=ev_value_getter(name, "soc_kwh"),
-                series_getter=ev_step_getter(name, "soc_kwh"),
-                device_info=load_device,
-                unit=UnitOfEnergy.KILO_WATT_HOUR,
-                icon="mdi:car-electric",
-            )
-        )
-        if ev.soc_pct is not None:
-            entities.append(
-                EnergyAssistantPlanValueSensor(
+                unique_id=entity_unique_id(base_url, "cost", "forecast"),
+                suggested_object_id_value=None,
+                name="Cost Forecast",
+                value_getter=lambda response: response.plan.objective_value,
+                series_getter=None,
+                device_info=base_device,
+                unit=CURRENCY_DOLLAR,
+                icon="mdi:cash-multiple",
+                entity_category=None,
+            ),
+            EnergyAssistantPlanValueSensor(
+                coordinator,
+                unique_id=entity_unique_id(base_url, "horizon", "length"),
+                suggested_object_id_value=None,
+                name="Horizon Length",
+                value_getter=lambda response: plan_horizon_hours(response.plan),
+                series_getter=None,
+                device_info=base_device,
+                unit=UnitOfTime.HOURS,
+                icon="mdi:timeline-clock",
+                entity_category=None,
+            ),
+        ]
+    )
+
+    for component_id in components_of_type(plan, InverterComponentPlan):
+        device = inverter_device_info(base_url, component_id)
+        entities.extend(
+            [
+                _value_sensor(
                     coordinator,
-                    unique_id=entity_unique_id(base_url, "ev", name, "soc_pct"),
-                    suggested_object_id=suggested_object_id("ev", name, "soc_pct"),
-                    name="SoC",
-                    value_getter=ev_value_getter(name, "soc_pct"),
-                    series_getter=ev_step_getter(name, "soc_pct"),
-                    device_info=load_device,
-                    unit=PERCENTAGE,
-                    icon="mdi:car-electric",
-                )
-            )
+                    base_url,
+                    device,
+                    "inverter",
+                    component_id,
+                    "net_power",
+                    "Inverter Net Power",
+                    component_value_getter(component_id, "ac_net_kw"),
+                    component_series_getter(component_id, "ac_net_kw"),
+                    "kW",
+                    "mdi:current-ac",
+                    entity_category=None,
+                ),
+                _value_sensor(
+                    coordinator,
+                    base_url,
+                    device,
+                    "inverter",
+                    component_id,
+                    "mode",
+                    "Inverter Mode",
+                    component_intent_value_getter(component_id, "mode"),
+                    None,
+                    None,
+                    "mdi:transition",
+                    entity_category=None,
+                ),
+                _value_sensor(
+                    coordinator,
+                    base_url,
+                    device,
+                    "inverter",
+                    component_id,
+                    "export_limit_kw",
+                    "Export Limit",
+                    component_intent_value_getter(component_id, "export_limit_kw"),
+                    None,
+                    "kW",
+                    "mdi:transmission-tower-export",
+                    entity_category=None,
+                ),
+                _value_sensor(
+                    coordinator,
+                    base_url,
+                    device,
+                    "inverter",
+                    component_id,
+                    "force_charge_kw",
+                    "Force Charge Power",
+                    component_intent_value_getter(component_id, "force_charge_kw"),
+                    None,
+                    "kW",
+                    "mdi:battery-charging",
+                    entity_category=None,
+                ),
+                _value_sensor(
+                    coordinator,
+                    base_url,
+                    device,
+                    "inverter",
+                    component_id,
+                    "force_discharge_kw",
+                    "Force Discharge Power",
+                    component_intent_value_getter(component_id, "force_discharge_kw"),
+                    None,
+                    "kW",
+                    "mdi:battery-minus",
+                    entity_category=None,
+                ),
+            ]
+        )
+
+    for component_id in components_of_type(plan, PvComponentPlan):
+        device = pv_device_info(base_url, component_id)
+        entities.extend(
+            [
+                _value_sensor(
+                    coordinator,
+                    base_url,
+                    device,
+                    "pv",
+                    component_id,
+                    "actual_kw",
+                    "PV Power",
+                    component_value_getter(component_id, "actual_kw"),
+                    component_series_getter(component_id, "actual_kw"),
+                    "kW",
+                    "mdi:solar-power",
+                    entity_category=None,
+                ),
+                _value_sensor(
+                    coordinator,
+                    base_url,
+                    device,
+                    "pv",
+                    component_id,
+                    "available_kw",
+                    "PV Available Power",
+                    component_value_getter(component_id, "available_kw"),
+                    component_series_getter(component_id, "available_kw"),
+                    "kW",
+                    "mdi:solar-power-variant",
+                    entity_category=None,
+                ),
+                _value_sensor(
+                    coordinator,
+                    base_url,
+                    device,
+                    "pv",
+                    component_id,
+                    "curtail_kw",
+                    "PV Curtailment Power",
+                    component_value_getter(component_id, "curtail_kw"),
+                    component_series_getter(component_id, "curtail_kw"),
+                    "kW",
+                    "mdi:solar-power-variant-outline",
+                    entity_category=None,
+                ),
+            ]
+        )
+
+    for component_id in components_of_type(plan, BatteryComponentPlan):
+        device = battery_device_info(base_url, component_id)
+        entities.extend(
+            [
+                _value_sensor(
+                    coordinator,
+                    base_url,
+                    device,
+                    "battery",
+                    component_id,
+                    "charge_kw",
+                    "Charge Power",
+                    component_value_getter(component_id, "charge_kw"),
+                    component_series_getter(component_id, "charge_kw"),
+                    "kW",
+                    "mdi:battery-charging",
+                    entity_category=None,
+                ),
+                _value_sensor(
+                    coordinator,
+                    base_url,
+                    device,
+                    "battery",
+                    component_id,
+                    "discharge_kw",
+                    "Discharge Power",
+                    component_value_getter(component_id, "discharge_kw"),
+                    component_series_getter(component_id, "discharge_kw"),
+                    "kW",
+                    "mdi:battery-minus",
+                    entity_category=None,
+                ),
+                _value_sensor(
+                    coordinator,
+                    base_url,
+                    device,
+                    "battery",
+                    component_id,
+                    "soc_kwh",
+                    "Stored Energy",
+                    component_value_getter(component_id, "soc_kwh"),
+                    component_series_getter(component_id, "soc_kwh"),
+                    UnitOfEnergy.KILO_WATT_HOUR,
+                    "mdi:battery",
+                    entity_category=None,
+                ),
+                _value_sensor(
+                    coordinator,
+                    base_url,
+                    device,
+                    "battery",
+                    component_id,
+                    "soc_pct",
+                    "State Of Charge",
+                    component_value_getter(component_id, "soc_pct"),
+                    component_series_getter(component_id, "soc_pct"),
+                    PERCENTAGE,
+                    "mdi:battery",
+                    entity_category=None,
+                ),
+            ]
+        )
+
+    for component_id in components_of_type(plan, LoadControlledEvComponentPlan):
+        device = ev_device_info(base_url, component_id)
+        entities.extend(
+            [
+                _value_sensor(
+                    coordinator,
+                    base_url,
+                    device,
+                    "ev",
+                    component_id,
+                    "charge_power",
+                    "Charge Power",
+                    component_value_getter(component_id, "charge_kw"),
+                    component_series_getter(component_id, "charge_kw"),
+                    "kW",
+                    "mdi:ev-station",
+                    entity_category=None,
+                ),
+                _value_sensor(
+                    coordinator,
+                    base_url,
+                    device,
+                    "ev",
+                    component_id,
+                    "soc",
+                    "Stored Energy",
+                    component_value_getter(component_id, "soc_kwh"),
+                    component_series_getter(component_id, "soc_kwh"),
+                    UnitOfEnergy.KILO_WATT_HOUR,
+                    "mdi:car-electric",
+                    entity_category=None,
+                ),
+                _value_sensor(
+                    coordinator,
+                    base_url,
+                    device,
+                    "ev",
+                    component_id,
+                    "soc_pct",
+                    "SoC",
+                    component_value_getter(component_id, "soc_pct"),
+                    component_series_getter(component_id, "soc_pct"),
+                    PERCENTAGE,
+                    "mdi:car-electric",
+                    entity_category=None,
+                ),
+                _value_sensor(
+                    coordinator,
+                    base_url,
+                    device,
+                    "ev",
+                    component_id,
+                    "intent_charge_kw",
+                    "Intent Charge Power",
+                    component_intent_value_getter(component_id, "charge_kw"),
+                    None,
+                    "kW",
+                    "mdi:ev-plug-type2",
+                    entity_category=None,
+                ),
+            ]
+        )
+
     return entities
 
 
-def _timestep0_getter(
-    getter: Callable[[TimestepPlan], Any],
-) -> Callable[[PlanLatestResponse], Any]:
-    def _get(response: PlanLatestResponse) -> Any:
-        step = get_timestep0(response.plan)
-        if step is None:
-            return None
-        return getter(step)
-
-    return _get
+def _value_sensor(
+    coordinator: EnergyAssistantCoordinator,
+    base_url: str,
+    device_info: DeviceInfo,
+    kind: str,
+    *args: Any,
+    entity_category: EntityCategory | None = EntityCategory.DIAGNOSTIC,
+) -> EnergyAssistantPlanValueSensor:
+    if len(args) < 5:
+        raise ValueError("Expected path parts plus sensor configuration.")
+    *parts, name, value_getter, series_getter, unit, icon = args
+    if len(parts) < 1:
+        raise ValueError("Expected at least one path part for the sensor id.")
+    path_parts = tuple(str(part) for part in parts)
+    object_parts = path_parts[:-1] if len(path_parts) > 1 else path_parts
+    return EnergyAssistantPlanValueSensor(
+        coordinator,
+        unique_id=entity_unique_id(base_url, kind, *path_parts),
+        suggested_object_id_value=suggested_object_id(kind, *object_parts),
+        name=str(name),
+        value_getter=value_getter,
+        series_getter=series_getter,
+        device_info=device_info,
+        unit=unit,
+        icon=icon,
+        entity_category=entity_category,
+    )
 
 
 def _round_kw(value: float) -> float:
@@ -650,26 +640,3 @@ def _normalize_value(value: Any) -> Any:
     if isinstance(value, float):
         return _round_kw(value)
     return value
-
-
-def _plan_getter(
-    getter: Callable[[EmsPlanOutput], Any],
-) -> Callable[[PlanLatestResponse], Any]:
-    def _get(response: PlanLatestResponse) -> Any:
-        return getter(response.plan)
-
-    return _get
-
-
-def _plan_last_cumulative_cost(plan: EmsPlanOutput) -> Any:
-    if not plan.timesteps:
-        return None
-    return plan.timesteps[-1].economics.cumulative_cost
-
-
-def _plan_horizon_hours(plan: EmsPlanOutput) -> float | None:
-    if not plan.timesteps:
-        return None
-    start = plan.timesteps[0].start
-    end = plan.timesteps[-1].end
-    return (end - start).total_seconds() / 3600.0

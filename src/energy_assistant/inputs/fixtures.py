@@ -1,24 +1,11 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
 from pathlib import Path
 from typing import TypedDict, cast
 
-from energy_assistant.ems.system.factory import EmsSystemFactory
-from energy_assistant.inputs.provider import (
-    EmsInputProvider,
-    FixtureResolvedInputProvider,
-    ResolverBackedInputProvider,
-)
+from energy_assistant.inputs.provider import EmsInputProvider, FixtureResolvedInputProvider
 from energy_assistant.inputs.registry import ResolvedInputRegistry
-from energy_assistant.inputs.window import InputWindow
-from energy_assistant.lib.source_resolver.fixtures import (
-    FixtureHassDataProvider,
-    freeze_hass_source_time,
-)
-from energy_assistant.lib.source_resolver.resolver import ValueResolverImpl
-from energy_assistant.models.config import AppConfig
 from energy_assistant.models.inputs import InputValueKind
 
 
@@ -78,34 +65,6 @@ def _round_fixture_inputs_payload(
     return rounded_inputs
 
 
-class FrozenFixtureResolverInputProvider:
-    def __init__(
-        self,
-        *,
-        app_config: AppConfig,
-        fixture_path: Path,
-        captured_at: str | None,
-    ) -> None:
-        provider, _ = FixtureHassDataProvider.from_path(fixture_path)
-        resolver = ValueResolverImpl(hass_data_provider=provider)
-        self._base = ResolverBackedInputProvider(app_config=app_config, resolver=resolver)
-        self._captured_at = captured_at
-
-    def mark_for_hydration(self) -> None:
-        self._base.mark_for_hydration()
-
-    def hydrate_all(self) -> None:
-        self._base.hydrate_all()
-
-    def resolve_for_window(self, *, window: InputWindow) -> ResolvedInputRegistry:
-        frozen = None if self._captured_at is None else datetime.fromisoformat(self._captured_at)
-        with freeze_hass_source_time(frozen):
-            return self._base.resolve_for_window(window=window)
-
-    def grid_price_watch_entity_ids(self) -> set[str]:
-        return self._base.grid_price_watch_entity_ids()
-
-
 def load_resolved_inputs_fixture(path: Path) -> ResolvedInputsFixture:
     data = json.loads(path.read_text())
     if not isinstance(data, dict):
@@ -145,49 +104,6 @@ def load_resolved_input_registry(path: Path) -> tuple[ResolvedInputRegistry, str
 def load_fixture_input_provider(
     *,
     path: Path,
-    app_config: AppConfig,
 ) -> tuple[EmsInputProvider, str | None]:
-    data = json.loads(path.read_text())
-    if not isinstance(data, dict):
-        raise ValueError("EMS fixture payload must be a JSON object")
-
-    captured_at_obj = cast(object, data.get("captured_at"))
-    captured_at = captured_at_obj if isinstance(captured_at_obj, str) else None
-
-    if "inputs" in data:
-        registry, _ = load_resolved_input_registry(path)
-        return FixtureResolvedInputProvider(registry=registry), captured_at
-
-    if "states" in data and "history" in data:
-        input_provider = FrozenFixtureResolverInputProvider(
-            app_config=app_config,
-            fixture_path=path,
-            captured_at=captured_at,
-        )
-        input_provider.mark_for_hydration()
-        input_provider.hydrate_all()
-        return input_provider, captured_at
-
-    raise ValueError("Unsupported EMS fixture payload format")
-
-
-def resolve_fixture_input_registry(
-    *,
-    path: Path,
-    app_config: AppConfig,
-) -> tuple[ResolvedInputRegistry, str | None]:
-    data = json.loads(path.read_text())
-    if not isinstance(data, dict):
-        raise ValueError("EMS fixture payload must be a JSON object")
-    if "inputs" in data:
-        return load_resolved_input_registry(path)
-
-    input_provider, captured_at = load_fixture_input_provider(path=path, app_config=app_config)
-    captured_dt = (
-        datetime.fromisoformat(captured_at)
-        if captured_at
-        else datetime.now().astimezone()
-    )
-    horizon = EmsSystemFactory(app_config).horizon_shape.build(now=captured_dt)
-    window = InputWindow(now=horizon.now, end=horizon.slots[-1].end)
-    return input_provider.resolve_for_window(window=window), captured_at
+    registry, captured_at = load_resolved_input_registry(path)
+    return FixtureResolvedInputProvider(registry=registry), captured_at

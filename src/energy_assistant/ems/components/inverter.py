@@ -1,13 +1,18 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
 from dataclasses import dataclass
 
 from energy_assistant.ems.inputs.models import AppliedInputRegistry
+from energy_assistant.ems.intent import build_inverter_intent
 from energy_assistant.ems.milp.context import value_of
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
-from energy_assistant.ems.models import InverterTimestepPlan
+from energy_assistant.ems.models import (
+    BatteryComponentPlan,
+    InverterComponentPlan,
+    PvComponentPlan,
+)
 from energy_assistant.ems.planning.horizon import Horizon
+from energy_assistant.ems.series import interval_series_points
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import GraphElement
 from energy_assistant.ems.topology.nodes import Node
@@ -21,8 +26,6 @@ from energy_assistant.models.plant import (
 
 from .battery import BatteryComponent, BatterySolveState
 from .pv import PvComponent, PvSolveState
-
-_CURTAIL_POWER_THRESHOLD_KW = 0.01
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +53,7 @@ class InverterComponent:
         self.name = str(inverter.name)
         self.peak_power_kw = float(inverter.peak_power_kw)
         self.curtailment = inverter.curtailment
+        self._battery_cfg = battery
 
         self.ac_bus_id = str(switchboard_bus_id)
         self.dc_bus_id = f"{self.id}_dc"
@@ -142,64 +146,67 @@ class InverterComponent:
         )
         return elements, solve_state
 
-    def iter_timestep_plan(
+    def build_component_plans(
         self,
         snapshot: ModelSnapshot,
         *,
         solve_state: InverterSolveState,
-    ) -> Iterator[InverterTimestepPlan]:
+        grid_import_kw: list[float],
+        grid_export_kw: list[float],
+        grid_price_export: list[float],
+        export_limit_normal_kw: float,
+    ) -> dict[str, InverterComponentPlan | PvComponentPlan | BatteryComponentPlan]:
         horizon = snapshot.ctx.horizon
-
         inverter_connection = solve_state.inverter_connection
-
-        batt_conn = None
-        batt_node = None
-        batt_capacity = None
-        if solve_state.battery_solve_state is not None and self.battery is not None:
+        ac_net_kw = [
+            value_of(inverter_connection.flow_into_node(self.ac_bus_id).get(t))
+            - value_of(inverter_connection.flow_out_of_node(self.ac_bus_id).get(t))
+            for t in horizon.T
+        ]
+        battery_charge_kw: list[float] = []
+        battery_discharge_kw: list[float] = []
+        battery_soc_pct: list[float] = []
+        if solve_state.battery_solve_state is not None:
             batt_conn = solve_state.battery_solve_state.connection
             batt_node = solve_state.battery_solve_state.storage
-            batt_capacity = self.battery.capacity_kwh
-
-        for t in horizon.T:
-            pv_kw = 0.0
-            pv_curtail_kw = None
-            curtailment_active = None
-            if self.pv is not None and solve_state.pv_solve_state is not None:
-                pv_kw = self.pv.pv_kw(snapshot, t, solve_state=solve_state.pv_solve_state)
-                pv_curtail_kw = self.pv.curtail_kw(
-                    snapshot,
-                    t,
-                    solve_state=solve_state.pv_solve_state,
+            battery_charge_kw = [
+                value_of(batt_conn.flow_into_node(batt_node.id).get(t)) for t in horizon.T
+            ]
+            battery_discharge_kw = [
+                value_of(batt_conn.flow_out_of_node(batt_node.id).get(t)) for t in horizon.T
+            ]
+            battery_soc_pct = [
+                (
+                    value_of(batt_node.E_by_i.get(t)) / float(self.battery.capacity_kwh) * 100.0
+                    if self.battery is not None and self.battery.capacity_kwh
+                    else 0.0
                 )
-                curtailment_active = (
-                    None
-                    if pv_curtail_kw is None
-                    else bool(float(pv_curtail_kw) > _CURTAIL_POWER_THRESHOLD_KW)
-                )
+                for t in horizon.T
+            ]
 
-            ac_into = value_of(inverter_connection.flow_into_node(self.ac_bus_id).get(t))
-            ac_out = value_of(inverter_connection.flow_out_of_node(self.ac_bus_id).get(t))
-            ac_net = ac_into - ac_out
-
-            batt_charge_kw = None
-            batt_discharge_kw = None
-            batt_soc_kwh = None
-            batt_soc_pct = None
-            if batt_conn is not None and batt_node is not None:
-                batt_charge_kw = value_of(batt_conn.flow_into_node(batt_node.id).get(t))
-                batt_discharge_kw = value_of(batt_conn.flow_out_of_node(batt_node.id).get(t))
-                batt_soc_kwh = value_of(batt_node.E_by_i.get(t))
-                if batt_capacity:
-                    batt_soc_pct = (float(batt_soc_kwh) / float(batt_capacity)) * 100.0
-
-            yield InverterTimestepPlan(
-                name=str(self.name),
-                pv_kw=pv_kw,
-                pv_curtail_kw=pv_curtail_kw,
-                ac_net_kw=ac_net,
-                battery_charge_kw=batt_charge_kw,
-                battery_discharge_kw=batt_discharge_kw,
-                battery_soc_kwh=batt_soc_kwh,
-                battery_soc_pct=batt_soc_pct,
-                curtailment=curtailment_active,
+        exports: dict[str, InverterComponentPlan | PvComponentPlan | BatteryComponentPlan] = {
+            self.id: InverterComponentPlan(
+                ac_net_kw=interval_series_points(horizon, ac_net_kw),
+                intent=build_inverter_intent(
+                    ac_net_kw=float(ac_net_kw[0]) if ac_net_kw else 0.0,
+                    charge_kw=float(battery_charge_kw[0]) if battery_charge_kw else 0.0,
+                    discharge_kw=float(battery_discharge_kw[0]) if battery_discharge_kw else 0.0,
+                    battery_soc_pct=float(battery_soc_pct[0]) if battery_soc_pct else None,
+                    grid_import_kw=float(grid_import_kw[0]) if grid_import_kw else 0.0,
+                    grid_export_kw=float(grid_export_kw[0]) if grid_export_kw else 0.0,
+                    price_export=float(grid_price_export[0]) if grid_price_export else 0.0,
+                    export_limit_normal_kw=export_limit_normal_kw,
+                    battery=self._battery_cfg,
+                ),
             )
+        }
+        if self.pv is not None and solve_state.pv_solve_state is not None:
+            exports[self.pv.id] = self.pv.build_plan(
+                snapshot,
+                solve_state=solve_state.pv_solve_state,
+            )
+        if self.battery is not None and solve_state.battery_solve_state is not None:
+            exports[self.battery.id] = self.battery.build_plan(
+                snapshot, solve_state=solve_state.battery_solve_state
+            )
+        return exports

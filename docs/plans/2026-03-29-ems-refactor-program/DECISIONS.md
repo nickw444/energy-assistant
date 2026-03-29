@@ -165,10 +165,10 @@ This register captures the major architectural decisions made during the EMS ref
 - Consequence: offline replay is more faithful and deterministic.
 
 ## D028 — Support both raw-capture and resolved-input fixture formats during migration
-- Status: accepted and implemented
-- Decision: fixture replay can load either original captured data or resolved planner input payloads.
-- Why: this made the migration safer without losing the original source-of-truth capture path.
-- Consequence: fixture tooling can convert formats while keeping replay stable.
+- Status: completed and retired
+- Decision: fixture replay temporarily supported both original captured data and resolved planner input payloads.
+- Why: this made the migration safer while fixtures were being converted.
+- Consequence: the migration is complete; canonical EMS fixtures now store resolved planner inputs only.
 
 ## D029 — Regenerate resolved fixtures from original captures, not synthetic expansions
 - Status: accepted and implemented

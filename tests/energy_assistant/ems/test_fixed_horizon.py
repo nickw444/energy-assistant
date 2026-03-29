@@ -77,7 +77,7 @@ class StubResolver:
 
 
 def _load_fixture_config() -> AppConfig:
-    fixture_path = "/Users/nickw/repos/energy-assistant/tests/fixtures/ems/nwhass/ems_config.yaml"
+    fixture_path = "/Users/nickw/repos/energy-assistant/tests/fixtures/ems/nwhass/config.yaml"
     loaded_raw: Any = yaml.safe_load(open(fixture_path).read())
     assert isinstance(loaded_raw, dict)
     return AppConfig.model_validate(cast(dict[str, Any], loaded_raw))
