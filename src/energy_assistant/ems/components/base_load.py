@@ -7,7 +7,7 @@ from energy_assistant.ems.horizon import Horizon, floor_to_interval_boundary
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import GraphElement
 from energy_assistant.ems.topology.nodes import Node
-from energy_assistant.ems.topology.policies import DirectionalLimit, FixedFlow, Passthrough
+from energy_assistant.ems.topology.policies import DirectionalLimit, FixedFlow
 from energy_assistant.lib.source_resolver.resolver import ValueResolver
 from energy_assistant.models.plant import PlantLoadConfig
 
@@ -90,7 +90,6 @@ class BaseLoadComponent:
                     values_kw=base_load_kw,
                     name="base_load",
                 ),
-                "transfer": Passthrough(),
             },
         )
         self._latest = BaseLoadRun(base_load_kw=base_load_kw, connection=connection)

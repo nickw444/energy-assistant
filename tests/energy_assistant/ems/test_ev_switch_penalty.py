@@ -12,7 +12,7 @@ from energy_assistant.ems.milp.snapshot import ModelSnapshot
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import EnergyGraph
 from energy_assistant.ems.topology.nodes import Node
-from energy_assistant.ems.topology.policies import DirectionalLimit, LinearCost, Passthrough
+from energy_assistant.ems.topology.policies import DirectionalLimit, LinearCost
 
 
 def test_ev_switch_penalty_t0_seeded_from_realtime_state() -> None:
@@ -53,7 +53,6 @@ def test_ev_switch_penalty_t0_seeded_from_realtime_state() -> None:
                 cost_b_to_a_per_kwh=cost_ba,
                 name="reward",
             ),
-            "transfer": Passthrough(),
         },
     )
     graph.add_element(conn)

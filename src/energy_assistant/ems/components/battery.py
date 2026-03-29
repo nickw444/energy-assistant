@@ -201,7 +201,7 @@ class BatteryComponent:
                     cost_b_to_a_per_kwh=time_cost_per_kwh,
                     name=f"batt_time_{self.inverter_id}",
                 ),
-                "transfer": DirectionalEfficiency(
+                "efficiency": DirectionalEfficiency(
                     eta_a_to_b=self._eta,
                     eta_b_to_a=self._eta,
                 ),

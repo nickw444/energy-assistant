@@ -17,7 +17,6 @@ from energy_assistant.ems.topology.policies import (
     ConnectionPolicy,
     DirectionalLimit,
     FixedFlow,
-    Passthrough,
     UpperBound,
 )
 from energy_assistant.ems.topology.policies.connection_policy import (
@@ -66,7 +65,7 @@ class PvCurtailTracking(ConnectionPolicy):
         curtail = self.curtail_kw(connection)
         return [
             ConstraintSpec(
-                f"pv_curtail_track_{self.name}_{connection.id}_t{t}",
+                f"pv_curtail_track_{self.name}_{connection.segment_key}_t{t}",
                 curtail[t] == float(self.available_kw[t]) - flow[t],
             )
             for t in connection.horizon.T
@@ -109,7 +108,7 @@ class PvBinaryCurtailment(ConnectionPolicy):
         curtail = self.curtail_binary(connection)
         return [
             ConstraintSpec(
-                f"pv_binary_{self.name}_{connection.id}_t{t}",
+                f"pv_binary_{self.name}_{connection.segment_key}_t{t}",
                 flow[t] == float(self.available_kw[t]) * (1 - curtail[t]),
             )
             for t in connection.horizon.T
@@ -230,8 +229,6 @@ class PvComponent:
                         name=f"pv_{self.inverter_id}",
                     )
                 )
-        policies["transfer"] = Passthrough()
-
         connection = Connection(
             horizon=horizon,
             id=self.connection_id,

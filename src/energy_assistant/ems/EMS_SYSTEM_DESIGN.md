@@ -76,14 +76,16 @@ Helpers:
 - `flow_in_ab`, `flow_out_ab`, `flow_in_ba`, `flow_out_ba`
 - `flow_into_node(node_id)` / `flow_out_of_node(node_id)`
 
-Transfer mapping is always connection-policy-defined:
+Transfer mapping is segment-defined within the connection policy chain:
 
-- `Connection` requires exactly one `TransferConnectionPolicy` in `policies`.
 - `policies` is a named map (`dict[str, ConnectionPolicy]`), so components can retrieve
   specific policies by name with typed lookups.
-- `Passthrough` is lossless (`flow_in_ab == flow_out_ab` and `flow_in_ba == flow_out_ba`).
+- each policy segment sees its own `flow_in_*` / `flow_out_*` variables.
+- the default segment transfer is passthrough
+  (`flow_in_ab == flow_out_ab` and `flow_in_ba == flow_out_ba`).
 - `DirectionalEfficiency` is lossy
   (`flow_out_ab = eta_a_to_b * flow_in_ab`, `flow_out_ba = eta_b_to_a * flow_in_ba`).
+- multiple transfer-like policies compose by chaining segment outputs into the next segment inputs.
 
 ### Nodes
 
@@ -101,7 +103,7 @@ Transfer mapping is always connection-policy-defined:
 Current primitives:
 
 - `DirectionalLimit` (`None` means unbounded; `exclusive=True` requires finite bounds)
-- `Passthrough` (default lossless transfer)
+- `Passthrough` (optional explicit no-op; default transfer behavior is already lossless)
 - `DirectionalEfficiency`
 - `LinearCost`
 - `SoftDirectionalLimit`

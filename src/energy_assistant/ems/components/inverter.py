@@ -10,7 +10,7 @@ from energy_assistant.ems.models import InverterTimestepPlan
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import GraphElement
 from energy_assistant.ems.topology.nodes import Node
-from energy_assistant.ems.topology.policies import DirectionalLimit, Passthrough
+from energy_assistant.ems.topology.policies import DirectionalLimit
 from energy_assistant.lib.source_resolver.resolver import ValueResolver
 from energy_assistant.models.config import TerminalSocConfig
 from energy_assistant.models.plant import GridConfig, InverterConfig
@@ -108,7 +108,6 @@ class InverterComponent:
                     max_b_to_a_kw=self.peak_power_kw,
                     exclusive=True,
                 ),
-                "transfer": Passthrough(),
             },
         )
         elements.append(inverter_connection)

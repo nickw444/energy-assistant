@@ -502,7 +502,7 @@
     "generated_at": "2026-02-02T06:46:50.850976+00:00",
     "horizon_end": "2026-02-04T05:00:00+11:00",
     "horizon_start": "2026-02-02T17:45:00+11:00",
-    "objective_value": -1.334,
+    "objective_value": -1.297,
     "status": "Optimal",
     "timestep_minutes": {
       "avg": 22.742,

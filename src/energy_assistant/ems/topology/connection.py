@@ -7,24 +7,48 @@ import pulp
 
 from energy_assistant.ems.horizon import Horizon
 from energy_assistant.ems.milp.context import ConstraintSpec
-from energy_assistant.ems.topology.policies import ConnectionPolicy, TransferConnectionPolicy
+from energy_assistant.ems.topology.policies import ConnectionPolicy, Passthrough
 
 P = TypeVar("P", bound=ConnectionPolicy)
 
 
-def asset_has_transfer_policy(
-    *,
-    connection_id: str,
-    policies: Mapping[str, ConnectionPolicy],
-) -> None:
-    transfer_policies = [
-        policy for policy in policies.values() if isinstance(policy, TransferConnectionPolicy)
-    ]
-    if len(transfer_policies) != 1:
-        raise ValueError(
-            f"Connection {connection_id!r} requires exactly one TransferConnectionPolicy in "
-            f"policies; got {len(transfer_policies)}"
-        )
+class _PolicyBinding:
+    """Policy-scoped directional flow view within a connection."""
+
+    def __init__(
+        self,
+        *,
+        id: str,
+        segment_key: str,
+        horizon: Horizon,
+        flow_in_ab: dict[int, pulp.LpVariable],
+        flow_out_ab: dict[int, pulp.LpVariable],
+        flow_in_ba: dict[int, pulp.LpVariable],
+        flow_out_ba: dict[int, pulp.LpVariable],
+    ) -> None:
+        self.id = str(id)
+        self.segment_key = str(segment_key)
+        self.horizon = horizon
+        self._flow_in_ab = flow_in_ab
+        self._flow_out_ab = flow_out_ab
+        self._flow_in_ba = flow_in_ba
+        self._flow_out_ba = flow_out_ba
+
+    @property
+    def flow_in_ab(self) -> dict[int, pulp.LpVariable]:
+        return self._flow_in_ab
+
+    @property
+    def flow_out_ab(self) -> dict[int, pulp.LpVariable]:
+        return self._flow_out_ab
+
+    @property
+    def flow_in_ba(self) -> dict[int, pulp.LpVariable]:
+        return self._flow_in_ba
+
+    @property
+    def flow_out_ba(self) -> dict[int, pulp.LpVariable]:
+        return self._flow_out_ba
 
 
 class Connection:
@@ -36,11 +60,9 @@ class Connection:
     - `power_in_ba`: power leaving node B toward node A (kW)
     - `power_out_ba`: power arriving at node A from node B (kW)
 
-    Connection policies define constraints over these variables and are stored as a named map.
-
-    Exactly one transfer-defining policy (`TransferConnectionPolicy`) must be present in
-    `policies`. This keeps the physical transfer behavior explicit and unambiguous:
-    each direction has one mapping from source-side flow to sink-side flow.
+    Policies are composed as ordered segments. Each policy sees its own
+    directional input/output variables, so multiple transfer-like policies can
+    be chained without special handling.
     """
 
     def __init__(
@@ -57,9 +79,7 @@ class Connection:
         self.a_node_id = str(a_node_id)
         self.b_node_id = str(b_node_id)
         self.policies: dict[str, ConnectionPolicy] = dict(policies or {})
-        asset_has_transfer_policy(connection_id=self.id, policies=self.policies)
 
-        # Direction a->b: source=a, destination=b
         self.power_in_ab: dict[int, pulp.LpVariable] = pulp.LpVariable.dicts(
             f"P_{self.id}_in_ab_kw",
             self.horizon.T,
@@ -70,8 +90,6 @@ class Connection:
             self.horizon.T,
             lowBound=0,
         )
-
-        # Direction b->a: source=b, destination=a
         self.power_in_ba: dict[int, pulp.LpVariable] = pulp.LpVariable.dicts(
             f"P_{self.id}_in_ba_kw",
             self.horizon.T,
@@ -83,9 +101,16 @@ class Connection:
             lowBound=0,
         )
 
+        self._ordered_policies = self._build_ordered_policies()
+        self._policy_bindings = self._build_policy_bindings()
+
     @property
     def flow_in_ab(self) -> dict[int, pulp.LpVariable]:
         return self.power_in_ab
+
+    @property
+    def segment_key(self) -> str:
+        return self.id
 
     @property
     def flow_out_ab(self) -> dict[int, pulp.LpVariable]:
@@ -115,6 +140,51 @@ class Connection:
             return self.flow_out_ab
         raise ValueError(f"Node {node_id!r} is not connected to {self.id!r}")
 
+    def _build_ordered_policies(self) -> list[tuple[str, ConnectionPolicy]]:
+        if not self.policies:
+            return [("passthrough", Passthrough())]
+        return list(self.policies.items())
+
+    def _build_policy_bindings(self) -> list[_PolicyBinding]:
+        policy_count = len(self._ordered_policies)
+        ab_points: list[dict[int, pulp.LpVariable]] = [self.power_in_ab]
+        ba_points: list[dict[int, pulp.LpVariable]] = [self.power_in_ba]
+
+        # Intermediate segment boundaries let policy transfer laws compose.
+        for idx in range(1, policy_count):
+            ab_points.append(
+                pulp.LpVariable.dicts(
+                    f"P_{self.id}_seg{idx}_ab_kw",
+                    self.horizon.T,
+                    lowBound=0,
+                )
+            )
+            ba_points.append(
+                pulp.LpVariable.dicts(
+                    f"P_{self.id}_seg{idx}_ba_kw",
+                    self.horizon.T,
+                    lowBound=0,
+                )
+            )
+
+        ab_points.append(self.power_out_ab)
+        ba_points.append(self.power_out_ba)
+
+        bindings: list[_PolicyBinding] = []
+        for idx, (name, _policy) in enumerate(self._ordered_policies):
+            bindings.append(
+                _PolicyBinding(
+                    id=self.id,
+                    segment_key=f"{self.id}_{name}_seg{idx}",
+                    horizon=self.horizon,
+                    flow_in_ab=ab_points[idx],
+                    flow_out_ab=ab_points[idx + 1],
+                    flow_in_ba=ba_points[idx],
+                    flow_out_ba=ba_points[idx + 1],
+                )
+            )
+        return bindings
+
     def policy(self, name: str, policy_type: type[P]) -> P:
         policy = self.policies.get(str(name))
         if policy is None:
@@ -140,10 +210,22 @@ class Connection:
     @property
     def constraints(self) -> list[ConstraintSpec]:
         constraints: list[ConstraintSpec] = []
-        for policy in self.policies.values():
-            constraints.extend(policy.constraints(self))
+        for (_name, policy), binding in zip(
+            self._ordered_policies,
+            self._policy_bindings,
+            strict=True,
+        ):
+            constraints.extend(policy.transfer_constraints(binding))
+            constraints.extend(policy.constraints(binding))
         return constraints
 
     @property
     def objective(self) -> pulp.LpAffineExpression:
-        return pulp.lpSum(policy.objective(self) for policy in self.policies.values())
+        return pulp.lpSum(
+            policy.objective(binding)
+            for (_name, policy), binding in zip(
+                self._ordered_policies,
+                self._policy_bindings,
+                strict=True,
+            )
+        )

@@ -14,7 +14,6 @@ from energy_assistant.ems.topology.nodes import Node
 from energy_assistant.ems.topology.policies import (
     DirectionalLimit,
     FixedFlow,
-    Passthrough,
     SoftDirectionalLimit,
 )
 
@@ -48,7 +47,6 @@ def test_soft_import_limit_uses_slack_violation() -> None:
             policies={
                 "directional_limit": DirectionalLimit(max_a_to_b_kw=10.0, max_b_to_a_kw=0.0),
                 "fixed_flow": FixedFlow(direction="a_to_b", values_kw=load_kw, name="load"),
-                "transfer": Passthrough(),
             },
         )
     )
@@ -62,7 +60,6 @@ def test_soft_import_limit_uses_slack_violation() -> None:
         policies={
             "directional_limit": DirectionalLimit(max_a_to_b_kw=0.0, max_b_to_a_kw=10.0),
             "import_soft_limit": soft,
-            "transfer": Passthrough(),
         },
     )
     graph.add_element(grid_conn)

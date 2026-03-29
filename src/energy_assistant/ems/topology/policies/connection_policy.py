@@ -15,6 +15,9 @@ class ConnectionBinding(Protocol):
     horizon: Horizon
 
     @property
+    def segment_key(self) -> str: ...
+
+    @property
     def flow_in_ab(self) -> dict[int, pulp.LpVariable]: ...
 
     @property
@@ -28,7 +31,28 @@ class ConnectionBinding(Protocol):
 
 
 class ConnectionPolicy:
-    """Connection augmentation: query-only constraints/objective."""
+    """Composable connection policy.
+
+    Policies are composed as an ordered chain within a connection. Each policy
+    sees a segment-scoped input/output flow pair per direction, can define how
+    flow transfers across that segment, and can also add extra constraints or
+    objective terms.
+    """
+
+    def transfer_constraints(self, connection: ConnectionBinding) -> list[ConstraintSpec]:
+        return [
+            ConstraintSpec(
+                f"policy_transfer_{connection.segment_key}_a_to_b_t{t}",
+                connection.flow_in_ab[t] == connection.flow_out_ab[t],
+            )
+            for t in connection.horizon.T
+        ] + [
+            ConstraintSpec(
+                f"policy_transfer_{connection.segment_key}_b_to_a_t{t}",
+                connection.flow_in_ba[t] == connection.flow_out_ba[t],
+            )
+            for t in connection.horizon.T
+        ]
 
     def constraints(self, connection: ConnectionBinding) -> list[ConstraintSpec]:
         _ = connection
@@ -37,23 +61,6 @@ class ConnectionPolicy:
     def objective(self, connection: ConnectionBinding) -> pulp.LpAffineExpression:
         _ = connection
         return pulp.LpAffineExpression()
-
-
-class TransferConnectionPolicy(ConnectionPolicy):
-    """Defines the connection's transfer law between endpoint flows.
-
-    A transfer policy maps source-side flow to sink-side flow per direction,
-    for example:
-    - lossless transport (`Passthrough`):
-      `flow_in_ab == flow_out_ab` and `flow_in_ba == flow_out_ba`
-    - lossy transport (`DirectionalEfficiency`):
-      `flow_out_ab == eta_a_to_b * flow_in_ab`
-      and `flow_out_ba == eta_b_to_a * flow_in_ba`
-
-    Exactly one transfer policy must exist per connection:
-    - none => source/sink variables are not tied together (physically incomplete)
-    - more than one => conflicting/duplicated transfer equations (ambiguous model)
-    """
 
 
 def validate_eta(name: str, value: float) -> float:

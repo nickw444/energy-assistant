@@ -56,7 +56,7 @@ def test_storage_soc_dynamics_applies_efficiency() -> None:
                     values_kw=discharge_kw,
                     name="discharge",
                 ),
-                "transfer": DirectionalEfficiency(
+                "efficiency": DirectionalEfficiency(
                     eta_a_to_b=0.9,
                     eta_b_to_a=0.9,
                 ),

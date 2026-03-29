@@ -28,18 +28,18 @@ class DirectionalLimit(ConnectionPolicy):
                 "exclusive=True requires finite bounds for both directions; "
                 "use numeric max_a_to_b_kw and max_b_to_a_kw"
             )
-        self._dir_select_by_connection: dict[str, dict[int, pulp.LpVariable]] = {}
+        self._dir_select_by_segment: dict[str, dict[int, pulp.LpVariable]] = {}
 
     def dir_select(self, connection: ConnectionBinding) -> dict[int, pulp.LpVariable]:
-        if connection.id not in self._dir_select_by_connection:
-            self._dir_select_by_connection[connection.id] = pulp.LpVariable.dicts(
-                f"Dir_{connection.id}",
+        if connection.segment_key not in self._dir_select_by_segment:
+            self._dir_select_by_segment[connection.segment_key] = pulp.LpVariable.dicts(
+                f"Dir_{connection.segment_key}",
                 connection.horizon.T,
                 lowBound=0,
                 upBound=1,
                 cat="Binary",
             )
-        return self._dir_select_by_connection[connection.id]
+        return self._dir_select_by_segment[connection.segment_key]
 
     def constraints(self, connection: ConnectionBinding) -> list[ConstraintSpec]:
         dir_select = None
@@ -53,14 +53,14 @@ class DirectionalLimit(ConnectionPolicy):
             if self.max_a_to_b_kw is not None:
                 constraints.append(
                     ConstraintSpec(
-                        f"limit_{connection.id}_a_to_b_t{t}",
+                        f"limit_{connection.segment_key}_a_to_b_t{t}",
                         flow_ab[t] <= float(self.max_a_to_b_kw),
                     )
                 )
             if self.max_b_to_a_kw is not None:
                 constraints.append(
                     ConstraintSpec(
-                        f"limit_{connection.id}_b_to_a_t{t}",
+                        f"limit_{connection.segment_key}_b_to_a_t{t}",
                         flow_ba[t] <= float(self.max_b_to_a_kw),
                     )
                 )
@@ -76,13 +76,13 @@ class DirectionalLimit(ConnectionPolicy):
             for t in connection.horizon.T:
                 constraints.append(
                     ConstraintSpec(
-                        f"exclusive_{connection.id}_a_to_b_t{t}",
+                        f"exclusive_{connection.segment_key}_a_to_b_t{t}",
                         flow_ab[t] <= max_a_to_b_kw * dir_select[t],
                     )
                 )
                 constraints.append(
                     ConstraintSpec(
-                        f"exclusive_{connection.id}_b_to_a_t{t}",
+                        f"exclusive_{connection.segment_key}_b_to_a_t{t}",
                         flow_ba[t] <= max_b_to_a_kw * (1 - dir_select[t]),
                     )
                 )

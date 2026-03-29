@@ -16,7 +16,6 @@ from energy_assistant.ems.topology.nodes import StorageNode
 from energy_assistant.ems.topology.policies import (
     ConnectionPolicy,
     DirectionalLimit,
-    Passthrough,
 )
 from energy_assistant.ems.topology.policies.connection_policy import (
     ConnectionBinding,
@@ -359,7 +358,6 @@ class EvComponent:
                     max_b_to_a_kw=0.0,
                 ),
                 "charge_control": charge_control,
-                "transfer": Passthrough(),
             },
         )
 

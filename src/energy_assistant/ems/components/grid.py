@@ -16,7 +16,6 @@ from energy_assistant.ems.topology.nodes import Node
 from energy_assistant.ems.topology.policies import (
     DirectionalLimit,
     LinearCost,
-    Passthrough,
     SoftDirectionalLimit,
 )
 from energy_assistant.lib.source_resolver.resolver import ValueResolver
@@ -182,7 +181,6 @@ class GridComponent:
                     cost_b_to_a_per_kwh=grid_early_cost_per_kwh,
                     name="grid_early",
                 ),
-                "transfer": Passthrough(),
             },
         )
 

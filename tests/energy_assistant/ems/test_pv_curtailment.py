@@ -15,7 +15,6 @@ from energy_assistant.ems.topology.nodes import Node
 from energy_assistant.ems.topology.policies import (
     DirectionalLimit,
     LinearCost,
-    Passthrough,
     UpperBound,
 )
 
@@ -55,7 +54,6 @@ def test_pv_binary_curtailment_can_force_all_or_nothing() -> None:
                 cost_b_to_a_per_kwh=cost_ba,
                 name="penalty",
             ),
-            "transfer": Passthrough(),
         },
     )
     graph.add_element(conn)

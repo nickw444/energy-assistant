@@ -14,7 +14,6 @@ from energy_assistant.ems.topology.policies import (
     DirectionalEfficiency,
     DirectionalLimit,
     FixedFlow,
-    Passthrough,
 )
 
 
@@ -40,7 +39,7 @@ def test_bus_balance_enforces_conservation_with_efficiency() -> None:
             policies={
                 "directional_limit": DirectionalLimit(max_a_to_b_kw=10.0, max_b_to_a_kw=0.0),
                 "fixed_flow": FixedFlow(direction="a_to_b", values_kw=producer_kw, name="producer"),
-                "transfer": DirectionalEfficiency(
+                "efficiency": DirectionalEfficiency(
                     eta_a_to_b=0.9,
                     eta_b_to_a=1.0,
                 ),
@@ -58,7 +57,6 @@ def test_bus_balance_enforces_conservation_with_efficiency() -> None:
             policies={
                 "directional_limit": DirectionalLimit(max_a_to_b_kw=9.0, max_b_to_a_kw=0.0),
                 "fixed_flow": FixedFlow(direction="a_to_b", values_kw=load_kw, name="load"),
-                "transfer": Passthrough(),
             },
         )
     )

@@ -32,7 +32,7 @@ class FixedFlow(ConnectionPolicy):
         for t in connection.horizon.T:
             constraints.append(
                 ConstraintSpec(
-                    f"fixed_flow_{self.name}_{connection.id}_{self.direction}_t{t}",
+                    f"fixed_flow_{self.name}_{connection.segment_key}_{self.direction}_t{t}",
                     flow[t] == float(values[t]),
                 )
             )
