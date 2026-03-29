@@ -32,6 +32,197 @@ from energy_assistant.models.plant import ControlledEvComponentConfig, SocIncent
 _EV_SWITCH_ON_THRESHOLD_KW = 0.1
 
 
+@dataclass(frozen=True, slots=True)
+class EvSolveState:
+    connected: bool
+    storage: StorageNode
+    connection: Connection
+    gate_series: list[float]
+
+
+class EvComponent:
+    def __init__(
+        self,
+        *,
+        component_id: str,
+        switchboard_bus_id: str,
+        load: ControlledEvComponentConfig,
+        grid_export_bias_pct: float,
+    ) -> None:
+        self.id = str(component_id)
+        self.name = str(load.name)
+        self.capacity_kwh = float(load.energy_kwh)
+        self.min_power_kw = float(load.min_power_kw)
+        self.max_power_kw = float(load.max_power_kw)
+        self.switch_penalty = float(load.switch_penalty)
+        self.soc_incentives = list(load.soc_incentives)
+        self._grid_price_bias = float(grid_export_bias_pct) / 100.0
+
+        self._load = load
+        self._matcher = TimeWindowMatcher()
+
+        self.node_id = self.id
+        self.connection_id = f"ev_{self.id}_link"
+        self.switchboard_bus_id = str(switchboard_bus_id)
+
+        self._connected = ScalarParameter[bool](f"{self.id}_connected")
+        self._realtime_power_kw = ScalarParameter[float](f"{self.id}_realtime_power_kw")
+        self._initial_soc_kwh = ScalarParameter[float](f"{self.id}_initial_soc_kwh")
+        self._gate_series = SeriesParameter[float](f"{self.id}_gate_series")
+
+    def update_inputs(self, *, horizon: Horizon, inputs: AppliedInputRegistry) -> None:
+        connected = inputs.scalar_bool(self._load.connected.key)
+        can_connect = True
+        if self._load.can_connect is not None:
+            can_connect = inputs.scalar_bool(self._load.can_connect.key)
+
+        realtime_power_kw = inputs.scalar_float(
+            self._load.realtime_power.key,
+            kind=InputValueKind.POWER,
+        )
+
+        initial_soc_pct = inputs.scalar_float(
+            self._load.state_of_charge_pct.key,
+            kind=InputValueKind.PERCENTAGE,
+        )
+        initial_soc_kwh = self.capacity_kwh * initial_soc_pct / 100.0
+        initial_soc_kwh = max(0.0, min(self.capacity_kwh, initial_soc_kwh))
+
+        gate_series = self._connected_allowance(
+            horizon=horizon,
+            connected=connected,
+            can_connect=can_connect,
+        )
+        self._connected.set(connected)
+        self._realtime_power_kw.set(realtime_power_kw)
+        self._initial_soc_kwh.set(max(0.0, min(self.capacity_kwh, initial_soc_kwh)))
+        self._gate_series.set(gate_series)
+
+    def graph_elements(self, *, horizon: Horizon) -> tuple[list[GraphElement], EvSolveState]:
+        connected = self._connected.get()
+        realtime_power_kw = self._realtime_power_kw.get()
+        initial_soc_kwh = self._initial_soc_kwh.get()
+        gate_series = self._gate_series.get()
+
+        storage = StorageNode(
+            horizon=horizon,
+            id=self.node_id,
+            name=self.name,
+            capacity_kwh=self.capacity_kwh,
+            soc_min_kwh=0.0,
+            soc_max_kwh=self.capacity_kwh,
+            initial_soc_kwh=initial_soc_kwh,
+            terminal_mode="none",
+        )
+
+        charge_control = EvChargeControl(
+            gate=gate_series,
+            connected=connected,
+            realtime_power_kw=realtime_power_kw,
+            min_power_kw=self.min_power_kw,
+            max_power_kw=self.max_power_kw,
+            switch_penalty=self.switch_penalty,
+            name=self.id,
+        )
+
+        # Connection convention: a_node is AC bus, b_node is EV storage (charge is a_to_b).
+        connection = Connection(
+            horizon=horizon,
+            id=self.connection_id,
+            a_node_id=self.switchboard_bus_id,
+            b_node_id=self.node_id,
+            policies={
+                "directional_limit": DirectionalLimit(
+                    max_a_to_b_kw=self.max_power_kw,
+                    max_b_to_a_kw=0.0,
+                ),
+                "charge_control": charge_control,
+            },
+        )
+
+        elements: list[GraphElement] = [storage, connection]
+
+        if self.soc_incentives:
+            elements.append(
+                EvSocIncentivesFragment(
+                    horizon=horizon,
+                    ev_id=self.id,
+                    storage=storage,
+                    initial_soc_kwh=initial_soc_kwh,
+                    capacity_kwh=self.capacity_kwh,
+                    incentives=self.soc_incentives,
+                    grid_price_bias=self._grid_price_bias,
+                )
+            )
+
+        solve_state = EvSolveState(
+            connected=connected,
+            storage=storage,
+            connection=connection,
+            gate_series=gate_series,
+        )
+        return elements, solve_state
+
+    def _connected_allowance(
+        self,
+        *,
+        horizon: Horizon,
+        connected: bool,
+        can_connect: bool,
+    ) -> list[float]:
+        if connected:
+            return [1.0] * int(horizon.num_intervals)
+        if not can_connect:
+            return [0.0] * int(horizon.num_intervals)
+
+        from datetime import timedelta
+
+        grace_end = horizon.now + timedelta(minutes=int(self._load.connect_grace_minutes))
+        allowed: list[float] = []
+        for slot in horizon.slots:
+            if slot.start < grace_end:
+                allowed.append(0.0)
+                continue
+            # Empty window list means "always allowed".
+            if self._matcher.allows(self._load.allowed_connect_times, slot.start):
+                allowed.append(1.0)
+            else:
+                allowed.append(0.0)
+        return allowed
+
+    def build_plan(
+        self,
+        snapshot: ModelSnapshot,
+        *,
+        solve_state: EvSolveState,
+    ) -> LoadControlledEvComponentPlan:
+        horizon = snapshot.ctx.horizon
+        storage = solve_state.storage
+        connection = solve_state.connection
+        charge_kw = [value_of(connection.flow_into_node(self.node_id).get(t)) for t in horizon.T]
+        soc_kwh = [value_of(storage.E_by_i.get(t)) for t in range(horizon.num_intervals + 1)]
+        soc_pct = [
+            (float(value) / float(self.capacity_kwh)) * 100.0 if self.capacity_kwh else 0.0
+            for value in soc_kwh
+        ]
+        connected = [bool(solve_state.connected)] * horizon.num_intervals
+        charge_allowed = [value > 0 for value in solve_state.gate_series]
+        first_charge_kw = float(charge_kw[0]) if charge_kw else 0.0
+        first_connected = bool(connected[0]) if connected else False
+        return LoadControlledEvComponentPlan(
+            charge_kw=interval_series_points(horizon, charge_kw),
+            soc_kwh=state_series_points(horizon, soc_kwh),
+            soc_pct=state_series_points(horizon, soc_pct),
+            connected=interval_series_points(horizon, bool_series(connected)),
+            charge_allowed=interval_series_points(horizon, bool_series(charge_allowed)),
+            intent=build_load_controlled_ev_intent(
+                charge_kw=first_charge_kw,
+                connected=first_connected,
+                ev_config=self._load,
+            ),
+        )
+
+
 class EvChargeControl(ConnectionPolicy):
     """Charge-on binary + optional switch penalty, implemented as a connection component."""
 
@@ -271,194 +462,3 @@ class EvSocIncentivesFragment:
     def objective(self) -> pulp.LpAffineExpression:
         self._ensure_built()
         return self._objective
-
-
-@dataclass(frozen=True, slots=True)
-class EvSolveState:
-    connected: bool
-    storage: StorageNode
-    connection: Connection
-    gate_series: list[float]
-
-
-class EvComponent:
-    def __init__(
-        self,
-        *,
-        component_id: str,
-        switchboard_bus_id: str,
-        load: ControlledEvComponentConfig,
-        grid_export_bias_pct: float,
-    ) -> None:
-        self.id = str(component_id)
-        self.name = str(load.name)
-        self.capacity_kwh = float(load.energy_kwh)
-        self.min_power_kw = float(load.min_power_kw)
-        self.max_power_kw = float(load.max_power_kw)
-        self.switch_penalty = float(load.switch_penalty)
-        self.soc_incentives = list(load.soc_incentives)
-        self._grid_price_bias = float(grid_export_bias_pct) / 100.0
-
-        self._load = load
-        self._matcher = TimeWindowMatcher()
-
-        self.node_id = self.id
-        self.connection_id = f"ev_{self.id}_link"
-        self.switchboard_bus_id = str(switchboard_bus_id)
-
-        self._connected = ScalarParameter[bool](f"{self.id}_connected")
-        self._realtime_power_kw = ScalarParameter[float](f"{self.id}_realtime_power_kw")
-        self._initial_soc_kwh = ScalarParameter[float](f"{self.id}_initial_soc_kwh")
-        self._gate_series = SeriesParameter[float](f"{self.id}_gate_series")
-
-    def update_inputs(self, *, horizon: Horizon, inputs: AppliedInputRegistry) -> None:
-        connected = inputs.scalar_bool(self._load.connected.key)
-        can_connect = True
-        if self._load.can_connect is not None:
-            can_connect = inputs.scalar_bool(self._load.can_connect.key)
-
-        realtime_power_kw = inputs.scalar_float(
-            self._load.realtime_power.key,
-            kind=InputValueKind.POWER,
-        )
-
-        initial_soc_pct = inputs.scalar_float(
-            self._load.state_of_charge_pct.key,
-            kind=InputValueKind.PERCENTAGE,
-        )
-        initial_soc_kwh = self.capacity_kwh * initial_soc_pct / 100.0
-        initial_soc_kwh = max(0.0, min(self.capacity_kwh, initial_soc_kwh))
-
-        gate_series = self._connected_allowance(
-            horizon=horizon,
-            connected=connected,
-            can_connect=can_connect,
-        )
-        self._connected.set(connected)
-        self._realtime_power_kw.set(realtime_power_kw)
-        self._initial_soc_kwh.set(max(0.0, min(self.capacity_kwh, initial_soc_kwh)))
-        self._gate_series.set(gate_series)
-
-    def graph_elements(self, *, horizon: Horizon) -> tuple[list[GraphElement], EvSolveState]:
-        connected = self._connected.get()
-        realtime_power_kw = self._realtime_power_kw.get()
-        initial_soc_kwh = self._initial_soc_kwh.get()
-        gate_series = self._gate_series.get()
-
-        storage = StorageNode(
-            horizon=horizon,
-            id=self.node_id,
-            name=self.name,
-            capacity_kwh=self.capacity_kwh,
-            soc_min_kwh=0.0,
-            soc_max_kwh=self.capacity_kwh,
-            initial_soc_kwh=initial_soc_kwh,
-            terminal_mode="none",
-        )
-
-        charge_control = EvChargeControl(
-            gate=gate_series,
-            connected=connected,
-            realtime_power_kw=realtime_power_kw,
-            min_power_kw=self.min_power_kw,
-            max_power_kw=self.max_power_kw,
-            switch_penalty=self.switch_penalty,
-            name=self.id,
-        )
-
-        # Connection convention: a_node is AC bus, b_node is EV storage (charge is a_to_b).
-        connection = Connection(
-            horizon=horizon,
-            id=self.connection_id,
-            a_node_id=self.switchboard_bus_id,
-            b_node_id=self.node_id,
-            policies={
-                "directional_limit": DirectionalLimit(
-                    max_a_to_b_kw=self.max_power_kw,
-                    max_b_to_a_kw=0.0,
-                ),
-                "charge_control": charge_control,
-            },
-        )
-
-        elements: list[GraphElement] = [storage, connection]
-
-        if self.soc_incentives:
-            elements.append(
-                EvSocIncentivesFragment(
-                    horizon=horizon,
-                    ev_id=self.id,
-                    storage=storage,
-                    initial_soc_kwh=initial_soc_kwh,
-                    capacity_kwh=self.capacity_kwh,
-                    incentives=self.soc_incentives,
-                    grid_price_bias=self._grid_price_bias,
-                )
-            )
-
-        solve_state = EvSolveState(
-            connected=connected,
-            storage=storage,
-            connection=connection,
-            gate_series=gate_series,
-        )
-        return elements, solve_state
-
-    def _connected_allowance(
-        self,
-        *,
-        horizon: Horizon,
-        connected: bool,
-        can_connect: bool,
-    ) -> list[float]:
-        if connected:
-            return [1.0] * int(horizon.num_intervals)
-        if not can_connect:
-            return [0.0] * int(horizon.num_intervals)
-
-        from datetime import timedelta
-
-        grace_end = horizon.now + timedelta(minutes=int(self._load.connect_grace_minutes))
-        allowed: list[float] = []
-        for slot in horizon.slots:
-            if slot.start < grace_end:
-                allowed.append(0.0)
-                continue
-            # Empty window list means "always allowed".
-            if self._matcher.allows(self._load.allowed_connect_times, slot.start):
-                allowed.append(1.0)
-            else:
-                allowed.append(0.0)
-        return allowed
-
-    def build_plan(
-        self,
-        snapshot: ModelSnapshot,
-        *,
-        solve_state: EvSolveState,
-    ) -> LoadControlledEvComponentPlan:
-        horizon = snapshot.ctx.horizon
-        storage = solve_state.storage
-        connection = solve_state.connection
-        charge_kw = [value_of(connection.flow_into_node(self.node_id).get(t)) for t in horizon.T]
-        soc_kwh = [value_of(storage.E_by_i.get(t)) for t in range(horizon.num_intervals + 1)]
-        soc_pct = [
-            (float(value) / float(self.capacity_kwh)) * 100.0 if self.capacity_kwh else 0.0
-            for value in soc_kwh
-        ]
-        connected = [bool(solve_state.connected)] * horizon.num_intervals
-        charge_allowed = [value > 0 for value in solve_state.gate_series]
-        first_charge_kw = float(charge_kw[0]) if charge_kw else 0.0
-        first_connected = bool(connected[0]) if connected else False
-        return LoadControlledEvComponentPlan(
-            charge_kw=interval_series_points(horizon, charge_kw),
-            soc_kwh=state_series_points(horizon, soc_kwh),
-            soc_pct=state_series_points(horizon, soc_pct),
-            connected=interval_series_points(horizon, bool_series(connected)),
-            charge_allowed=interval_series_points(horizon, bool_series(charge_allowed)),
-            intent=build_load_controlled_ev_intent(
-                charge_kw=first_charge_kw,
-                connected=first_connected,
-                ev_config=self._load,
-            ),
-        )

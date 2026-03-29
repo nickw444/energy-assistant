@@ -34,90 +34,6 @@ CurtailmentMode = Literal["load-aware", "binary"] | None
 _CURTAIL_POWER_THRESHOLD_KW = 0.01
 
 
-class PvCurtailTracking(ConnectionPolicy):
-    """Expose curtailment as a derived nonnegative series: available - actual."""
-
-    def __init__(
-        self,
-        *,
-        direction: FlowDirection,
-        available_kw: list[float],
-        name: str,
-    ) -> None:
-        self.direction: FlowDirection = direction
-        self.available_kw = [float(v) for v in available_kw]
-        self.name = str(name)
-        self._curtail_by_connection: dict[str, dict[int, pulp.LpVariable]] = {}
-
-    def curtail_kw(self, connection: ConnectionBinding) -> dict[int, pulp.LpVariable]:
-        if connection.id not in self._curtail_by_connection:
-            self._curtail_by_connection[connection.id] = pulp.LpVariable.dicts(
-                f"P_curtail_{self.name}_{connection.id}_kw",
-                connection.horizon.T,
-                lowBound=0,
-            )
-        return self._curtail_by_connection[connection.id]
-
-    def constraints(self, connection: ConnectionBinding) -> list[ConstraintSpec]:
-        if len(self.available_kw) != len(connection.horizon.T):
-            raise ValueError(
-                f"PV available series {self.name!r} length {len(self.available_kw)} does not match "
-                f"connection {connection.id!r} horizon length {len(connection.horizon.T)}"
-            )
-        flow = connection.flow_in_ab if self.direction == "a_to_b" else connection.flow_in_ba
-        curtail = self.curtail_kw(connection)
-        return list(self._passthrough_constraints(connection)) + [
-            ConstraintSpec(
-                f"pv_curtail_track_{self.name}_{connection.segment_key}_t{t}",
-                curtail[t] == float(self.available_kw[t]) - flow[t],
-            )
-            for t in connection.horizon.T
-        ]
-
-
-class PvBinaryCurtailment(ConnectionPolicy):
-    """Binary curtailment: either produce full available or zero."""
-
-    def __init__(
-        self,
-        *,
-        direction: FlowDirection,
-        available_kw: list[float],
-        name: str,
-    ) -> None:
-        self.direction: FlowDirection = direction
-        self.available_kw = [float(v) for v in available_kw]
-        self.name = str(name)
-        self._curtail_binary_by_connection: dict[str, dict[int, pulp.LpVariable]] = {}
-
-    def curtail_binary(self, connection: ConnectionBinding) -> dict[int, pulp.LpVariable]:
-        if connection.id not in self._curtail_binary_by_connection:
-            self._curtail_binary_by_connection[connection.id] = pulp.LpVariable.dicts(
-                f"Curtail_{self.name}_{connection.id}",
-                connection.horizon.T,
-                lowBound=0,
-                upBound=1,
-                cat="Binary",
-            )
-        return self._curtail_binary_by_connection[connection.id]
-
-    def constraints(self, connection: ConnectionBinding) -> list[ConstraintSpec]:
-        if len(self.available_kw) != len(connection.horizon.T):
-            raise ValueError(
-                f"PV available series {self.name!r} length {len(self.available_kw)} does not match "
-                f"connection {connection.id!r} horizon length {len(connection.horizon.T)}"
-            )
-        flow = connection.flow_in_ab if self.direction == "a_to_b" else connection.flow_in_ba
-        curtail = self.curtail_binary(connection)
-        return list(self._passthrough_constraints(connection)) + [
-            ConstraintSpec(
-                f"pv_binary_{self.name}_{connection.segment_key}_t{t}",
-                flow[t] == float(self.available_kw[t]) * (1 - curtail[t]),
-            )
-            for t in connection.horizon.T
-        ]
-
-
 @dataclass(frozen=True, slots=True)
 class PvSolveState:
     available_kw: list[float]
@@ -273,3 +189,87 @@ class PvComponent:
             curtail_kw=interval_series_points(horizon, curtail_kw),
             curtailment=interval_series_points(horizon, bool_series(curtailment)),
         )
+
+
+class PvCurtailTracking(ConnectionPolicy):
+    """Expose curtailment as a derived nonnegative series: available - actual."""
+
+    def __init__(
+        self,
+        *,
+        direction: FlowDirection,
+        available_kw: list[float],
+        name: str,
+    ) -> None:
+        self.direction: FlowDirection = direction
+        self.available_kw = [float(v) for v in available_kw]
+        self.name = str(name)
+        self._curtail_by_connection: dict[str, dict[int, pulp.LpVariable]] = {}
+
+    def curtail_kw(self, connection: ConnectionBinding) -> dict[int, pulp.LpVariable]:
+        if connection.id not in self._curtail_by_connection:
+            self._curtail_by_connection[connection.id] = pulp.LpVariable.dicts(
+                f"P_curtail_{self.name}_{connection.id}_kw",
+                connection.horizon.T,
+                lowBound=0,
+            )
+        return self._curtail_by_connection[connection.id]
+
+    def constraints(self, connection: ConnectionBinding) -> list[ConstraintSpec]:
+        if len(self.available_kw) != len(connection.horizon.T):
+            raise ValueError(
+                f"PV available series {self.name!r} length {len(self.available_kw)} does not match "
+                f"connection {connection.id!r} horizon length {len(connection.horizon.T)}"
+            )
+        flow = connection.flow_in_ab if self.direction == "a_to_b" else connection.flow_in_ba
+        curtail = self.curtail_kw(connection)
+        return list(self._passthrough_constraints(connection)) + [
+            ConstraintSpec(
+                f"pv_curtail_track_{self.name}_{connection.segment_key}_t{t}",
+                curtail[t] == float(self.available_kw[t]) - flow[t],
+            )
+            for t in connection.horizon.T
+        ]
+
+
+class PvBinaryCurtailment(ConnectionPolicy):
+    """Binary curtailment: either produce full available or zero."""
+
+    def __init__(
+        self,
+        *,
+        direction: FlowDirection,
+        available_kw: list[float],
+        name: str,
+    ) -> None:
+        self.direction: FlowDirection = direction
+        self.available_kw = [float(v) for v in available_kw]
+        self.name = str(name)
+        self._curtail_binary_by_connection: dict[str, dict[int, pulp.LpVariable]] = {}
+
+    def curtail_binary(self, connection: ConnectionBinding) -> dict[int, pulp.LpVariable]:
+        if connection.id not in self._curtail_binary_by_connection:
+            self._curtail_binary_by_connection[connection.id] = pulp.LpVariable.dicts(
+                f"Curtail_{self.name}_{connection.id}",
+                connection.horizon.T,
+                lowBound=0,
+                upBound=1,
+                cat="Binary",
+            )
+        return self._curtail_binary_by_connection[connection.id]
+
+    def constraints(self, connection: ConnectionBinding) -> list[ConstraintSpec]:
+        if len(self.available_kw) != len(connection.horizon.T):
+            raise ValueError(
+                f"PV available series {self.name!r} length {len(self.available_kw)} does not match "
+                f"connection {connection.id!r} horizon length {len(connection.horizon.T)}"
+            )
+        flow = connection.flow_in_ab if self.direction == "a_to_b" else connection.flow_in_ba
+        curtail = self.curtail_binary(connection)
+        return list(self._passthrough_constraints(connection)) + [
+            ConstraintSpec(
+                f"pv_binary_{self.name}_{connection.segment_key}_t{t}",
+                flow[t] == float(self.available_kw[t]) * (1 - curtail[t]),
+            )
+            for t in connection.horizon.T
+        ]
