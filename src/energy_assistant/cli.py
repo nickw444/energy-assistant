@@ -363,6 +363,9 @@ def ems_record_scenario(
         raise click.ClickException("--fixture is required.")
     paths = resolve_ems_fixture_paths(output_dir, fixture_parsed, name)
     paths.scenario_dir.mkdir(parents=True, exist_ok=True)
+    config_write_path = (
+        paths.scenario_config_path if name is not None else paths.fixture_config_path
+    )
 
     try:
         hass_client = HomeAssistantClient(config=app_config.homeassistant)
@@ -379,12 +382,12 @@ def ems_record_scenario(
         paths.fixture_path.write_text(json.dumps(fixture_data, indent=2, sort_keys=True))
         click.echo(f"Wrote EMS fixture to {paths.fixture_path}")
 
-        if not paths.config_path.exists():
+        if not config_write_path.exists():
             config_payload = _serialize_fixture_config(app_config, redact=redact)
-            paths.config_path.write_text(yaml.safe_dump(config_payload, sort_keys=False))
-            click.echo(f"Wrote EMS config to {paths.config_path}")
+            config_write_path.write_text(yaml.safe_dump(config_payload, sort_keys=False))
+            click.echo(f"Wrote EMS config to {config_write_path}")
         else:
-            click.echo(f"EMS config already exists at {paths.config_path}, skipping.")
+            click.echo(f"EMS config already exists at {config_write_path}, skipping.")
 
         if write_plan:
             fixture_states = cast(dict[str, HomeAssistantStateDict], fixture_data["states"])

@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Iterator
-from datetime import datetime
+from datetime import timedelta
 
-from energy_assistant.ems.forecast_alignment import PriceForecastAligner, forecast_coverage_slots
+from energy_assistant.ems.forecast_alignment import (
+    PriceForecastAligner,
+    validate_forecast_coverage,
+)
 from energy_assistant.ems.horizon import Horizon, floor_to_interval_boundary
 from energy_assistant.ems.milp.context import value_of
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
 from energy_assistant.ems.models import GridTimestepPlan
+from energy_assistant.ems.parameters import SeriesParameter
 from energy_assistant.ems.pricing import PriceSeriesBuilder
 from energy_assistant.ems.time_windows import TimeWindowMatcher
 from energy_assistant.ems.topology.connection import Connection
@@ -18,6 +23,11 @@ from energy_assistant.ems.topology.policies import (
     LinearCost,
     SoftDirectionalLimit,
 )
+from energy_assistant.lib.source_resolver.hass_source import (
+    HomeAssistantCurrencyEntitySource,
+    HomeAssistantHistoricalAveragePriceForecastSource,
+)
+from energy_assistant.lib.source_resolver.models import PriceForecastInterval
 from energy_assistant.lib.source_resolver.resolver import ValueResolver
 from energy_assistant.models.plant import GridConfig
 
@@ -64,6 +74,11 @@ class GridComponent:
             grid_price_risk=grid.grid_price_risk,
         )
 
+        self._price_import_raw = SeriesParameter[float]("grid_price_import_raw")
+        self._price_export_raw = SeriesParameter[float]("grid_price_export_raw")
+        self._price_import_effective = SeriesParameter[float]("grid_price_import_effective")
+        self._price_export_effective = SeriesParameter[float]("grid_price_export_effective")
+        self._import_allowed = SeriesParameter[bool]("grid_import_allowed")
         self._latest: GridRun | None = None
 
     def mark_for_hydration(self, resolver: ValueResolver) -> None:
@@ -72,34 +87,63 @@ class GridComponent:
         resolver.mark_for_hydration(cfg.realtime_price_export)
         resolver.mark_for_hydration(cfg.price_import_forecast)
         resolver.mark_for_hydration(cfg.price_export_forecast)
+        extension = cfg.price_forecast_extension
+        if extension is not None:
+            resolver.mark_for_hydration(
+                self._build_price_extension_source(
+                    realtime_source=cfg.realtime_price_import,
+                    history_days=extension.history_days,
+                    interval_duration=extension.interval_duration,
+                    forecast_horizon_hours=48,
+                )
+            )
+            resolver.mark_for_hydration(
+                self._build_price_extension_source(
+                    realtime_source=cfg.realtime_price_export,
+                    history_days=extension.history_days,
+                    interval_duration=extension.interval_duration,
+                    forecast_horizon_hours=48,
+                )
+            )
 
-    def forecast_coverage_intervals(
-        self, *, now: datetime, interval_minutes: int, resolver: ValueResolver
-    ) -> int:
-        start = floor_to_interval_boundary(now, interval_minutes)
-        cfg = self._grid_cfg
-        import_intervals = resolver.resolve(cfg.price_import_forecast)
-        export_intervals = resolver.resolve(cfg.price_export_forecast)
-        cov_import = forecast_coverage_slots(
-            start,
-            interval_minutes,
-            import_intervals,
+    def validate_forecast_coverage(self, *, horizon: Horizon, resolver: ValueResolver) -> None:
+        import_intervals = self._resolve_price_intervals(
+            horizon=horizon,
+            resolver=resolver,
+            direction="import",
+        )
+        export_intervals = self._resolve_price_intervals(
+            horizon=horizon,
+            resolver=resolver,
+            direction="export",
+        )
+        validate_forecast_coverage(
+            label="Grid import price forecast",
+            horizon=horizon,
+            intervals=import_intervals,
             allow_first_slot_missing=True,
         )
-        cov_export = forecast_coverage_slots(
-            start,
-            interval_minutes,
-            export_intervals,
+        validate_forecast_coverage(
+            label="Grid export price forecast",
+            horizon=horizon,
+            intervals=export_intervals,
             allow_first_slot_missing=True,
         )
-        return int(min(cov_import, cov_export))
 
-    def build(self, *, horizon: Horizon, resolver: ValueResolver) -> list[GraphElement]:
+    def update_inputs(self, *, horizon: Horizon, resolver: ValueResolver) -> None:
         cfg = self._grid_cfg
         realtime_import = float(resolver.resolve(cfg.realtime_price_import))
         realtime_export = float(resolver.resolve(cfg.realtime_price_export))
-        import_intervals = resolver.resolve(cfg.price_import_forecast)
-        export_intervals = resolver.resolve(cfg.price_export_forecast)
+        import_intervals = self._resolve_price_intervals(
+            horizon=horizon,
+            resolver=resolver,
+            direction="import",
+        )
+        export_intervals = self._resolve_price_intervals(
+            horizon=horizon,
+            resolver=resolver,
+            direction="export",
+        )
 
         price_import = self._price_aligner.align(
             horizon,
@@ -122,22 +166,28 @@ class GridComponent:
         import_eff = [float(x) for x in price_series.import_effective]
         export_eff = [float(x) for x in price_series.export_effective]
 
-        # Export tie-break bonus when effective export price is exactly zero.
+        import_allowed = self._resolve_import_allowed(horizon)
+
+        self._price_import_raw.set(price_import_raw)
+        self._price_export_raw.set(price_export_raw)
+        self._price_import_effective.set(import_eff)
+        self._price_export_effective.set(export_eff)
+        self._import_allowed.set(import_allowed)
+
+    def graph_elements(self, *, horizon: Horizon) -> list[GraphElement]:
+        cfg = self._grid_cfg
+        import_eff = self._price_import_effective.get()
+        export_eff = self._price_export_effective.get()
+        import_allowed = self._import_allowed.get()
         export_bonus = 1e-4 if cfg.zero_price_export_preference == "export" else -1e-4
         export_eff_with_bonus = [
             export_bonus if abs(float(export_eff[t])) <= 1e-9 else float(export_eff[t])
             for t in range(len(export_eff))
         ]
-
-        # Grid flow costs: import is +price; export is -revenue.
         grid_import_cost_per_kwh = import_eff
         grid_export_cost_per_kwh = [-float(x) for x in export_eff_with_bonus]
-
-        # Early-flow tie-break (tiny negative cost on any grid flow, stronger earlier).
         w_early = 1e-4
         grid_early_cost_per_kwh = [(-w_early * (1.0 / (t + 1))) for t in horizon.T]
-
-        import_allowed = self._resolve_import_allowed(horizon)
         import_limit_kw = [
             float(cfg.max_import_kw) * (1.0 if ok else 0.0) for ok in import_allowed
         ]
@@ -186,8 +236,8 @@ class GridComponent:
 
         self._latest = GridRun(
             connection=connection,
-            price_import_raw=price_import_raw,
-            price_export_raw=price_export_raw,
+            price_import_raw=self._price_import_raw.get(),
+            price_export_raw=self._price_export_raw.get(),
             price_import_effective=import_eff,
             price_export_effective=export_eff,
             import_allowed=import_allowed,
@@ -211,24 +261,108 @@ class GridComponent:
         return self._latest.connection
 
     def latest_price_import_raw(self) -> list[float]:
-        if self._latest is None:
-            raise ValueError("GridComponent has not been built for this run")
-        return list(self._latest.price_import_raw)
+        return self._price_import_raw.get()
 
     def latest_price_export_raw(self) -> list[float]:
-        if self._latest is None:
-            raise ValueError("GridComponent has not been built for this run")
-        return list(self._latest.price_export_raw)
+        return self._price_export_raw.get()
 
     def latest_price_import_effective(self) -> list[float]:
-        if self._latest is None:
-            raise ValueError("GridComponent has not been built for this run")
-        return list(self._latest.price_import_effective)
+        return self._price_import_effective.get()
 
     def latest_price_export_effective(self) -> list[float]:
-        if self._latest is None:
-            raise ValueError("GridComponent has not been built for this run")
-        return list(self._latest.price_export_effective)
+        return self._price_export_effective.get()
+
+    def _resolve_price_intervals(
+        self,
+        *,
+        horizon: Horizon,
+        resolver: ValueResolver,
+        direction: str,
+    ) -> list[PriceForecastInterval]:
+        cfg = self._grid_cfg
+        if direction == "import":
+            base_intervals = resolver.resolve(cfg.price_import_forecast)
+            realtime_source = cfg.realtime_price_import
+        else:
+            base_intervals = resolver.resolve(cfg.price_export_forecast)
+            realtime_source = cfg.realtime_price_export
+
+        extension_cfg = cfg.price_forecast_extension
+        if extension_cfg is None:
+            return list(base_intervals)
+
+        extension_source = self._build_price_extension_source(
+            realtime_source=realtime_source,
+            history_days=extension_cfg.history_days,
+            interval_duration=extension_cfg.interval_duration,
+            forecast_horizon_hours=self._forecast_extension_horizon_hours(
+                horizon,
+                interval_duration=extension_cfg.interval_duration,
+            ),
+        )
+        extension_intervals = resolver.resolve(extension_source)
+        return self._merge_price_forecast_extension(
+            base_intervals=list(base_intervals),
+            extension_intervals=list(extension_intervals),
+        )
+
+    def _build_price_extension_source(
+        self,
+        *,
+        realtime_source: HomeAssistantCurrencyEntitySource,
+        history_days: int,
+        interval_duration: int,
+        forecast_horizon_hours: int,
+    ) -> HomeAssistantHistoricalAveragePriceForecastSource:
+        return HomeAssistantHistoricalAveragePriceForecastSource(
+            type="home_assistant",
+            platform="historical_average_price",
+            entity=realtime_source.entity,
+            history_days=history_days,
+            interval_duration=interval_duration,
+            forecast_horizon_hours=forecast_horizon_hours,
+        )
+
+    def _forecast_extension_horizon_hours(
+        self,
+        horizon: Horizon,
+        *,
+        interval_duration: int,
+    ) -> int:
+        extension_start = floor_to_interval_boundary(horizon.now, interval_duration)
+        required_duration = horizon.slots[-1].end - extension_start
+        required_minutes = max(1.0, required_duration / timedelta(minutes=1))
+        return max(1, math.ceil(required_minutes / 60.0))
+
+    def _merge_price_forecast_extension(
+        self,
+        *,
+        base_intervals: list[PriceForecastInterval],
+        extension_intervals: list[PriceForecastInterval],
+    ) -> list[PriceForecastInterval]:
+        if not base_intervals:
+            return extension_intervals
+        if not extension_intervals:
+            return base_intervals
+
+        ordered_base = sorted(base_intervals, key=lambda interval: interval.start)
+        ordered_extension = sorted(extension_intervals, key=lambda interval: interval.start)
+        forecast_end = ordered_base[-1].end
+        merged = list(ordered_base)
+        for interval in ordered_extension:
+            if interval.end <= forecast_end:
+                continue
+            if interval.start < forecast_end:
+                merged.append(
+                    PriceForecastInterval(
+                        start=forecast_end,
+                        end=interval.end,
+                        value=float(interval.value),
+                    )
+                )
+                continue
+            merged.append(interval)
+        return merged
 
     def iter_timestep_plan(self, snapshot: ModelSnapshot) -> Iterator[GridTimestepPlan]:
         if self._latest is None:

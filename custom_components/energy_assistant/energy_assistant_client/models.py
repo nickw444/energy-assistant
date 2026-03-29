@@ -177,7 +177,7 @@ class TerminalSocConfig(BaseModel):
 
 class EmsConfig(BaseModel):
     timestep_minutes: int
-    min_horizon_minutes: int
+    horizon_minutes: int
     high_res_timestep_minutes: int | None = None
     high_res_horizon_minutes: int | None = None
     terminal_soc: TerminalSocConfig = Field(default_factory=TerminalSocConfig)

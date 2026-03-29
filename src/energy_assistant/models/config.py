@@ -35,7 +35,7 @@ class TerminalSocConfig(BaseModel):
 
 class EmsConfig(BaseModel):
     timestep_minutes: int = Field(default=5, ge=1, le=1440)
-    min_horizon_minutes: int = Field(default=120, ge=1, le=525600)
+    horizon_minutes: int = Field(default=120, ge=1, le=525600)
     high_res_timestep_minutes: int | None = Field(default=None, ge=1, le=1440)
     high_res_horizon_minutes: int | None = Field(default=None, ge=1, le=525600)
     terminal_soc: TerminalSocConfig = Field(default_factory=TerminalSocConfig)
@@ -50,10 +50,14 @@ class EmsConfig(BaseModel):
             raise ValueError(
                 "high_res_timestep_minutes and high_res_horizon_minutes must be set together"
             )
+        if self.high_res_timestep_minutes > self.timestep_minutes:
+            raise ValueError("high_res_timestep_minutes must be <= timestep_minutes")
         if self.high_res_horizon_minutes % self.high_res_timestep_minutes != 0:
             raise ValueError(
                 "high_res_horizon_minutes must be a multiple of high_res_timestep_minutes"
             )
+        if self.high_res_horizon_minutes > self.horizon_minutes:
+            raise ValueError("high_res_horizon_minutes must be <= horizon_minutes")
         return self
 
 

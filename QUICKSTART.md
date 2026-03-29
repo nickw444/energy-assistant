@@ -46,8 +46,8 @@ ems:
   # The high-res window runs first and the transition snaps to the next base boundary
   # (e.g. 30-min slots on :00/:30) so coarse slots stay aligned to the clock.
   timestep_minutes: 30
-  # Minimum horizon length to plan for.
-  min_horizon_minutes: 1440
+  # Fixed rolling horizon length to plan for.
+  horizon_minutes: 1440
   # Higher-resolution timestep at the start of the horizon.
   high_res_timestep_minutes: 5
   # Duration of the high-resolution window.
@@ -112,6 +112,14 @@ plant:
       # Forecast post-processing mode options:
       # - spot, advanced, blend_min, blend_max, blend_mean (or omit for provider default).
       price_forecast_mode: spot
+    # Optional history-based tail extension for price forecasts when the provider
+    # forecast is shorter than the EMS horizon. Uses historical realtime import/export
+    # prices to build a time-of-day average profile and only fills the uncovered tail.
+    # price_forecast_extension:
+    #   # Number of days of realtime price history to average.
+    #   history_days: 7
+    #   # Time-of-day bucket size in minutes. Must evenly divide 60.
+    #   interval_duration: 30
     # amber-express example:
     # realtime_price_export:
     #   type: home_assistant

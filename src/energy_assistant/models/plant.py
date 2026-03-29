@@ -78,6 +78,19 @@ class GridPriceRiskConfig(BaseModel):
         return self
 
 
+class GridPriceForecastExtensionConfig(BaseModel):
+    history_days: int = Field(ge=1)
+    interval_duration: int = Field(default=30, ge=1, le=60)
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    @model_validator(mode="after")
+    def _validate_interval_duration(self) -> Self:
+        if 60 % self.interval_duration != 0:
+            raise ValueError("interval_duration must evenly divide 60 minutes")
+        return self
+
+
 class GridConfig(BaseModel):
     max_import_kw: float = Field(ge=0)
     max_export_kw: float = Field(ge=0)
@@ -94,6 +107,7 @@ class GridConfig(BaseModel):
     zero_price_export_preference: Literal["export", "curtail"] = "export"
     # Forecast price risk bias (ramps from start after minutes over duration).
     grid_price_risk: GridPriceRiskConfig | None = None
+    price_forecast_extension: GridPriceForecastExtensionConfig | None = None
     import_forbidden_periods: list[TimeWindow] = Field(
         default_factory=_default_import_forbidden_periods
     )

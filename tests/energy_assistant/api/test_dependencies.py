@@ -53,7 +53,7 @@ async def test_settings_uses_get_config_dependency(tmp_path: Path) -> None:
     assert resp.status_code == 200
     payload = resp.json()
     assert payload["timestep_minutes"] == config.ems.timestep_minutes
-    assert payload["min_horizon_minutes"] == config.ems.min_horizon_minutes
+    assert payload["horizon_minutes"] == config.ems.horizon_minutes
 
 
 async def test_plan_run_returns_500_without_worker(tmp_path: Path) -> None:

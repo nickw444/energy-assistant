@@ -4,6 +4,7 @@ import pulp
 
 from energy_assistant.ems.horizon import Horizon
 from energy_assistant.ems.milp.context import ConstraintSpec
+from energy_assistant.ems.parameters import ScalarParameter
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import GraphElement
 from energy_assistant.ems.topology.nodes import StorageNode
@@ -135,23 +136,34 @@ class BatteryComponent:
         self._grid_max_export_kw = float(grid_max_export_kw)
         self._terminal_soc = terminal_soc
 
+        self._initial_soc_kwh = ScalarParameter[float](
+            f"{self.inverter_id}_battery_initial_soc_kwh"
+        )
         self._latest: BatteryRun | None = None
 
     def mark_for_hydration(self, resolver: ValueResolver) -> None:
         resolver.mark_for_hydration(self._battery_cfg.state_of_charge_pct)
         resolver.mark_for_hydration(self._battery_cfg.realtime_power)
 
-    def build(
+    def update_inputs(
         self,
         *,
         horizon: Horizon,
         resolver: ValueResolver,
+    ) -> None:
+        _ = horizon
+        initial_soc_pct = float(resolver.resolve(self._battery_cfg.state_of_charge_pct))
+        initial_soc_kwh = self.capacity_kwh * initial_soc_pct / 100.0
+        self._initial_soc_kwh.set(max(0.0, min(self.capacity_kwh, initial_soc_kwh)))
+
+    def graph_elements(
+        self,
+        *,
+        horizon: Horizon,
         grid_connection: Connection,
         price_import_raw: list[float],
     ) -> list[GraphElement]:
-        initial_soc_pct = float(resolver.resolve(self._battery_cfg.state_of_charge_pct))
-        initial_soc_kwh = self.capacity_kwh * initial_soc_pct / 100.0
-        initial_soc_kwh = max(0.0, min(self.capacity_kwh, initial_soc_kwh))
+        initial_soc_kwh = self._initial_soc_kwh.get()
 
         charge_cost_per_kwh = [
             float(self._battery_cfg.charge_cost_per_kwh)
@@ -171,7 +183,7 @@ class BatteryComponent:
             capacity_kwh=self.capacity_kwh,
             soc_min_kwh=self.soc_min_kwh,
             soc_max_kwh=self.soc_max_kwh,
-            initial_soc_kwh=float(initial_soc_kwh),
+            initial_soc_kwh=initial_soc_kwh,
             terminal_mode=self._terminal_soc.mode,
             terminal_reserve_kwh=self.reserve_kwh,
             terminal_penalty_per_kwh=self._terminal_soc.penalty_per_kwh,

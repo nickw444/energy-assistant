@@ -12,39 +12,43 @@ The EMS architecture is split into:
 
 Key behavior in v6:
 
-- Layer 1 components are **horizon-agnostic definitions**.
-- At solve time, components are asked to **build their topology elements** for the specific horizon.
-- Components resolve realtime/forecast values during that build step and pass **concrete scalars/series**
-  into topology/link primitives.
-- No deferred-value box layer is used in the MILP build path.
+- EMS uses a configured **fixed-shape rolling horizon** rather than sizing the horizon from forecast
+  coverage.
+- Layer 1 components are **persistent definitions** that own input parameter boxes.
+- At solve time, components first **validate forecast coverage**, then **update their input boxes**,
+  then **emit run-scoped topology elements** for the current horizon.
+- PuLP problems and topology objects remain run-scoped in v6; persistent reuse is at the component and
+  horizon-shape level.
 
 ## Runtime Flow
 
 `EmsMilpPlanner.generate_ems_plan(...)`:
 
-1. Determine horizon length from forecast coverage.
-2. Build `Horizon`.
-3. Get persistent component definitions from `EmsSystemFactory`.
-4. Call `EmsSystem.build_snapshot(horizon, resolver)`:
+1. Build the current solve window from the configured rolling `HorizonShape`.
+2. Get persistent component definitions from `EmsSystemFactory`.
+3. Call `EmsSystem.validate_forecast_coverage(horizon, resolver)`.
+4. Call `EmsSystem.update_inputs(horizon, resolver)`.
+5. Call `EmsSystem.build_snapshot(horizon)`:
    - create a fresh `EnergyGraph`,
-   - call each component's `build(...)` method (returns run-scoped topology elements),
+   - call each component's `graph_elements(...)` method (returns run-scoped topology elements),
    - add all returned elements through `EnergyGraph.add_elements(...)`,
    - collect fragment constraints/objective into `ModelSnapshot`.
-5. Solve PuLP model.
-6. Ask each component to iterate plan output from solved vars.
+6. Solve PuLP model.
+7. Ask each component to iterate plan output from solved vars.
 
 ## Layer 1 Component Contract
 
 Each component supports:
 
 - `mark_for_hydration(resolver)`
-- `forecast_coverage_intervals(now, interval_minutes, resolver)` when relevant
-- `build(horizon, resolver, ...) -> list[GraphElement]` to create run-scoped topology primitives
+- `validate_forecast_coverage(horizon, resolver)` when relevant
+- `update_inputs(horizon, resolver)` to populate persistent scalar/series parameters
+- `graph_elements(horizon, ...) -> list[GraphElement]` to create run-scoped topology primitives
 - `iter_timestep_plan(snapshot)` for result extraction where applicable
 
 Components keep configuration and helper objects persistently, while run-scoped MILP objects
 (nodes/connections/connection fragments) are rebuilt per solve. For plan extraction they keep references
-to the latest run-scoped topology objects only.
+to the latest run-scoped topology objects only, alongside the latest resolved input parameters.
 
 ## Layer 0 Topology Model
 

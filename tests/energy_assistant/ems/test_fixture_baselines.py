@@ -59,9 +59,6 @@ def _discover_fixture_scenarios() -> list[tuple[str, str]]:
     for fixture_dir in FIXTURE_BASE.iterdir():
         if not fixture_dir.is_dir():
             continue
-        config_path = fixture_dir / "ems_config.yaml"
-        if not config_path.exists():
-            continue
         for scenario_dir in fixture_dir.iterdir():
             if not scenario_dir.is_dir():
                 continue

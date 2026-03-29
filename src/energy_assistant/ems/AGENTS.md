@@ -9,11 +9,11 @@ plotting and inspection. Canonical implementation notes live in
 
 Key files:
 - `src/energy_assistant/ems/planner.py` orchestrates build, solve, and plan extraction.
-- `src/energy_assistant/ems/system/factory.py` wires config into run-scoped `EmsSystem` instances (components + topology graph).
-- `src/energy_assistant/ems/system/system.py` coordinates component updates, builds the MILP snapshot, and merges per-component plans.
+- `src/energy_assistant/ems/system/factory.py` wires config into a persistent `EmsSystem` plus the configured rolling `HorizonShape`.
+- `src/energy_assistant/ems/system/system.py` validates forecast coverage, hydrates component inputs, builds the run-scoped MILP snapshot, and merges per-component plans.
 - `src/energy_assistant/ems/topology/*` contains Layer 0 topology primitives (nodes, connections, policies).
 - `src/energy_assistant/ems/components/*` contains Layer 1 logical components (Grid, PV, Battery, EV, etc).
-- `src/energy_assistant/ems/horizon.py` handles time slotting (single and multi-resolution horizons).
+- `src/energy_assistant/ems/horizon.py` defines the persistent rolling `HorizonShape` and per-solve `Horizon`.
 - `src/energy_assistant/ems/forecast_alignment.py` aligns forecast intervals to horizon slots.
 - `src/energy_assistant/ems/pricing.py` applies price transforms used by the objective (bias, risk, etc).
 - `src/energy_assistant/ems/intent.py` maps a plan into a higher-level intent used by API consumers.

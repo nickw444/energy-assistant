@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import datetime
 
 from energy_assistant.ems.horizon import Horizon
 from energy_assistant.ems.milp.context import value_of
@@ -67,21 +66,24 @@ class InverterComponent:
         if self.battery is not None:
             self.battery.mark_for_hydration(resolver)
 
-    def forecast_coverage_intervals(
-        self, *, now: datetime, interval_minutes: int, resolver: ValueResolver
-    ) -> int:
+    def validate_forecast_coverage(self, *, horizon: Horizon, resolver: ValueResolver) -> None:
         # Inverters only contribute PV forecast coverage (battery + inverter are realtime-only).
-        return int(
-            self.pv.forecast_coverage_intervals(
-                now=now, interval_minutes=interval_minutes, resolver=resolver
-            )
-        )
+        self.pv.validate_forecast_coverage(horizon=horizon, resolver=resolver)
 
-    def build(
+    def update_inputs(
         self,
         *,
         horizon: Horizon,
         resolver: ValueResolver,
+    ) -> None:
+        self.pv.update_inputs(horizon=horizon, resolver=resolver)
+        if self.battery is not None:
+            self.battery.update_inputs(horizon=horizon, resolver=resolver)
+
+    def graph_elements(
+        self,
+        *,
+        horizon: Horizon,
         grid_connection: Connection,
         price_import_raw: list[float],
     ) -> list[GraphElement]:
@@ -112,12 +114,11 @@ class InverterComponent:
         )
         elements.append(inverter_connection)
 
-        elements.extend(self.pv.build(horizon=horizon, resolver=resolver))
+        elements.extend(self.pv.graph_elements(horizon=horizon))
         if self.battery is not None:
             elements.extend(
-                self.battery.build(
+                self.battery.graph_elements(
                     horizon=horizon,
-                    resolver=resolver,
                     grid_connection=grid_connection,
                     price_import_raw=price_import_raw,
                 )

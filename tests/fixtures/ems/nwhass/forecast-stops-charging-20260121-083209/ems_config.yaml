@@ -9,13 +9,12 @@ homeassistant:
   timeout_seconds: 30.0
 ems:
   timestep_minutes: 30
-  horizon_minutes: 720
+  horizon_minutes: 1230
   high_res_timestep_minutes: 5
   high_res_horizon_minutes: 120
   terminal_soc:
     mode: adaptive
     penalty_per_kwh: median
-
 plant:
   grid:
     max_import_kw: 13.0
@@ -69,7 +68,7 @@ plant:
       platform: historical_average
       unit: W
       interval_duration: 5
-      forecast_horizon_hours: 48
+      forecast_horizon_hours: 22
       realtime_window_minutes: 180
   inverters:
   - id: primary
@@ -80,7 +79,6 @@ plant:
       realtime_power:
         type: home_assistant
         entity: sensor.hass_energy_pv_power_smoothed_1m
-      # Pessimism factor applied to PV forecast kW values.
       forecast_multiplier: 0.95
       forecast:
         type: home_assistant
@@ -133,7 +131,7 @@ loads:
   - target_soc_pct: 40.0
     incentive: 0.16
   - target_soc_pct: 50.0
-    incentive: 0.10
+    incentive: 0.1
   - target_soc_pct: 60.0
     incentive: 0.08
   - target_soc_pct: 80.0

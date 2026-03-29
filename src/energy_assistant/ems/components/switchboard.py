@@ -12,7 +12,7 @@ class SwitchboardComponent:
         self.bus_id = str(bus_id)
         self._latest_bus: Node | None = None
 
-    def build(self, *, horizon: Horizon) -> list[GraphElement]:
+    def graph_elements(self, *, horizon: Horizon) -> list[GraphElement]:
         bus = Node(
             horizon=horizon,
             id=self.bus_id,

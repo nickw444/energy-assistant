@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import datetime
 
 from energy_assistant.ems.components.base_load import BaseLoadComponent
 from energy_assistant.ems.components.ev import EvComponent
@@ -24,7 +23,7 @@ from energy_assistant.lib.source_resolver.resolver import ValueResolver
 
 
 class EmsSystem:
-    """Persistent EMS component definitions that build a run-scoped topology per solve."""
+    """Persistent EMS component definitions with per-solve input hydration."""
 
     def __init__(
         self,
@@ -53,58 +52,40 @@ class EmsSystem:
         for ev in self.evs.values():
             ev.mark_for_hydration(resolver)
 
-    def forecast_coverage_intervals(
-        self, *, now: datetime, interval_minutes: int, resolver: ValueResolver
-    ) -> int:
-        coverages: list[int] = []
-        coverages.append(
-            int(
-                self.base_load.forecast_coverage_intervals(
-                    now=now, interval_minutes=interval_minutes, resolver=resolver
-                )
-            )
-        )
-        coverages.append(
-            int(
-                self.grid.forecast_coverage_intervals(
-                    now=now, interval_minutes=interval_minutes, resolver=resolver
-                )
-            )
-        )
+    def validate_forecast_coverage(self, *, horizon: Horizon, resolver: ValueResolver) -> None:
+        self.base_load.validate_forecast_coverage(horizon=horizon, resolver=resolver)
+        self.grid.validate_forecast_coverage(horizon=horizon, resolver=resolver)
         for inv in self.inverters.values():
-            coverages.append(
-                int(
-                    inv.forecast_coverage_intervals(
-                        now=now, interval_minutes=interval_minutes, resolver=resolver
-                    )
-                )
-            )
-        # EVs do not contribute to horizon sizing today (no forecasts), only realtime gating.
-        if not coverages:
-            raise ValueError("No forecasts available to determine planning horizon")
-        return int(min(coverages))
+            inv.validate_forecast_coverage(horizon=horizon, resolver=resolver)
 
-    def build_snapshot(self, *, horizon: Horizon, resolver: ValueResolver) -> ModelSnapshot:
+    def update_inputs(self, *, horizon: Horizon, resolver: ValueResolver) -> None:
+        self.base_load.update_inputs(horizon=horizon, resolver=resolver)
+        self.grid.update_inputs(horizon=horizon, resolver=resolver)
+        for inv in self.inverters.values():
+            inv.update_inputs(horizon=horizon, resolver=resolver)
+        for ev in self.evs.values():
+            ev.update_inputs(horizon=horizon, resolver=resolver)
+
+    def build_snapshot(self, *, horizon: Horizon) -> ModelSnapshot:
         graph = EnergyGraph()
-        graph.add_elements(self.switchboard.build(horizon=horizon))
-        graph.add_elements(self.base_load.build(horizon=horizon, resolver=resolver))
-        graph.add_elements(self.grid.build(horizon=horizon, resolver=resolver))
+        graph.add_elements(self.switchboard.graph_elements(horizon=horizon))
+        graph.add_elements(self.base_load.graph_elements(horizon=horizon))
+        graph.add_elements(self.grid.graph_elements(horizon=horizon))
 
         grid_connection = self.grid.latest_connection()
         price_import_raw = self.grid.latest_price_import_raw()
 
         for inv in self.inverters.values():
             graph.add_elements(
-                inv.build(
+                inv.graph_elements(
                     horizon=horizon,
-                    resolver=resolver,
                     grid_connection=grid_connection,
                     price_import_raw=price_import_raw,
                 )
             )
 
         for ev in self.evs.values():
-            graph.add_elements(ev.build(horizon=horizon, resolver=resolver))
+            graph.add_elements(ev.graph_elements(horizon=horizon))
 
         ctx = ModelContext(horizon=horizon)
         return ModelSnapshot(ctx=ctx, graph=graph)

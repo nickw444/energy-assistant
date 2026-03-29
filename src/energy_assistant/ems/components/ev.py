@@ -9,6 +9,7 @@ from energy_assistant.ems.horizon import Horizon
 from energy_assistant.ems.milp.context import ConstraintSpec, value_of
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
 from energy_assistant.ems.models import EvTimestepPlan
+from energy_assistant.ems.parameters import ScalarParameter, SeriesParameter
 from energy_assistant.ems.time_windows import TimeWindowMatcher
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import GraphElement
@@ -298,6 +299,10 @@ class EvComponent:
         self.connection_id = f"ev_{self.id}_link"
         self.switchboard_bus_id = str(switchboard_bus_id)
 
+        self._connected = ScalarParameter[bool](f"{self.id}_connected")
+        self._realtime_power_kw = ScalarParameter[float](f"{self.id}_realtime_power_kw")
+        self._initial_soc_kwh = ScalarParameter[float](f"{self.id}_initial_soc_kwh")
+        self._gate_series = SeriesParameter[float](f"{self.id}_gate_series")
         self._latest: EvRun | None = None
 
     def mark_for_hydration(self, resolver: ValueResolver) -> None:
@@ -307,7 +312,7 @@ class EvComponent:
         resolver.mark_for_hydration(self._load.realtime_power)
         resolver.mark_for_hydration(self._load.state_of_charge_pct)
 
-    def build(self, *, horizon: Horizon, resolver: ValueResolver) -> list[GraphElement]:
+    def update_inputs(self, *, horizon: Horizon, resolver: ValueResolver) -> None:
         connected = bool(resolver.resolve(self._load.connected))
         can_connect = True
         if self._load.can_connect is not None:
@@ -324,6 +329,16 @@ class EvComponent:
             connected=connected,
             can_connect=can_connect,
         )
+        self._connected.set(connected)
+        self._realtime_power_kw.set(realtime_power_kw)
+        self._initial_soc_kwh.set(max(0.0, min(self.capacity_kwh, initial_soc_kwh)))
+        self._gate_series.set(gate_series)
+
+    def graph_elements(self, *, horizon: Horizon) -> list[GraphElement]:
+        connected = self._connected.get()
+        realtime_power_kw = self._realtime_power_kw.get()
+        initial_soc_kwh = self._initial_soc_kwh.get()
+        gate_series = self._gate_series.get()
 
         storage = StorageNode(
             horizon=horizon,
@@ -332,7 +347,7 @@ class EvComponent:
             capacity_kwh=self.capacity_kwh,
             soc_min_kwh=0.0,
             soc_max_kwh=self.capacity_kwh,
-            initial_soc_kwh=float(initial_soc_kwh),
+            initial_soc_kwh=initial_soc_kwh,
             terminal_mode="none",
         )
 
@@ -369,7 +384,7 @@ class EvComponent:
                     horizon=horizon,
                     ev_id=self.id,
                     storage=storage,
-                    initial_soc_kwh=float(initial_soc_kwh),
+                    initial_soc_kwh=initial_soc_kwh,
                     capacity_kwh=self.capacity_kwh,
                     incentives=self.soc_incentives,
                     grid_price_bias=self._grid_price_bias,

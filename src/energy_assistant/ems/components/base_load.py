@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime
-
-from energy_assistant.ems.forecast_alignment import PowerForecastAligner, forecast_coverage_slots
-from energy_assistant.ems.horizon import Horizon, floor_to_interval_boundary
+from energy_assistant.ems.forecast_alignment import (
+    PowerForecastAligner,
+    validate_forecast_coverage,
+)
+from energy_assistant.ems.horizon import Horizon
+from energy_assistant.ems.parameters import SeriesParameter
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import GraphElement
 from energy_assistant.ems.topology.nodes import Node
@@ -13,8 +15,7 @@ from energy_assistant.models.plant import PlantLoadConfig
 
 
 class BaseLoadRun:
-    def __init__(self, *, base_load_kw: list[float], connection: Connection) -> None:
-        self.base_load_kw = [float(v) for v in base_load_kw]
+    def __init__(self, *, connection: Connection) -> None:
         self.connection = connection
 
 
@@ -35,30 +36,28 @@ class BaseLoadComponent:
         self._load = load
 
         self._aligner = PowerForecastAligner()
+        self._base_load_kw = SeriesParameter[float]("base_load_kw")
         self._latest: BaseLoadRun | None = None
 
     def mark_for_hydration(self, resolver: ValueResolver) -> None:
         resolver.mark_for_hydration(self._load.realtime_load_power)
         resolver.mark_for_hydration(self._load.forecast)
 
-    def forecast_coverage_intervals(
-        self, *, now: datetime, interval_minutes: int, resolver: ValueResolver
-    ) -> int:
-        start = floor_to_interval_boundary(now, interval_minutes)
+    def validate_forecast_coverage(self, *, horizon: Horizon, resolver: ValueResolver) -> None:
         intervals = resolver.resolve(self._load.forecast)
-        return forecast_coverage_slots(
-            start,
-            interval_minutes,
-            intervals,
+        validate_forecast_coverage(
+            label="Base load forecast",
+            horizon=horizon,
+            intervals=intervals,
             allow_first_slot_missing=True,
         )
 
-    def build(
+    def update_inputs(
         self,
         *,
         horizon: Horizon,
         resolver: ValueResolver,
-    ) -> list[GraphElement]:
+    ) -> None:
         realtime_load = float(resolver.resolve(self._load.realtime_load_power))
         intervals = resolver.resolve(self._load.forecast)
         series = self._aligner.align(
@@ -66,7 +65,14 @@ class BaseLoadComponent:
             intervals,
             first_slot_override=realtime_load,
         )
-        base_load_kw = [float(x) for x in series]
+        self._base_load_kw.set([float(x) for x in series])
+
+    def graph_elements(
+        self,
+        *,
+        horizon: Horizon,
+    ) -> list[GraphElement]:
+        base_load_kw = self._base_load_kw.get()
 
         node = Node(
             horizon=horizon,
@@ -92,10 +98,8 @@ class BaseLoadComponent:
                 ),
             },
         )
-        self._latest = BaseLoadRun(base_load_kw=base_load_kw, connection=connection)
+        self._latest = BaseLoadRun(connection=connection)
         return [node, connection]
 
     def latest_base_load_kw(self) -> list[float]:
-        if self._latest is None:
-            raise ValueError("BaseLoadComponent has not been built for this run")
-        return list(self._latest.base_load_kw)
+        return self._base_load_kw.get()

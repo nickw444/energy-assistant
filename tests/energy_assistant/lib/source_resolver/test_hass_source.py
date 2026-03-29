@@ -15,6 +15,7 @@ from energy_assistant.lib.source_resolver.hass_source import (
     HomeAssistantAmberElectricForecastSource,
     HomeAssistantAmberExpressForecastSource,
     HomeAssistantHistoricalAverageForecastSource,
+    HomeAssistantHistoricalAveragePriceForecastSource,
 )
 
 
@@ -140,6 +141,63 @@ def test_historical_average_smooths_realtime_override(
     assert intervals[1].value == pytest.approx(2.5)  # type: ignore[reportUnknownMemberType]
     assert intervals[2].start == datetime(2025, 1, 2, 8, 0, tzinfo=UTC)
     assert intervals[2].value == pytest.approx(1.5)  # type: ignore[reportUnknownMemberType]
+
+
+def test_historical_average_price_builds_time_of_day_profile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    now = datetime(2025, 1, 2, 6, 30, tzinfo=UTC)
+    _freeze_hass_source_time(monkeypatch, now)
+
+    source = HomeAssistantHistoricalAveragePriceForecastSource(
+        type="home_assistant",
+        platform="historical_average_price",
+        entity="price_realtime",
+        history_days=2,
+        interval_duration=30,
+        forecast_horizon_hours=2,
+    )
+
+    history: list[HomeAssistantHistoryStateDict] = [
+        {
+            "last_updated": datetime(2025, 1, 1, 6, 0, tzinfo=UTC).isoformat(),
+            "state": 0.10,
+        },
+        {
+            "last_updated": datetime(2025, 1, 1, 6, 30, tzinfo=UTC).isoformat(),
+            "state": 0.20,
+        },
+        {
+            "last_updated": datetime(2025, 1, 1, 7, 0, tzinfo=UTC).isoformat(),
+            "state": 0.30,
+        },
+        {
+            "last_updated": datetime(2025, 1, 2, 6, 0, tzinfo=UTC).isoformat(),
+            "state": 0.10,
+        },
+        {
+            "last_updated": datetime(2025, 1, 2, 6, 30, tzinfo=UTC).isoformat(),
+            "state": 0.20,
+        },
+    ]
+    current_state: HomeAssistantStateDict = {
+        "entity_id": "sensor.price_realtime",
+        "state": 0.20,
+        "attributes": {},
+        "last_changed": now.isoformat(),
+        "last_reported": now.isoformat(),
+        "last_updated": now.isoformat(),
+    }
+
+    intervals = source.mapper(
+        HomeAssistantHistoryPayload(history=history, current_state=current_state)
+    )
+
+    assert len(intervals) == 4
+    assert intervals[0].start == datetime(2025, 1, 2, 6, 30, tzinfo=UTC)
+    assert intervals[0].value == pytest.approx(0.20)  # type: ignore[reportUnknownMemberType]
+    assert intervals[1].start == datetime(2025, 1, 2, 7, 0, tzinfo=UTC)
+    assert intervals[1].value == pytest.approx(0.30)  # type: ignore[reportUnknownMemberType]
 
 
 def test_amber_forecast_falls_back_to_per_kwh_when_advanced_missing() -> None:

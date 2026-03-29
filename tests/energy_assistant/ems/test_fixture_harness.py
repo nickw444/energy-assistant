@@ -15,6 +15,8 @@ def test_resolve_ems_fixture_paths_fixture_only(tmp_path: Path) -> None:
     assert paths.fixture_dir == fixture_dir
     assert paths.scenario_dir == fixture_dir
     assert paths.fixture_path == fixture_dir / "ems_fixture.json"
+    assert paths.fixture_config_path == fixture_dir / "ems_config.yaml"
+    assert paths.scenario_config_path == fixture_dir / "ems_config.yaml"
     assert paths.config_path == fixture_dir / "ems_config.yaml"
     assert paths.plan_path == fixture_dir / "ems_plan.json"
 
@@ -30,6 +32,8 @@ def test_resolve_ems_fixture_paths_fixture_with_scenario(tmp_path: Path) -> None
     assert paths.fixture_dir == fixture_dir
     assert paths.scenario_dir == scenario_dir
     assert paths.fixture_path == scenario_dir / "ems_fixture.json"
+    assert paths.fixture_config_path == fixture_dir / "ems_config.yaml"
+    assert paths.scenario_config_path == scenario_dir / "ems_config.yaml"
     assert paths.config_path == fixture_dir / "ems_config.yaml"
     assert paths.plan_path == scenario_dir / "ems_plan.json"
 
@@ -49,3 +53,18 @@ def test_resolve_ems_fixture_paths_config_at_fixture_level(tmp_path: Path) -> No
     assert paths_a.config_path == fixture_dir / "ems_config.yaml"
     assert paths_a.fixture_path == scenario_a / "ems_fixture.json"
     assert paths_b.fixture_path == scenario_b / "ems_fixture.json"
+
+
+def test_resolve_ems_fixture_paths_prefers_scenario_config(tmp_path: Path) -> None:
+    base_dir = tmp_path / "fixtures"
+    fixture_dir = base_dir / "scenario-config"
+    scenario_dir = fixture_dir / "a"
+    scenario_dir.mkdir(parents=True)
+    (fixture_dir / "ems_config.yaml").write_text("fixture: true\n")
+    (scenario_dir / "ems_config.yaml").write_text("scenario: true\n")
+
+    paths = resolve_ems_fixture_paths(base_dir, "scenario-config", "a")
+
+    assert paths.fixture_config_path == fixture_dir / "ems_config.yaml"
+    assert paths.scenario_config_path == scenario_dir / "ems_config.yaml"
+    assert paths.config_path == scenario_dir / "ems_config.yaml"

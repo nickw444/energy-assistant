@@ -68,6 +68,62 @@ def forecast_coverage_slots(
     return count
 
 
+def validate_forecast_coverage(
+    *,
+    label: str,
+    horizon: Horizon,
+    intervals: Sequence[ForecastInterval],
+    allow_first_slot_missing: bool = False,
+) -> None:
+    available_minutes = _forecast_coverage_minutes(
+        horizon,
+        intervals,
+        allow_first_slot_missing=allow_first_slot_missing,
+    )
+    required_minutes = int(sum(slot.duration_m for slot in horizon.slots))
+    if available_minutes >= required_minutes:
+        return
+    raise ValueError(
+        f"{label} coverage is insufficient for the configured horizon: "
+        f"required={required_minutes} minutes available={available_minutes} minutes"
+    )
+
+
+def _forecast_coverage_minutes(
+    horizon: Horizon,
+    intervals: Sequence[ForecastInterval],
+    *,
+    allow_first_slot_missing: bool = False,
+) -> int:
+    if not intervals:
+        return 0
+
+    ordered = sorted(intervals, key=lambda interval: interval.start)
+    covered_minutes = 0
+
+    for slot in horizon.slots:
+        slot_seconds = (slot.end - slot.start).total_seconds()
+        total_overlap = sum(
+            max(
+                0.0,
+                (
+                    min(interval.end, slot.end) - max(interval.start, slot.start)
+                ).total_seconds(),
+            )
+            for interval in ordered
+            if interval.start < slot.end and interval.end > slot.start
+        )
+        coverage_gap = slot_seconds - total_overlap
+        if coverage_gap > 1.0:
+            if allow_first_slot_missing and slot.index == 0:
+                covered_minutes += slot.duration_m
+                continue
+            break
+        covered_minutes += slot.duration_m
+
+    return covered_minutes
+
+
 def _align_intervals[T: ForecastInterval](
     horizon: Horizon,
     intervals: Sequence[T],

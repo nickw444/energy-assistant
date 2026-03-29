@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from energy_assistant.ems.horizon import build_horizon
+from energy_assistant.ems.horizon import build_horizon, build_horizon_shape
 
 
 def test_build_horizon_with_interval_schedule() -> None:
@@ -125,3 +125,18 @@ def test_default_horizon_uses_single_resolution() -> None:
     durations = [slot.duration_m for slot in horizon.slots]
     assert durations == [15, 15, 15, 15]
     assert horizon.start.minute == 0
+
+
+def test_horizon_shape_uses_configured_total_minutes() -> None:
+    now = datetime(2025, 12, 27, 3, 55, tzinfo=UTC)
+    shape = build_horizon_shape(
+        timestep_minutes=30,
+        horizon_minutes=80,
+        high_res_timestep_minutes=5,
+        high_res_horizon_minutes=20,
+    )
+
+    horizon = shape.build(now=now)
+
+    assert horizon.start.minute == 55
+    assert horizon.slots[-1].end == horizon.start + timedelta(minutes=80)

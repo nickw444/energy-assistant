@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -39,6 +40,27 @@ class Horizon:
         return slot.start, slot.end
 
 
+@dataclass(frozen=True, slots=True)
+class HorizonShape:
+    timestep_minutes: int
+    horizon_minutes: int
+    high_res_timestep_minutes: int | None = None
+    high_res_horizon_minutes: int | None = None
+
+    @property
+    def base_interval_minutes(self) -> int:
+        return self.high_res_timestep_minutes or self.timestep_minutes
+
+    def build(self, *, now: datetime) -> Horizon:
+        return build_horizon(
+            now=now,
+            timestep_minutes=self.timestep_minutes,
+            high_res_timestep_minutes=self.high_res_timestep_minutes,
+            high_res_horizon_minutes=self.high_res_horizon_minutes,
+            total_minutes=self.horizon_minutes,
+        )
+
+
 def build_horizon(
     *,
     now: datetime,
@@ -53,18 +75,29 @@ def build_horizon(
 
     # Single-resolution horizon: build fixed-size slots from the base timestep.
     if high_res_timestep_minutes is None and high_res_horizon_minutes is None:
-        if num_intervals is None:
-            raise ValueError("num_intervals is required for single-resolution horizons")
+        if total_minutes is None and num_intervals is None:
+            raise ValueError(
+                "total_minutes or num_intervals is required for single-resolution horizons"
+            )
+        interval_count = num_intervals
+        if total_minutes is not None:
+            interval_count = math.ceil(total_minutes / timestep_minutes)
+        if interval_count is None:
+            raise ValueError("Unable to determine single-resolution horizon interval count")
         slots: list[HorizonSlot] = []
-        for idx in range(num_intervals):
+        for idx in range(interval_count):
             slot_start = start + timedelta(minutes=idx * timestep_minutes)
             slot_end = slot_start + timedelta(minutes=timestep_minutes)
+            if total_minutes is not None:
+                horizon_end = start + timedelta(minutes=total_minutes)
+                if slot_end > horizon_end:
+                    slot_end = horizon_end
             slots.append(HorizonSlot(index=idx, start=slot_start, end=slot_end))
         return Horizon(
             now=now,
             start=start,
             interval_minutes=base_interval_minutes,
-            num_intervals=num_intervals,
+            num_intervals=len(slots),
             slots=slots,
         )
 
@@ -127,3 +160,18 @@ def ceil_to_interval_boundary(now: datetime, interval_minutes: int) -> datetime:
     if floored == aligned:
         return floored
     return floored + timedelta(minutes=interval_minutes)
+
+
+def build_horizon_shape(
+    *,
+    timestep_minutes: int,
+    horizon_minutes: int,
+    high_res_timestep_minutes: int | None = None,
+    high_res_horizon_minutes: int | None = None,
+) -> HorizonShape:
+    return HorizonShape(
+        timestep_minutes=timestep_minutes,
+        horizon_minutes=horizon_minutes,
+        high_res_timestep_minutes=high_res_timestep_minutes,
+        high_res_horizon_minutes=high_res_horizon_minutes,
+    )

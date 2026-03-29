@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 
 from energy_assistant.ems.components.base_load import BaseLoadComponent
 from energy_assistant.ems.components.ev import EvComponent
 from energy_assistant.ems.components.grid import GridComponent
 from energy_assistant.ems.components.inverter import InverterComponent
 from energy_assistant.ems.components.switchboard import SwitchboardComponent
+from energy_assistant.ems.horizon import HorizonShape, build_horizon_shape
 from energy_assistant.ems.system.system import EmsSystem
 from energy_assistant.lib.source_resolver.resolver import ValueResolver
 from energy_assistant.models.config import AppConfig
@@ -22,21 +22,23 @@ class EmsSystemFactory:
     def __init__(self, app_config: AppConfig, *, resolver: ValueResolver) -> None:
         self._app_config = app_config
         self._resolver = resolver
+        self._horizon_shape = build_horizon_shape(
+            timestep_minutes=app_config.ems.timestep_minutes,
+            horizon_minutes=app_config.ems.horizon_minutes,
+            high_res_timestep_minutes=app_config.ems.high_res_timestep_minutes,
+            high_res_horizon_minutes=app_config.ems.high_res_horizon_minutes,
+        )
         self._system = self._build_system()
 
     def mark_for_hydration(self) -> None:
         self._system.mark_for_hydration(self._resolver)
 
-    def forecast_coverage_intervals(self, *, now: datetime, interval_minutes: int) -> int:
-        return int(
-            self._system.forecast_coverage_intervals(
-                now=now,
-                interval_minutes=interval_minutes,
-                resolver=self._resolver,
-            )
-        )
+    @property
+    def horizon_shape(self) -> HorizonShape:
+        return self._horizon_shape
 
-    def build_system_for_run(self) -> EmsSystem:
+    @property
+    def system(self) -> EmsSystem:
         return self._system
 
     def _build_system(self) -> EmsSystem:

@@ -1,15 +1,18 @@
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Literal
 
 import pulp
 
-from energy_assistant.ems.forecast_alignment import PowerForecastAligner, forecast_coverage_slots
+from energy_assistant.ems.forecast_alignment import (
+    PowerForecastAligner,
+    validate_forecast_coverage,
+)
 from energy_assistant.ems.forecast_multiplier import ForecastMultiplier
-from energy_assistant.ems.horizon import Horizon, floor_to_interval_boundary
+from energy_assistant.ems.horizon import Horizon
 from energy_assistant.ems.milp.context import ConstraintSpec, value_of
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
+from energy_assistant.ems.parameters import SeriesParameter
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import GraphElement
 from energy_assistant.ems.topology.nodes import Node
@@ -144,6 +147,7 @@ class PvComponent:
         self.connection_id = f"pv_{self.inverter_id}_link"
 
         self._aligner = PowerForecastAligner()
+        self._available_kw = SeriesParameter[float](f"{self.inverter_id}_pv_available_kw")
         self._latest: PvRun | None = None
 
     def mark_for_hydration(self, resolver: ValueResolver) -> None:
@@ -151,22 +155,17 @@ class PvComponent:
             resolver.mark_for_hydration(self._pv_cfg.realtime_power)
         resolver.mark_for_hydration(self._pv_cfg.forecast)
 
-    def forecast_coverage_intervals(
-        self, *, now: datetime, interval_minutes: int, resolver: ValueResolver
-    ) -> int:
-        start = floor_to_interval_boundary(now, interval_minutes)
+    def validate_forecast_coverage(self, *, horizon: Horizon, resolver: ValueResolver) -> None:
         intervals = resolver.resolve(self._pv_cfg.forecast)
         allow_first_slot_missing = self._pv_cfg.realtime_power is not None
-        return int(
-            forecast_coverage_slots(
-                start,
-                interval_minutes,
-                intervals,
-                allow_first_slot_missing=allow_first_slot_missing,
-            )
+        validate_forecast_coverage(
+            label=f"PV forecast {self.inverter_id}",
+            horizon=horizon,
+            intervals=intervals,
+            allow_first_slot_missing=allow_first_slot_missing,
         )
 
-    def build(self, *, horizon: Horizon, resolver: ValueResolver) -> list[GraphElement]:
+    def update_inputs(self, *, horizon: Horizon, resolver: ValueResolver) -> None:
         realtime_pv = None
         if self._pv_cfg.realtime_power is not None:
             realtime_pv = float(resolver.resolve(self._pv_cfg.realtime_power))
@@ -183,7 +182,10 @@ class PvComponent:
             pv_series,
             skip_first_slot=realtime_pv is not None,
         )
-        available_kw = [float(x) for x in pv_series]
+        self._available_kw.set([float(x) for x in pv_series])
+
+    def graph_elements(self, *, horizon: Horizon) -> list[GraphElement]:
+        available_kw = self._available_kw.get()
 
         node = Node(
             horizon=horizon,

@@ -16,6 +16,8 @@ class EmsFixturePaths:
     fixture_dir: Path
     scenario_dir: Path
     fixture_path: Path
+    fixture_config_path: Path
+    scenario_config_path: Path
     config_path: Path
     plan_path: Path
     plot_path: Path
@@ -27,11 +29,19 @@ def resolve_ems_fixture_paths(
 ) -> EmsFixturePaths:
     fixture_dir = base_dir / fixture
     scenario_dir = fixture_dir if scenario is None else fixture_dir / scenario
+    fixture_config_path = fixture_dir / "ems_config.yaml"
+    scenario_config_path = scenario_dir / "ems_config.yaml"
+    if scenario is not None and scenario_config_path.exists():
+        config_path = scenario_config_path
+    else:
+        config_path = fixture_config_path
     return EmsFixturePaths(
         fixture_dir=fixture_dir,
         scenario_dir=scenario_dir,
         fixture_path=scenario_dir / "ems_fixture.json",
-        config_path=fixture_dir / "ems_config.yaml",
+        fixture_config_path=fixture_config_path,
+        scenario_config_path=scenario_config_path,
+        config_path=config_path,
         plan_path=scenario_dir / "ems_plan.json",
         plot_path=scenario_dir / "ems_plan.jpeg",
         hash_path=scenario_dir / "ems_plan.hash",
