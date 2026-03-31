@@ -12,6 +12,7 @@ from fastapi import Depends, FastAPI
 from energy_assistant.api.dependencies import GlobalDependencies, get_config
 from energy_assistant.api.server import create_app
 from energy_assistant.ems.planner import EmsMilpPlanner
+from energy_assistant.ems.system.factory import EmsSystemFactory
 from energy_assistant.inputs.fixtures import load_fixture_input_provider
 from energy_assistant.models.config import AppConfig
 from energy_assistant.worker import PlanRunState, Worker
@@ -42,7 +43,10 @@ def _build_fixture_plan(config: AppConfig) -> object:
     fixture_dir = Path("tests/fixtures/ems/nwhass/short-horizon-low-pv")
     input_provider, captured_at = load_fixture_input_provider(path=fixture_dir / "input.json")
     now = datetime.fromisoformat(captured_at) if captured_at else None
-    return EmsMilpPlanner(config, input_provider=input_provider).generate_ems_plan(now=now)
+    return EmsMilpPlanner(
+        input_provider=input_provider,
+        system_factory=EmsSystemFactory.create(config),
+    ).generate_ems_plan(now=now)
 
 
 def test_create_app_sets_global_dependencies(tmp_path: Path) -> None:

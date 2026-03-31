@@ -13,10 +13,12 @@ from energy_assistant.config import load_app_config
 from energy_assistant.ems.fixtures.harness import (
     EmsFixturePaths,
     compute_plan_hash,
+    compute_text_hash,
     resolve_ems_fixture_paths,
     serialize_plan,
 )
 from energy_assistant.ems.planner import EmsMilpPlanner
+from energy_assistant.ems.system.factory import EmsSystemFactory
 from energy_assistant.inputs.fixtures import load_fixture_input_provider
 
 FIXTURE_BASE = Path("tests/fixtures/ems")
@@ -79,7 +81,10 @@ def test_fixture_baseline_up_to_date(fixture: str, scenario: str) -> None:
     input_provider, captured_at = load_fixture_input_provider(path=paths.fixture_path)
     now = datetime.fromisoformat(captured_at) if captured_at else None
 
-    plan = EmsMilpPlanner(app_config, input_provider=input_provider).generate_ems_plan(now=now)
+    plan = EmsMilpPlanner(
+        input_provider=input_provider,
+        system_factory=EmsSystemFactory.create(app_config),
+    ).generate_ems_plan(now=now)
 
     actual = serialize_plan(plan)
     expected = json.loads(paths.plan_path.read_text())
@@ -97,7 +102,7 @@ def test_fixture_baseline_up_to_date(fixture: str, scenario: str) -> None:
     ids=[f"{f}/{s}" for f, s in _discover_fixture_scenarios()],
 )
 def test_fixture_plot_up_to_date(fixture: str, scenario: str) -> None:
-    """Assert the stored output.jpeg matches the current plan hash."""
+    """Assert the stored fixture visual artifacts match their expected hashes."""
     paths = resolve_ems_fixture_paths(FIXTURE_BASE, fixture, scenario)
     if not _is_complete_bundle(paths):
         pytest.skip("EMS fixture scenario not recorded.")
@@ -134,6 +139,66 @@ def test_fixture_plot_up_to_date(fixture: str, scenario: str) -> None:
 
     assert stored_hash == actual_hash, (
         f"Fixture {fixture}/{scenario!r} output.jpeg is out of date "
+        f"(hash mismatch: stored={stored_hash}, expected={actual_hash}). "
+        "Re-record with: " + record_hint
+    )
+
+    _assert_text_artifact_up_to_date(
+        fixture=fixture,
+        scenario=scenario,
+        artifact_path=paths.logical_graph_path,
+        hash_path=paths.logical_graph_hash_path,
+        artifact_name="logical-graph.svg",
+        record_hint=record_hint,
+    )
+    _assert_text_artifact_up_to_date(
+        fixture=fixture,
+        scenario=scenario,
+        artifact_path=paths.topology_graph_path,
+        hash_path=paths.topology_graph_hash_path,
+        artifact_name="topology-graph.svg",
+        record_hint=record_hint,
+    )
+
+
+def _assert_text_artifact_up_to_date(
+    *,
+    fixture: str,
+    scenario: str,
+    artifact_path: Path,
+    hash_path: Path,
+    artifact_name: str,
+    record_hint: str,
+) -> None:
+    if hash_path.exists() and not artifact_path.exists():
+        pytest.fail(
+            f"Fixture {fixture}/{scenario!r} has {hash_path.name} without {artifact_name}. "
+            f"Re-record with: {record_hint}"
+        )
+
+    if artifact_path.exists() and not hash_path.exists():
+        pytest.fail(
+            f"Fixture {fixture}/{scenario!r} has {artifact_name} without {hash_path.name}. "
+            f"Re-record with: {record_hint}"
+        )
+
+    if not hash_path.exists():
+        pytest.fail(
+            f"Fixture {fixture}/{scenario!r} missing {hash_path.name}. "
+            f"Re-record with: {record_hint}"
+        )
+
+    if not artifact_path.exists():
+        pytest.fail(
+            f"Fixture {fixture}/{scenario!r} missing {artifact_name}. "
+            f"Re-record with: {record_hint}"
+        )
+
+    stored_hash = hash_path.read_text().strip()
+    actual_hash = compute_text_hash(artifact_path.read_text())
+
+    assert stored_hash == actual_hash, (
+        f"Fixture {fixture}/{scenario!r} {artifact_name} is out of date "
         f"(hash mismatch: stored={stored_hash}, expected={actual_hash}). "
         "Re-record with: " + record_hint
     )

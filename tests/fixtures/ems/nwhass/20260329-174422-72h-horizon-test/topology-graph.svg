@@ -1,223 +1,111 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<svg width="4092pt" height="4429pt"
- viewBox="18.00 18.00 4074.00 4411.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(43.2 4385.58)">
+<svg width="1128pt" height="512pt"
+ viewBox="14.00 14.00 1114.00 498.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(28.8 483.41)">
 <title>energy_modeling_topology</title>
-<polygon fill="#f7fafb" stroke="none" points="-25.2,25.2 -25.2,-4367.58 4031,-4367.58 4031,25.2 -25.2,25.2"/>
-<text xml:space="preserve" text-anchor="middle" x="2002.9" y="-4317.48" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="22.00">Energy Modeling Topology</text>
-<g id="edge6" class="edge">
-<title>n_segment_base_load_link_000_directional_limit_28db4b97&#45;&gt;n_base_load_a82f7aa3</title>
-<path fill="none" stroke="#64748b" stroke-width="1.3" d="M3181.98,-2734.81C3233.01,-2730.96 3705.05,-2695.38 3878.47,-2682.31"/>
-<text xml:space="preserve" text-anchor="middle" x="3444.58" y="-2721.87" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#334155">base_load_link.fixed_flow</text>
-<text xml:space="preserve" text-anchor="middle" x="3444.58" y="-2713.62" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#334155">fixed flow</text>
-</g>
-<g id="edge7" class="edge">
-<title>n_segment_eq4800_link_000_directional_limit_ac293bab&#45;&gt;n_segment_eq4800_link_001_wear_cost_50d60a76</title>
-<path fill="none" stroke="#64748b" stroke-width="1.3" d="M2287.22,-1712.09C2339.34,-1677.3 2894.69,-1306.51 2946.64,-1271.82"/>
-<text xml:space="preserve" text-anchor="middle" x="2581.37" y="-1501.77" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#334155">eq4800_link.wear_cost</text>
-<text xml:space="preserve" text-anchor="middle" x="2581.37" y="-1493.52" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#334155">linear cost</text>
-</g>
-<g id="edge8" class="edge">
-<title>n_segment_eq4800_link_001_wear_cost_50d60a76&#45;&gt;n_segment_eq4800_link_002_time_cost_68a1332d</title>
-<path fill="none" stroke="#64748b" stroke-width="1.3" d="M2953,-1265.36C2984.35,-1216.37 3303.95,-716.96 3335.09,-668.3"/>
-<text xml:space="preserve" text-anchor="middle" x="3109.25" y="-976.56" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#334155">eq4800_link.time_cost</text>
-<text xml:space="preserve" text-anchor="middle" x="3109.25" y="-968.31" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#334155">linear cost</text>
-</g>
-<g id="edge9" class="edge">
-<title>n_segment_eq4800_link_002_time_cost_68a1332d&#45;&gt;n_eq4800_adee8c37</title>
-<path fill="none" stroke="#64748b" stroke-width="1.3" d="M3334.65,-660.8C3302.32,-619.29 3006.23,-239.15 2914.49,-121.37"/>
-<text xml:space="preserve" text-anchor="middle" x="3112.35" y="-429.53" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#334155">eq4800_link.efficiency</text>
-<text xml:space="preserve" text-anchor="middle" x="3112.35" y="-421.28" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#334155">efficiency</text>
-</g>
-<g id="edge10" class="edge">
-<title>n_segment_ev_tessie_link_000_directional_limit_000bf7e1&#45;&gt;n_tessie_9214d04b</title>
-<path fill="none" stroke="#64748b" stroke-width="1.3" d="M2384.16,-3570.42C2402.19,-3618.66 2569.12,-4065.42 2617.31,-4194.41"/>
-<text xml:space="preserve" text-anchor="middle" x="2443.3" y="-3861.99" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#334155">ev_tessie_link.charge_control</text>
-<text xml:space="preserve" text-anchor="middle" x="2443.3" y="-3853.74" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#334155">charge control</text>
-</g>
-<g id="edge11" class="edge">
-<title>n_segment_grid_link_000_directional_limit_6037bcd8&#45;&gt;n_segment_grid_link_001_import_soft_limit_e8ed88cf</title>
-<path fill="none" stroke="#64748b" stroke-width="1.3" d="M1548.48,-2086.8C1496.92,-2047.68 921.61,-1611.18 870.03,-1572.04"/>
-<text xml:space="preserve" text-anchor="middle" x="1169.51" y="-1839.27" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#334155">grid_link.import_soft_limit</text>
-<text xml:space="preserve" text-anchor="middle" x="1169.51" y="-1831.02" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#334155">soft limit</text>
-</g>
-<g id="edge12" class="edge">
-<title>n_segment_grid_link_001_import_soft_limit_e8ed88cf&#45;&gt;n_segment_grid_link_002_grid_energy_cost_9f299312</title>
-<path fill="none" stroke="#64748b" stroke-width="1.3" d="M862.55,-1566.36C814.56,-1529.92 325.38,-1158.42 277.72,-1122.22"/>
-<text xml:space="preserve" text-anchor="middle" x="529.51" y="-1354.05" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#334155">grid_link.grid_energy_cost</text>
-<text xml:space="preserve" text-anchor="middle" x="529.51" y="-1345.8" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#334155">linear cost</text>
-</g>
-<g id="edge13" class="edge">
-<title>n_segment_grid_link_002_grid_energy_cost_9f299312&#45;&gt;n_grid_f3c543ad</title>
-<path fill="none" stroke="#64748b" stroke-width="1.3" d="M274.76,-1114.94C283.52,-1063.62 365.6,-583.04 387.56,-454.44"/>
-<text xml:space="preserve" text-anchor="middle" x="288.71" y="-823.52" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#334155">grid_link.grid_early_cost</text>
-<text xml:space="preserve" text-anchor="middle" x="288.71" y="-815.27" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#334155">linear cost</text>
-</g>
-<g id="edge14" class="edge">
-<title>n_segment_pv_link_000_directional_limit_9619fc85&#45;&gt;n_segment_pv_link_001_upper_bound_00119ea2</title>
-<path fill="none" stroke="#64748b" stroke-width="1.3" d="M239,-3026.25C298.81,-3020.63 936.05,-2960.79 995.66,-2955.19"/>
-<text xml:space="preserve" text-anchor="middle" x="585.53" y="-3000.56" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#334155">pv_link.upper_bound</text>
-<text xml:space="preserve" text-anchor="middle" x="585.53" y="-2992.31" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#334155">upper bound</text>
-</g>
-<g id="edge15" class="edge">
-<title>n_segment_pv_link_001_upper_bound_00119ea2&#45;&gt;n_inverter_primary_dc_a8595c76</title>
-<path fill="none" stroke="#64748b" stroke-width="1.3" d="M1004.3,-2952.62C1055.54,-2926.18 1563.1,-2664.27 1726.8,-2579.8"/>
-<text xml:space="preserve" text-anchor="middle" x="1287.75" y="-2797.82" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#334155">pv_link.curtail_tracking</text>
-<text xml:space="preserve" text-anchor="middle" x="1287.75" y="-2789.57" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#334155">curtail tracking</text>
-</g>
-<g id="edge3" class="edge">
-<title>n_inverter_primary_dc_a8595c76&#45;&gt;n_segment_eq4800_link_000_directional_limit_ac293bab</title>
-<path fill="none" stroke="#64748b" stroke-width="1.3" d="M1796.16,-2522.58C1883.61,-2377.57 2248.38,-1772.63 2280.97,-1718.58"/>
-<text xml:space="preserve" text-anchor="middle" x="2015.64" y="-2096.32" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#334155">eq4800_link.directional_limit</text>
-<text xml:space="preserve" text-anchor="middle" x="2015.64" y="-2088.07" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#334155">directional limit</text>
-</g>
-<g id="edge4" class="edge">
+<polygon fill="#f7fafb" stroke="none" points="-14.4,14.4 -14.4,-469.01 1085.29,-469.01 1085.29,14.4 -14.4,14.4"/>
+<text xml:space="preserve" text-anchor="middle" x="535.44" y="-429.71" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="22.00">Energy Modeling Topology</text>
+<g id="edge2" class="edge">
 <title>n_inverter_primary_dc_a8595c76&#45;&gt;n_switchboard_1b8cb242</title>
-<path fill="none" stroke="#64748b" stroke-width="1.3" d="M1834.88,-2578.1C1943.17,-2624.1 2175.55,-2722.81 2276.1,-2765.52"/>
-<text xml:space="preserve" text-anchor="middle" x="1998.77" y="-2682.89" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#334155">inverter_primary_acdc.directional_limit</text>
-<text xml:space="preserve" text-anchor="middle" x="1998.77" y="-2674.64" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#334155">directional limit</text>
-</g>
-<g id="edge16" class="edge">
-<title>n_switchboard_1b8cb242&#45;&gt;n_segment_base_load_link_000_directional_limit_28db4b97</title>
-<path fill="none" stroke="#64748b" stroke-width="1.3" d="M2386.51,-2782.2C2573.25,-2771.09 3118.16,-2738.68 3173.02,-2735.41"/>
-<text xml:space="preserve" text-anchor="middle" x="2781.22" y="-2765.72" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#334155">base_load_link.directional_limit</text>
-<text xml:space="preserve" text-anchor="middle" x="2781.22" y="-2757.47" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#334155">directional limit</text>
-</g>
-<g id="edge17" class="edge">
-<title>n_switchboard_1b8cb242&#45;&gt;n_segment_ev_tessie_link_000_directional_limit_000bf7e1</title>
-<path fill="none" stroke="#64748b" stroke-width="1.3" d="M2326.47,-2817.47C2336.85,-2956.03 2378.08,-3506.15 2382.24,-3561.66"/>
-<text xml:space="preserve" text-anchor="middle" x="2309.44" y="-3230.56" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#334155">ev_tessie_link.directional_limit</text>
-<text xml:space="preserve" text-anchor="middle" x="2309.44" y="-3222.31" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#334155">directional limit</text>
-</g>
-<g id="edge18" class="edge">
-<title>n_switchboard_1b8cb242&#45;&gt;n_segment_grid_link_000_directional_limit_6037bcd8</title>
-<path fill="none" stroke="#64748b" stroke-width="1.3" d="M2293.37,-2758.19C2156.24,-2634.5 1604.95,-2137.2 1555.69,-2092.77"/>
-<text xml:space="preserve" text-anchor="middle" x="1853.7" y="-2405.61" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#334155">grid_link.directional_limit</text>
-<text xml:space="preserve" text-anchor="middle" x="1853.7" y="-2397.36" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#334155">directional limit</text>
-</g>
-<g id="edge5" class="edge">
-<title>n_pv_9b879864&#45;&gt;n_segment_pv_link_000_directional_limit_9619fc85</title>
-<path fill="none" stroke="#64748b" stroke-width="1.3" d="M68.9,-3657.05C101.5,-3532.97 219.97,-3082 233.29,-3031.31"/>
-<text xml:space="preserve" text-anchor="middle" x="122.33" y="-3326.51" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#334155">pv_link.directional_limit</text>
-<text xml:space="preserve" text-anchor="middle" x="122.33" y="-3318.26" font-family="Helvetica,sans-Serif" font-size="7.00" fill="#334155">directional limit</text>
+<path fill="none" stroke="#64748b" stroke-width="1.3" d="M447.86,-149.42C508.3,-167.68 595.67,-194.08 651.3,-210.89"/>
+<text xml:space="preserve" text-anchor="start" x="517" y="-202.66" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#334155">E05</text>
+<text xml:space="preserve" text-anchor="start" x="517" y="-191.41" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#334155">&#45; directional limit</text>
 </g>
 <g id="edge1" class="edge">
-<title>n_eq4800_adee8c37&#45;&gt;n_fragment_eq4800_battery_reserve_27a6230b</title>
-<path fill="none" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="5,2" d="M2835.05,-60.22C2824.69,-54.98 2813.9,-49.53 2803.84,-44.45"/>
+<title>n_inverter_primary_dc_a8595c76&#45;&gt;n_eq4800_adee8c37</title>
+<path fill="none" stroke="#64748b" stroke-width="1.3" d="M413.48,-99.79C439.61,-78.88 478,-52.47 517,-41 555.66,-29.63 600.69,-31.8 636.94,-37.08"/>
+<text xml:space="preserve" text-anchor="start" x="517" y="-76.5" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#334155">E02</text>
+<text xml:space="preserve" text-anchor="start" x="517" y="-65.25" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#334155">&#45; directional limit</text>
+<text xml:space="preserve" text-anchor="start" x="517" y="-54" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#334155">&#45; linear cost</text>
+<text xml:space="preserve" text-anchor="start" x="517" y="-42.75" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#334155">&#45; efficiency</text>
 </g>
-<g id="edge2" class="edge">
-<title>n_tessie_9214d04b&#45;&gt;n_fragment_tessie_ev_incentives_b17d18ca</title>
-<path fill="none" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="5,2" d="M2682.7,-4250.77C2696.46,-4256.45 2711.05,-4262.47 2723.96,-4267.8"/>
+<g id="edge4" class="edge">
+<title>n_switchboard_1b8cb242&#45;&gt;n_base_load_a82f7aa3</title>
+<path fill="none" stroke="#64748b" stroke-width="1.3" d="M748.58,-250.26C805.56,-281.84 906.84,-337.99 963.92,-369.63"/>
+<text xml:space="preserve" text-anchor="start" x="823" y="-354" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#334155">E01</text>
+<text xml:space="preserve" text-anchor="start" x="823" y="-342.75" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#334155">&#45; directional limit</text>
+<text xml:space="preserve" text-anchor="start" x="823" y="-331.5" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#334155">&#45; fixed flow</text>
+</g>
+<g id="edge5" class="edge">
+<title>n_switchboard_1b8cb242&#45;&gt;n_grid_f3c543ad</title>
+<path fill="none" stroke="#64748b" stroke-width="1.3" d="M767.58,-221.4C785.42,-220 804.98,-218.7 823,-218 854.65,-216.78 862.61,-216.73 894.25,-218 910.7,-218.66 928.47,-219.87 944.9,-221.18"/>
+<text xml:space="preserve" text-anchor="start" x="823" y="-253.5" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#334155">E04</text>
+<text xml:space="preserve" text-anchor="start" x="823" y="-242.25" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#334155">&#45; directional limit</text>
+<text xml:space="preserve" text-anchor="start" x="823" y="-231" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#334155">&#45; soft limit</text>
+<text xml:space="preserve" text-anchor="start" x="823" y="-219.75" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#334155">&#45; linear cost</text>
+</g>
+<g id="edge6" class="edge">
+<title>n_switchboard_1b8cb242&#45;&gt;n_tessie_9214d04b</title>
+<path fill="none" stroke="#64748b" stroke-width="1.3" d="M746.39,-202.96C800,-170.56 895.54,-112.81 954.59,-77.12"/>
+<text xml:space="preserve" text-anchor="start" x="823" y="-176.96" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#334155">E03</text>
+<text xml:space="preserve" text-anchor="start" x="823" y="-165.71" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#334155">&#45; directional limit</text>
+<text xml:space="preserve" text-anchor="start" x="823" y="-154.46" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#334155">&#45; charge control</text>
+</g>
+<g id="edge3" class="edge">
+<title>n_pv_9b879864&#45;&gt;n_inverter_primary_dc_a8595c76</title>
+<path fill="none" stroke="#64748b" stroke-width="1.3" d="M121.93,-129C169.48,-129 236.48,-129 290.05,-129"/>
+<text xml:space="preserve" text-anchor="start" x="170.27" y="-164.5" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#334155">E06</text>
+<text xml:space="preserve" text-anchor="start" x="170.27" y="-153.25" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#334155">&#45; directional limit</text>
+<text xml:space="preserve" text-anchor="start" x="170.27" y="-142" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#334155">&#45; upper bound</text>
+<text xml:space="preserve" text-anchor="start" x="170.27" y="-130.75" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#334155">&#45; curtail tracking</text>
 </g>
 <g id="node1" class="node">
-<title>n_fragment_eq4800_battery_reserve_27a6230b</title>
-<path fill="#f8fafc" stroke="#475569" stroke-width="1.2" stroke-dasharray="5,2" d="M2797.8,-44C2797.8,-44 2721.05,-44 2721.05,-44 2715.05,-44 2709.05,-38 2709.05,-32 2709.05,-32 2709.05,-12 2709.05,-12 2709.05,-6 2715.05,0 2721.05,0 2721.05,0 2797.8,0 2797.8,0 2803.8,0 2809.8,-6 2809.8,-12 2809.8,-12 2809.8,-32 2809.8,-32 2809.8,-38 2803.8,-44 2797.8,-44"/>
-<text xml:space="preserve" text-anchor="middle" x="2759.43" y="-29.55" font-family="Helvetica,sans-Serif" font-size="11.00">battery reserve</text>
-<text xml:space="preserve" text-anchor="middle" x="2759.43" y="-17.55" font-family="Helvetica,sans-Serif" font-size="11.00">node: eq4800</text>
-<text xml:space="preserve" text-anchor="middle" x="2759.43" y="-5.55" font-family="Helvetica,sans-Serif" font-size="11.00">reserve: 12.6kWh</text>
+<title>n_inverter_primary_dc_a8595c76</title>
+<ellipse fill="#dbeafe" stroke="#0f172a" stroke-width="1.5" cx="379.26" cy="-129" rx="88.74" ry="31.11"/>
+<text xml:space="preserve" text-anchor="middle" x="379.26" y="-136.55" font-family="Helvetica,sans-Serif" font-size="11.00">bus node</text>
+<text xml:space="preserve" text-anchor="middle" x="379.26" y="-124.55" font-family="Helvetica,sans-Serif" font-size="11.00">role: bus</text>
+<text xml:space="preserve" text-anchor="middle" x="379.26" y="-112.55" font-family="Helvetica,sans-Serif" font-size="11.00">id: inverter_primary_dc</text>
 </g>
 <g id="node2" class="node">
-<title>n_fragment_tessie_ev_incentives_b17d18ca</title>
-<path fill="#f8fafc" stroke="#475569" stroke-width="1.2" stroke-dasharray="5,2" d="M2789.66,-4311.88C2789.66,-4311.88 2736.16,-4311.88 2736.16,-4311.88 2730.16,-4311.88 2724.16,-4305.88 2724.16,-4299.88 2724.16,-4299.88 2724.16,-4267.88 2724.16,-4267.88 2724.16,-4261.88 2730.16,-4255.88 2736.16,-4255.88 2736.16,-4255.88 2789.66,-4255.88 2789.66,-4255.88 2795.66,-4255.88 2801.66,-4261.88 2801.66,-4267.88 2801.66,-4267.88 2801.66,-4299.88 2801.66,-4299.88 2801.66,-4305.88 2795.66,-4311.88 2789.66,-4311.88"/>
-<text xml:space="preserve" text-anchor="middle" x="2762.91" y="-4297.43" font-family="Helvetica,sans-Serif" font-size="11.00">ev incentives</text>
-<text xml:space="preserve" text-anchor="middle" x="2762.91" y="-4285.43" font-family="Helvetica,sans-Serif" font-size="11.00">node: tessie</text>
-<text xml:space="preserve" text-anchor="middle" x="2762.91" y="-4273.43" font-family="Helvetica,sans-Serif" font-size="11.00">incentives: 4</text>
-<text xml:space="preserve" text-anchor="middle" x="2762.91" y="-4261.43" font-family="Helvetica,sans-Serif" font-size="11.00">bias: 0%</text>
+<title>n_switchboard_1b8cb242</title>
+<ellipse fill="#dbeafe" stroke="#0f172a" stroke-width="1.5" cx="705.63" cy="-227" rx="62.23" ry="31.11"/>
+<text xml:space="preserve" text-anchor="middle" x="705.63" y="-234.55" font-family="Helvetica,sans-Serif" font-size="11.00">bus node</text>
+<text xml:space="preserve" text-anchor="middle" x="705.63" y="-222.55" font-family="Helvetica,sans-Serif" font-size="11.00">role: bus</text>
+<text xml:space="preserve" text-anchor="middle" x="705.63" y="-210.55" font-family="Helvetica,sans-Serif" font-size="11.00">id: switchboard</text>
 </g>
 <g id="node3" class="node">
-<title>n_segment_base_load_link_000_directional_limit_28db4b97</title>
-<ellipse fill="#475569" stroke="#475569" cx="3177.49" cy="-2735.15" rx="4.32" ry="4.32"/>
+<title>n_base_load_a82f7aa3</title>
+<ellipse fill="#ffedd5" stroke="#7c2d12" stroke-width="1.5" cx="1007.07" cy="-393" rx="63.82" ry="31.11"/>
+<text xml:space="preserve" text-anchor="middle" x="1007.07" y="-400.55" font-family="Helvetica,sans-Serif" font-size="11.00">consumer node</text>
+<text xml:space="preserve" text-anchor="middle" x="1007.07" y="-388.55" font-family="Helvetica,sans-Serif" font-size="11.00">role: consumer</text>
+<text xml:space="preserve" text-anchor="middle" x="1007.07" y="-376.55" font-family="Helvetica,sans-Serif" font-size="11.00">id: base_load</text>
 </g>
 <g id="node4" class="node">
-<title>n_segment_eq4800_link_000_directional_limit_ac293bab</title>
-<ellipse fill="#475569" stroke="#475569" cx="2283.3" cy="-1714.71" rx="4.32" ry="4.32"/>
+<title>n_pv_9b879864</title>
+<ellipse fill="#fef3c7" stroke="#92400e" stroke-width="1.5" cx="60.63" cy="-129" rx="60.63" ry="31.11"/>
+<text xml:space="preserve" text-anchor="middle" x="60.63" y="-136.55" font-family="Helvetica,sans-Serif" font-size="11.00">producer node</text>
+<text xml:space="preserve" text-anchor="middle" x="60.63" y="-124.55" font-family="Helvetica,sans-Serif" font-size="11.00">role: producer</text>
+<text xml:space="preserve" text-anchor="middle" x="60.63" y="-112.55" font-family="Helvetica,sans-Serif" font-size="11.00">id: pv</text>
 </g>
 <g id="node5" class="node">
-<title>n_segment_eq4800_link_001_wear_cost_50d60a76</title>
-<ellipse fill="#475569" stroke="#475569" cx="2950.53" cy="-1269.22" rx="4.32" ry="4.32"/>
+<title>n_grid_f3c543ad</title>
+<ellipse fill="#dcfce7" stroke="#166534" stroke-width="1.5" cx="1007.07" cy="-227" rx="62.76" ry="31.11"/>
+<text xml:space="preserve" text-anchor="middle" x="1007.07" y="-234.55" font-family="Helvetica,sans-Serif" font-size="11.00">prosumer node</text>
+<text xml:space="preserve" text-anchor="middle" x="1007.07" y="-222.55" font-family="Helvetica,sans-Serif" font-size="11.00">role: prosumer</text>
+<text xml:space="preserve" text-anchor="middle" x="1007.07" y="-210.55" font-family="Helvetica,sans-Serif" font-size="11.00">id: grid</text>
 </g>
 <g id="node6" class="node">
-<title>n_segment_eq4800_link_002_time_cost_68a1332d</title>
-<ellipse fill="#475569" stroke="#475569" cx="3337.53" cy="-664.49" rx="4.32" ry="4.32"/>
+<title>n_eq4800_adee8c37</title>
+<path fill="#dcfce7" stroke="#166534" stroke-width="1.5" d="M762,-92C762,-92 649.25,-92 649.25,-92 643.25,-92 637.25,-86 637.25,-80 637.25,-80 637.25,-24 637.25,-24 637.25,-18 643.25,-12 649.25,-12 649.25,-12 762,-12 762,-12 768,-12 774,-18 774,-24 774,-24 774,-80 774,-80 774,-86 768,-92 762,-92"/>
+<text xml:space="preserve" text-anchor="middle" x="705.63" y="-77.55" font-family="Helvetica,sans-Serif" font-size="11.00">storage node</text>
+<text xml:space="preserve" text-anchor="middle" x="705.63" y="-65.55" font-family="Helvetica,sans-Serif" font-size="11.00">role: prosumer</text>
+<text xml:space="preserve" text-anchor="middle" x="705.63" y="-53.55" font-family="Helvetica,sans-Serif" font-size="11.00">id: eq4800</text>
+<text xml:space="preserve" text-anchor="middle" x="705.63" y="-41.55" font-family="Helvetica,sans-Serif" font-size="11.00">capacity: 41.9kWh</text>
+<text xml:space="preserve" text-anchor="middle" x="705.63" y="-29.55" font-family="Helvetica,sans-Serif" font-size="11.00">terminal: adaptive</text>
+<text xml:space="preserve" text-anchor="middle" x="705.63" y="-17.55" font-family="Helvetica,sans-Serif" font-size="11.00">battery reserve: 12.6kWh</text>
 </g>
 <g id="node7" class="node">
-<title>n_segment_ev_tessie_link_000_directional_limit_000bf7e1</title>
-<ellipse fill="#475569" stroke="#475569" cx="2382.58" cy="-3566.19" rx="4.32" ry="4.32"/>
-</g>
-<g id="node8" class="node">
-<title>n_segment_grid_link_000_directional_limit_6037bcd8</title>
-<ellipse fill="#475569" stroke="#475569" cx="1552.17" cy="-2089.6" rx="4.32" ry="4.32"/>
-</g>
-<g id="node9" class="node">
-<title>n_segment_grid_link_001_import_soft_limit_e8ed88cf</title>
-<ellipse fill="#475569" stroke="#475569" cx="866.33" cy="-1569.23" rx="4.32" ry="4.32"/>
-</g>
-<g id="node10" class="node">
-<title>n_segment_grid_link_002_grid_energy_cost_9f299312</title>
-<ellipse fill="#475569" stroke="#475569" cx="274" cy="-1119.39" rx="4.32" ry="4.32"/>
-</g>
-<g id="node11" class="node">
-<title>n_segment_pv_link_000_directional_limit_9619fc85</title>
-<ellipse fill="#475569" stroke="#475569" cx="234.51" cy="-3026.67" rx="4.32" ry="4.32"/>
-</g>
-<g id="node12" class="node">
-<title>n_segment_pv_link_001_upper_bound_00119ea2</title>
-<ellipse fill="#475569" stroke="#475569" cx="1000.12" cy="-2954.78" rx="4.32" ry="4.32"/>
-</g>
-<g id="node13" class="node">
-<title>n_inverter_primary_dc_a8595c76</title>
-<ellipse fill="#dbeafe" stroke="#0f172a" stroke-width="1.5" cx="1777.41" cy="-2553.69" rx="88.74" ry="31.11"/>
-<text xml:space="preserve" text-anchor="middle" x="1777.41" y="-2561.24" font-family="Helvetica,sans-Serif" font-size="11.00">bus node</text>
-<text xml:space="preserve" text-anchor="middle" x="1777.41" y="-2549.24" font-family="Helvetica,sans-Serif" font-size="11.00">role: bus</text>
-<text xml:space="preserve" text-anchor="middle" x="1777.41" y="-2537.24" font-family="Helvetica,sans-Serif" font-size="11.00">id: inverter_primary_dc</text>
-</g>
-<g id="node14" class="node">
-<title>n_switchboard_1b8cb242</title>
-<ellipse fill="#dbeafe" stroke="#0f172a" stroke-width="1.5" cx="2324.1" cy="-2785.92" rx="62.23" ry="31.11"/>
-<text xml:space="preserve" text-anchor="middle" x="2324.1" y="-2793.47" font-family="Helvetica,sans-Serif" font-size="11.00">bus node</text>
-<text xml:space="preserve" text-anchor="middle" x="2324.1" y="-2781.47" font-family="Helvetica,sans-Serif" font-size="11.00">role: bus</text>
-<text xml:space="preserve" text-anchor="middle" x="2324.1" y="-2769.47" font-family="Helvetica,sans-Serif" font-size="11.00">id: switchboard</text>
-</g>
-<g id="node15" class="node">
-<title>n_base_load_a82f7aa3</title>
-<ellipse fill="#ffedd5" stroke="#7c2d12" stroke-width="1.5" cx="3941.99" cy="-2677.52" rx="63.82" ry="31.11"/>
-<text xml:space="preserve" text-anchor="middle" x="3941.99" y="-2685.07" font-family="Helvetica,sans-Serif" font-size="11.00">consumer node</text>
-<text xml:space="preserve" text-anchor="middle" x="3941.99" y="-2673.07" font-family="Helvetica,sans-Serif" font-size="11.00">role: consumer</text>
-<text xml:space="preserve" text-anchor="middle" x="3941.99" y="-2661.07" font-family="Helvetica,sans-Serif" font-size="11.00">id: base_load</text>
-</g>
-<g id="node16" class="node">
-<title>n_pv_9b879864</title>
-<ellipse fill="#fef3c7" stroke="#92400e" stroke-width="1.5" cx="60.63" cy="-3688.53" rx="60.63" ry="31.11"/>
-<text xml:space="preserve" text-anchor="middle" x="60.63" y="-3696.08" font-family="Helvetica,sans-Serif" font-size="11.00">producer node</text>
-<text xml:space="preserve" text-anchor="middle" x="60.63" y="-3684.08" font-family="Helvetica,sans-Serif" font-size="11.00">role: producer</text>
-<text xml:space="preserve" text-anchor="middle" x="60.63" y="-3672.08" font-family="Helvetica,sans-Serif" font-size="11.00">id: pv</text>
-</g>
-<g id="node17" class="node">
-<title>n_grid_f3c543ad</title>
-<ellipse fill="#dcfce7" stroke="#166534" stroke-width="1.5" cx="392.94" cy="-422.92" rx="62.76" ry="31.11"/>
-<text xml:space="preserve" text-anchor="middle" x="392.94" y="-430.47" font-family="Helvetica,sans-Serif" font-size="11.00">prosumer node</text>
-<text xml:space="preserve" text-anchor="middle" x="392.94" y="-418.47" font-family="Helvetica,sans-Serif" font-size="11.00">role: prosumer</text>
-<text xml:space="preserve" text-anchor="middle" x="392.94" y="-406.47" font-family="Helvetica,sans-Serif" font-size="11.00">id: grid</text>
-</g>
-<g id="node18" class="node">
-<title>n_eq4800_adee8c37</title>
-<path fill="#dcfce7" stroke="#166534" stroke-width="1.5" d="M2927.39,-120.74C2927.39,-120.74 2847.64,-120.74 2847.64,-120.74 2841.64,-120.74 2835.64,-114.74 2835.64,-108.74 2835.64,-108.74 2835.64,-64.74 2835.64,-64.74 2835.64,-58.74 2841.64,-52.74 2847.64,-52.74 2847.64,-52.74 2927.39,-52.74 2927.39,-52.74 2933.39,-52.74 2939.39,-58.74 2939.39,-64.74 2939.39,-64.74 2939.39,-108.74 2939.39,-108.74 2939.39,-114.74 2933.39,-120.74 2927.39,-120.74"/>
-<text xml:space="preserve" text-anchor="middle" x="2887.52" y="-106.29" font-family="Helvetica,sans-Serif" font-size="11.00">storage node</text>
-<text xml:space="preserve" text-anchor="middle" x="2887.52" y="-94.29" font-family="Helvetica,sans-Serif" font-size="11.00">role: prosumer</text>
-<text xml:space="preserve" text-anchor="middle" x="2887.52" y="-82.29" font-family="Helvetica,sans-Serif" font-size="11.00">id: eq4800</text>
-<text xml:space="preserve" text-anchor="middle" x="2887.52" y="-70.29" font-family="Helvetica,sans-Serif" font-size="11.00">capacity: 41.9kWh</text>
-<text xml:space="preserve" text-anchor="middle" x="2887.52" y="-58.29" font-family="Helvetica,sans-Serif" font-size="11.00">terminal: adaptive</text>
-</g>
-<g id="node19" class="node">
 <title>n_tessie_9214d04b</title>
-<path fill="#dcfce7" stroke="#166534" stroke-width="1.5" d="M2670.16,-4263.13C2670.16,-4263.13 2590.41,-4263.13 2590.41,-4263.13 2584.41,-4263.13 2578.41,-4257.13 2578.41,-4251.13 2578.41,-4251.13 2578.41,-4207.13 2578.41,-4207.13 2578.41,-4201.13 2584.41,-4195.13 2590.41,-4195.13 2590.41,-4195.13 2670.16,-4195.13 2670.16,-4195.13 2676.16,-4195.13 2682.16,-4201.13 2682.16,-4207.13 2682.16,-4207.13 2682.16,-4251.13 2682.16,-4251.13 2682.16,-4257.13 2676.16,-4263.13 2670.16,-4263.13"/>
-<text xml:space="preserve" text-anchor="middle" x="2630.28" y="-4248.68" font-family="Helvetica,sans-Serif" font-size="11.00">storage node</text>
-<text xml:space="preserve" text-anchor="middle" x="2630.28" y="-4236.68" font-family="Helvetica,sans-Serif" font-size="11.00">role: prosumer</text>
-<text xml:space="preserve" text-anchor="middle" x="2630.28" y="-4224.68" font-family="Helvetica,sans-Serif" font-size="11.00">id: tessie</text>
-<text xml:space="preserve" text-anchor="middle" x="2630.28" y="-4212.68" font-family="Helvetica,sans-Serif" font-size="11.00">capacity: 78.0kWh</text>
-<text xml:space="preserve" text-anchor="middle" x="2630.28" y="-4200.68" font-family="Helvetica,sans-Serif" font-size="11.00">terminal: none</text>
+<path fill="#dcfce7" stroke="#166534" stroke-width="1.5" d="M1046.94,-92C1046.94,-92 967.19,-92 967.19,-92 961.19,-92 955.19,-86 955.19,-80 955.19,-80 955.19,-12 955.19,-12 955.19,-6 961.19,0 967.19,0 967.19,0 1046.94,0 1046.94,0 1052.94,0 1058.94,-6 1058.94,-12 1058.94,-12 1058.94,-80 1058.94,-80 1058.94,-86 1052.94,-92 1046.94,-92"/>
+<text xml:space="preserve" text-anchor="middle" x="1007.07" y="-77.55" font-family="Helvetica,sans-Serif" font-size="11.00">storage node</text>
+<text xml:space="preserve" text-anchor="middle" x="1007.07" y="-65.55" font-family="Helvetica,sans-Serif" font-size="11.00">role: prosumer</text>
+<text xml:space="preserve" text-anchor="middle" x="1007.07" y="-53.55" font-family="Helvetica,sans-Serif" font-size="11.00">id: tessie</text>
+<text xml:space="preserve" text-anchor="middle" x="1007.07" y="-41.55" font-family="Helvetica,sans-Serif" font-size="11.00">capacity: 78.0kWh</text>
+<text xml:space="preserve" text-anchor="middle" x="1007.07" y="-29.55" font-family="Helvetica,sans-Serif" font-size="11.00">terminal: none</text>
+<text xml:space="preserve" text-anchor="middle" x="1007.07" y="-17.55" font-family="Helvetica,sans-Serif" font-size="11.00">ev incentives: 4</text>
+<text xml:space="preserve" text-anchor="middle" x="1007.07" y="-5.55" font-family="Helvetica,sans-Serif" font-size="11.00">incentive bias: 0%</text>
 </g>
 </g>
 </svg>

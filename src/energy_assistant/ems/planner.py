@@ -2,45 +2,53 @@ from __future__ import annotations
 
 import logging
 import time
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import get_args
 
 import pulp
 
+from energy_assistant.ems.milp.snapshot import ModelSnapshot
 from energy_assistant.ems.models import (
     EmsPlanOutput,
     EmsPlanStatus,
     EmsPlanTimings,
 )
 from energy_assistant.ems.system.factory import EmsSystemFactory
-from energy_assistant.inputs.provider import EmsInputProvider, ResolverBackedInputProvider
+from energy_assistant.ems.system.system import EmsSystem, EmsSystemSolveState
+from energy_assistant.inputs.provider import EmsInputProvider
 from energy_assistant.inputs.window import InputWindow
-from energy_assistant.lib.source_resolver.resolver import ValueResolver
-from energy_assistant.models.config import AppConfig
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class EmsBuiltSnapshot:
+    solve_time: datetime
+    build_seconds: float
+    snapshot: ModelSnapshot
+    system: EmsSystem
+    solve_state: EmsSystemSolveState
+
+
+@dataclass(frozen=True, slots=True)
+class EmsSolvedRun:
+    plan: EmsPlanOutput
+    snapshot: ModelSnapshot
+    system: EmsSystem
+    solve_state: EmsSystemSolveState
 
 
 class EmsMilpPlanner:
     def __init__(
         self,
-        app_config: AppConfig,
         *,
-        input_provider: EmsInputProvider | None = None,
-        resolver: ValueResolver | None = None,
+        input_provider: EmsInputProvider,
+        system_factory: EmsSystemFactory,
     ) -> None:
-        self._app_config = app_config
-        if input_provider is not None:
-            self._input_provider = input_provider
-        elif resolver is not None:
-            self._input_provider = ResolverBackedInputProvider(
-                app_config=app_config,
-                resolver=resolver,
-            )
-        else:
-            raise ValueError("EmsMilpPlanner requires an input_provider or resolver")
+        self._input_provider = input_provider
         self._last_timings: EmsPlanTimings | None = None
-        self._system_factory = EmsSystemFactory(app_config)
+        self._system_factory = system_factory
 
     def mark_for_hydration(self) -> None:
         self._input_provider.mark_for_hydration()
@@ -54,7 +62,59 @@ class EmsMilpPlanner:
         now: datetime | None = None,
         solver_msg: bool = False,
     ) -> EmsPlanOutput:
+        return self.generate_ems_run(now=now, solver_msg=solver_msg).plan
+
+    def generate_ems_run(
+        self,
+        *,
+        now: datetime | None = None,
+        solver_msg: bool = False,
+    ) -> EmsSolvedRun:
         total_start = time.perf_counter()
+        built = self.build_snapshot(now=now)
+
+        solve_start = time.perf_counter()
+        built.snapshot.problem.solve(pulp.PULP_CBC_CMD(msg=solver_msg))
+        solve_seconds = time.perf_counter() - solve_start
+
+        objective_value = _objective_value(built.snapshot.problem)
+        status = _map_status(pulp.LpStatus.get(built.snapshot.problem.status, "Unknown"))
+        components = built.system.build_component_plans(
+            built.snapshot,
+            solve_state=built.solve_state,
+        )
+        total_seconds = time.perf_counter() - total_start
+        timings = EmsPlanTimings(
+            build_seconds=built.build_seconds,
+            solve_seconds=solve_seconds,
+            total_seconds=total_seconds,
+        )
+        self._last_timings = timings
+        logger.info(
+            "EMS plan timings: build=%.3fs solve=%.3fs total=%.3fs",
+            built.build_seconds,
+            solve_seconds,
+            total_seconds,
+        )
+        plan = EmsPlanOutput(
+            generated_at=built.solve_time.astimezone(UTC),
+            status=status,
+            objective_value=objective_value,
+            timings=timings,
+            components=components,
+        )
+        return EmsSolvedRun(
+            plan=plan,
+            snapshot=built.snapshot,
+            system=built.system,
+            solve_state=built.solve_state,
+        )
+
+    @property
+    def last_timings(self) -> EmsPlanTimings | None:
+        return self._last_timings
+
+    def build_snapshot(self, *, now: datetime | None = None) -> EmsBuiltSnapshot:
         solve_time = now or datetime.now().astimezone()
         if solve_time.tzinfo is None:
             solve_time = solve_time.astimezone()
@@ -77,6 +137,7 @@ class EmsMilpPlanner:
             horizon.start.isoformat(),
             schedule_info,
         )
+
         build_start = time.perf_counter()
         resolved_inputs = self._input_provider.resolve_for_window(
             window=InputWindow(now=horizon.now, end=horizon.slots[-1].end)
@@ -89,38 +150,13 @@ class EmsMilpPlanner:
         system.update_inputs(horizon=horizon, inputs=applied_inputs)
         snapshot, solve_state = system.build_snapshot(horizon=horizon)
         build_seconds = time.perf_counter() - build_start
-
-        solve_start = time.perf_counter()
-        snapshot.problem.solve(pulp.PULP_CBC_CMD(msg=solver_msg))
-        solve_seconds = time.perf_counter() - solve_start
-
-        objective_value = _objective_value(snapshot.problem)
-        status = _map_status(pulp.LpStatus.get(snapshot.problem.status, "Unknown"))
-        components = system.build_component_plans(snapshot, solve_state=solve_state)
-        total_seconds = time.perf_counter() - total_start
-        timings = EmsPlanTimings(
+        return EmsBuiltSnapshot(
+            solve_time=solve_time,
             build_seconds=build_seconds,
-            solve_seconds=solve_seconds,
-            total_seconds=total_seconds,
+            snapshot=snapshot,
+            system=system,
+            solve_state=solve_state,
         )
-        self._last_timings = timings
-        logger.info(
-            "EMS plan timings: build=%.3fs solve=%.3fs total=%.3fs",
-            build_seconds,
-            solve_seconds,
-            total_seconds,
-        )
-        return EmsPlanOutput(
-            generated_at=solve_time.astimezone(UTC),
-            status=status,
-            objective_value=objective_value,
-            timings=timings,
-            components=components,
-        )
-
-    @property
-    def last_timings(self) -> EmsPlanTimings | None:
-        return self._last_timings
 
 
 _VALID_STATUSES: frozenset[str] = frozenset(get_args(EmsPlanStatus))

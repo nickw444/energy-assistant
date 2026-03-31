@@ -74,6 +74,10 @@ class PvComponent:
         )
         self._available_kw.set([float(x) for x in pv_series])
 
+    @property
+    def display_name(self) -> str:
+        return self._pv_cfg.name or f"PV {self.inverter_id}"
+
     def graph_elements(self, *, horizon: Horizon) -> tuple[list[GraphElement], PvSolveState]:
         available_kw = self._available_kw.get()
 

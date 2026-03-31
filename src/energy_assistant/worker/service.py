@@ -9,10 +9,7 @@ from typing import Literal
 
 from energy_assistant.ems.models import EmsPlanOutput
 from energy_assistant.ems.planner import EmsMilpPlanner
-from energy_assistant.inputs.provider import ResolverBackedInputProvider
 from energy_assistant.lib.home_assistant_ws import HomeAssistantWebSocketClient
-from energy_assistant.lib.source_resolver.resolver import ValueResolver
-from energy_assistant.models.config import AppConfig
 
 logger = logging.getLogger(__name__)
 
@@ -42,18 +39,12 @@ class Worker:
     def __init__(
         self,
         *,
-        app_config: AppConfig,
-        resolver: ValueResolver,
+        planner: EmsMilpPlanner,
+        price_entity_ids: set[str],
         ha_ws_client: HomeAssistantWebSocketClient,
     ) -> None:
-        self._app_config = app_config
-        self._resolver = resolver
-        self._input_provider = ResolverBackedInputProvider(
-            app_config=app_config,
-            resolver=resolver,
-        )
-        self._input_provider.mark_for_hydration()
-        self._planner: EmsMilpPlanner | None = None
+        self._planner = planner
+        self._planner.mark_for_hydration()
 
         self._condition = asyncio.Condition()
         self._in_progress = False
@@ -70,7 +61,7 @@ class Worker:
         self._run_requested = asyncio.Event()
         self._last_run_finished_at: datetime | None = None
 
-        self._price_entity_ids = self._input_provider.grid_price_watch_entity_ids()
+        self._price_entity_ids = set(price_entity_ids)
         self._ha_ws_client = ha_ws_client
 
     def start(self, *, start_scheduler: bool = True, start_price_watcher: bool = True) -> None:
@@ -230,11 +221,6 @@ class Worker:
             self._condition.notify_all()
 
     def _solve_once_blocking(self) -> EmsPlanOutput:
-        if self._planner is None:
-            self._planner = EmsMilpPlanner(
-                self._app_config,
-                input_provider=self._input_provider,
-            )
         self._planner.hydrate_all()
         return self._planner.generate_ems_plan()
 

@@ -6,9 +6,12 @@ from typing import Any, cast
 import yaml
 
 from energy_assistant.ems.components.grid import GridComponent
+from energy_assistant.ems.inputs.alignment import PowerForecastAligner, PriceForecastAligner
 from energy_assistant.ems.inputs.application import EmsInputApplicator
 from energy_assistant.ems.inputs.models import AppliedForecastInput, AppliedInputRegistry
 from energy_assistant.ems.planning.horizon import build_horizon_shape
+from energy_assistant.ems.planning.pricing import PriceSeriesBuilder
+from energy_assistant.ems.planning.time_windows import TimeWindowMatcher
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.nodes import Node
 from energy_assistant.ems.topology.policies import LinearCost
@@ -191,11 +194,29 @@ def _forecast_input(config: AppConfig, key: str) -> ForecastInputConfig:
     return input_config
 
 
+def _input_applicator(config: AppConfig) -> EmsInputApplicator:
+    return EmsInputApplicator(
+        input_configs=config.inputs,
+        power_aligner=PowerForecastAligner(),
+        price_aligner=PriceForecastAligner(),
+    )
+
+
+def _grid_component_instance(config: AppConfig) -> GridComponent:
+    return GridComponent(
+        bus_id="switchboard",
+        component_id="grid",
+        grid=_grid_component(config),
+        time_window_matcher=TimeWindowMatcher(),
+        price_series_builder=PriceSeriesBuilder(),
+    )
+
+
 def test_input_provider_uses_fixed_horizon_for_coverage_validation() -> None:
     config = _minimal_grid_app_config(forecast_expansion=None)
     resolver = StubResolver()
     provider = ResolverBackedInputProvider(app_config=config, resolver=resolver)
-    applicator = EmsInputApplicator(input_configs=config.inputs)
+    applicator = _input_applicator(config)
     horizon = build_horizon_shape(timestep_minutes=60, horizon_minutes=180).build(
         now=datetime(2025, 1, 1, 0, 0, tzinfo=UTC)
     )
@@ -235,8 +256,7 @@ def test_input_provider_uses_fixed_horizon_for_coverage_validation() -> None:
 
 def test_grid_rebinds_inputs_without_changing_topology_ids() -> None:
     config = _load_fixture_config()
-    grid_cfg = _grid_component(config)
-    component = GridComponent(bus_id="switchboard", component_id="grid", grid=grid_cfg)
+    component = _grid_component_instance(config)
     horizon = build_horizon_shape(timestep_minutes=60, horizon_minutes=120).build(
         now=datetime(2025, 1, 1, 0, 0, tzinfo=UTC)
     )
@@ -312,7 +332,7 @@ def test_input_provider_can_extend_short_price_forecast_from_history() -> None:
     now = datetime.now(UTC).replace(minute=30, second=0, microsecond=0)
     resolver = StubResolver()
     provider = ResolverBackedInputProvider(app_config=config, resolver=resolver)
-    applicator = EmsInputApplicator(input_configs=config.inputs)
+    applicator = _input_applicator(config)
     horizon = build_horizon_shape(timestep_minutes=60, horizon_minutes=180).build(now=now)
 
     grid = _grid_component(config)
@@ -402,7 +422,7 @@ def test_price_extension_covers_unaligned_multi_resolution_horizon() -> None:
     now = datetime(2025, 1, 1, 12, 38, tzinfo=UTC)
     resolver = StubResolver()
     provider = ResolverBackedInputProvider(app_config=config, resolver=resolver)
-    applicator = EmsInputApplicator(input_configs=config.inputs)
+    applicator = _input_applicator(config)
     horizon = build_horizon_shape(
         timestep_minutes=30,
         horizon_minutes=2880,

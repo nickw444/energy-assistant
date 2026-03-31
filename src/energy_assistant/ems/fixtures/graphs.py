@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import hashlib
-import html
 import re
 import shutil
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, Sequence
 
 from graphviz import Digraph, Source
 
@@ -35,15 +34,13 @@ GraphNodeKind = Literal[
     "pv",
     "battery",
     "ev",
-    "fragment",
     "topology",
     "storage",
-    "segment",
 ]
 
-GraphEdgeKind = Literal["component", "fragment", "segment"]
+GraphEdgeKind = Literal["component", "segment"]
 
-_GRAPHVIZ_ENGINE = "neato"
+_GRAPHVIZ_ENGINE = "dot"
 _LOGICAL_NODE_COLORS: dict[GraphNodeKind, tuple[str, str]] = {
     "switchboard": ("#0f172a", "#dbeafe"),
     "grid": ("#0f766e", "#ccfbf1"),
@@ -52,10 +49,8 @@ _LOGICAL_NODE_COLORS: dict[GraphNodeKind, tuple[str, str]] = {
     "pv": ("#92400e", "#fef3c7"),
     "battery": ("#7c3aed", "#ede9fe"),
     "ev": ("#166534", "#dcfce7"),
-    "fragment": ("#475569", "#f8fafc"),
     "topology": ("#334155", "#e2e8f0"),
     "storage": ("#4338ca", "#e0e7ff"),
-    "segment": ("#475569", "#f8fafc"),
 }
 _TOPOLOGY_ROLE_COLORS: dict[NodeRole, tuple[str, str]] = {
     "bus": ("#0f172a", "#dbeafe"),
@@ -205,63 +200,47 @@ def build_logical_component_graph(system: EmsSystem) -> GraphSpec:
 
 
 def build_topology_graph(graph: EnergyGraph) -> GraphSpec:
-    nodes: list[GraphNodeSpec] = []
+    topology_nodes: dict[str, GraphNodeSpec] = {}
     edges: list[GraphEdgeSpec] = []
 
     for node in graph.nodes.values():
-        nodes.append(_topology_node(node))
-
-    for connection in graph.connections.values():
-        if len(connection.ordered_policies) == 1:
-            name, policy = connection.ordered_policies[0]
-            edges.append(
-                _graph_edge(
-                    connection.a_node_id,
-                    connection.b_node_id,
-                    kind="segment",
-                    label=_segment_edge_label(connection.id, name, policy),
-                )
-            )
-            continue
-
-        point_ids: list[str] = []
-        for index in range(len(connection.ordered_policies) - 1):
-            name, policy = connection.ordered_policies[index]
-            point_id = f"segment:{connection.id}:{index:03d}:{name}"
-            point_ids.append(point_id)
-            nodes.append(
-                GraphNodeSpec(
-                    id=point_id,
-                    kind="segment",
-                    title="",
-                    lines=(),
-                    sort_key=("segment", connection.id, f"{index:03d}", name),
-                )
-            )
-
-        segment_targets = [*point_ids, connection.b_node_id]
-        previous_id = connection.a_node_id
-        for (name, policy), target_id in zip(
-            connection.ordered_policies,
-            segment_targets,
-            strict=True,
-        ):
-            edges.append(
-                _graph_edge(
-                    previous_id,
-                    target_id,
-                    kind="segment",
-                    label=_segment_edge_label(connection.id, name, policy),
-                )
-            )
-            previous_id = target_id
+        spec = _topology_node(node)
+        topology_nodes[spec.id] = spec
 
     for fragment in sorted(graph.extra_fragments, key=_fragment_sort_key):
-        fragment_node = _topology_fragment_node(fragment)
-        if fragment_node is None:
+        if isinstance(fragment, BatteryExportReservePolicy):
+            owner_id = fragment.battery_node_id
+            if owner_id in topology_nodes:
+                topology_nodes[owner_id] = _append_node_lines(
+                    topology_nodes[owner_id],
+                    (f"battery reserve: {fragment.reserve_kwh:.1f}kWh",),
+                )
             continue
-        nodes.append(fragment_node)
-        edges.extend(_topology_fragment_edges(fragment, fragment_node.id))
+        if isinstance(fragment, EvSocIncentivesFragment):
+            owner_id = fragment.storage_node_id
+            if owner_id in topology_nodes:
+                topology_nodes[owner_id] = _append_node_lines(
+                    topology_nodes[owner_id],
+                    (
+                        f"ev incentives: {fragment.incentive_count}",
+                        f"incentive bias: {fragment.grid_price_bias * 100:.0f}%",
+                    ),
+                )
+            continue
+
+    nodes: list[GraphNodeSpec] = list(topology_nodes.values())
+
+    sorted_connections = sorted(graph.connections.values(), key=lambda item: item.id)
+    for connection_index, connection in enumerate(sorted_connections, start=1):
+        edge_code = f"E{connection_index:02d}"
+        edges.append(
+            _graph_edge(
+                connection.a_node_id,
+                connection.b_node_id,
+                kind="segment",
+                label=_segment_edge_label(connection.id, edge_code, connection.ordered_policies),
+            )
+        )
 
     return GraphSpec(
         graph_id="energy_modeling_topology",
@@ -286,17 +265,10 @@ def render_graph_dot(graph: GraphSpec) -> str:
     dot.attr(label=graph.title, labelloc="t", fontsize="22", fontname="Helvetica-Bold")
 
     for node in graph.nodes:
-        if node.kind == "segment":
-            dot.node(
-                dot_id_by_node_id[node.id],
-                label="",
-                **_segment_node_attributes(),
-            )
-            continue
         if graph.graph_id == "logical_component_graph":
             dot.node(
                 dot_id_by_node_id[node.id],
-                label=_logical_node_label(node),
+                label=_plain_multiline_label(node),
                 **_logical_node_attributes(node),
             )
             continue
@@ -371,48 +343,15 @@ def _topology_node(node: Node) -> GraphNodeSpec:
     )
 
 
-def _topology_fragment_node(
-    fragment: object,
-) -> GraphNodeSpec | None:
-    if isinstance(fragment, BatteryExportReservePolicy):
-        return GraphNodeSpec(
-            id=f"fragment:{fragment.battery_node_id}:battery_reserve",
-            kind="fragment",
-            title="battery reserve",
-            lines=(
-                f"node: {fragment.battery_node_id}",
-                f"reserve: {fragment.reserve_kwh:.1f}kWh",
-            ),
-            sort_key=("fragment", fragment.battery_node_id, "battery_reserve"),
-        )
-    if isinstance(fragment, EvSocIncentivesFragment):
-        return GraphNodeSpec(
-            id=f"fragment:{fragment.storage_node_id}:ev_incentives",
-            kind="fragment",
-            title="ev incentives",
-            lines=(
-                f"node: {fragment.storage_node_id}",
-                f"incentives: {fragment.incentive_count}",
-                f"bias: {fragment.grid_price_bias * 100:.0f}%",
-            ),
-            sort_key=("fragment", fragment.storage_node_id, "ev_incentives"),
-        )
-    return None
-
-
-def _topology_fragment_edges(
-    fragment: object,
-    fragment_node_id: str,
-) -> list[GraphEdgeSpec]:
-    if isinstance(fragment, BatteryExportReservePolicy):
-        return [
-            _graph_edge(fragment.battery_node_id, fragment_node_id, kind="fragment"),
-        ]
-    if isinstance(fragment, EvSocIncentivesFragment):
-        return [
-            _graph_edge(fragment.storage_node_id, fragment_node_id, kind="fragment"),
-        ]
-    return []
+def _append_node_lines(node: GraphNodeSpec, extra_lines: tuple[str, ...]) -> GraphNodeSpec:
+    return GraphNodeSpec(
+        id=node.id,
+        kind=node.kind,
+        title=node.title,
+        lines=(*node.lines, *extra_lines),
+        sort_key=node.sort_key,
+        topology_role=node.topology_role,
+    )
 
 
 def _fragment_sort_key(fragment: object) -> tuple[str, ...]:
@@ -452,15 +391,34 @@ def _segment_logical_id(connection_id: str, segment_name: str) -> str:
     return f"{connection_id}.{segment_name}"
 
 
-def _segment_edge_label(
+def _connection_note_segment_line(
     connection_id: str,
     segment_name: str,
     policy: ConnectionPolicy,
 ) -> str:
-    logical_id = _segment_logical_id(connection_id, segment_name)
+    _ = connection_id
     kind = _segment_title(segment_name, policy)
     _ = policy
-    return f"{logical_id}\n{kind}"
+    return f"{segment_name} ({kind})"
+
+
+def _segment_edge_label(
+    connection_id: str,
+    edge_code: str,
+    ordered_policies: Sequence[tuple[str, ConnectionPolicy]],
+) -> str:
+    _ = connection_id
+    lines = [edge_code]
+    seen: set[str] = set()
+    for _, policy in ordered_policies:
+        kind = _segment_title("", policy)
+        if kind in seen:
+            continue
+        seen.add(kind)
+        lines.append(f"- {kind}")
+    return "".join(f"{line}\\l" for line in lines)
+
+
 def _graph_edge(
     source_id: str,
     target_id: str,
@@ -481,20 +439,20 @@ def _graph_attributes(graph: GraphSpec) -> dict[str, str]:
     base = {
         "bgcolor": "#f7fafb",
         "forcelabels": "true",
-        "margin": "0.25",
+        "margin": "0.2",
         "outputorder": "edgesfirst",
-        "overlap": "false",
-        "pad": "0.35",
-        "sep": "0.55",
-        "splines": "true",
+        "pad": "0.2",
+        "splines": "spline",
     }
     if graph.graph_id == "logical_component_graph":
-        base["nodesep"] = "0.55"
+        base["nodesep"] = "0.85"
+        base["ranksep"] = "0.9"
+        base["rankdir"] = "LR"
+        base["splines"] = "curved"
     if graph.graph_id == "energy_modeling_topology":
-        base["K"] = "5.4"
-        base["esep"] = "+56"
-        base["pad"] = "0.35"
-        base["sep"] = "2.60"
+        base["nodesep"] = "1.45"
+        base["ranksep"] = "1.35"
+        base["rankdir"] = "LR"
     return base
 
 
@@ -503,21 +461,14 @@ def _logical_node_attributes(node: GraphNodeSpec) -> dict[str, str]:
     return {
         "color": stroke,
         "fillcolor": fill,
-        "margin": "0.0",
-        "shape": "plain",
+        "margin": "0.08,0.06",
+        "penwidth": "1.4",
+        "shape": "box",
+        "style": "rounded,filled",
     }
 
 
 def _topology_node_attributes(node: GraphNodeSpec) -> dict[str, str]:
-    if node.kind == "fragment":
-        stroke, fill = _LOGICAL_NODE_COLORS["fragment"]
-        return {
-            "color": stroke,
-            "fillcolor": fill,
-            "penwidth": "1.2",
-            "shape": "box",
-            "style": "rounded,filled,dashed",
-        }
     if node.topology_role is None:
         stroke, fill = _LOGICAL_NODE_COLORS[node.kind]
     else:
@@ -531,48 +482,6 @@ def _topology_node_attributes(node: GraphNodeSpec) -> dict[str, str]:
     }
 
 
-def _segment_node_attributes() -> dict[str, str]:
-    return {
-        "color": "#475569",
-        "fillcolor": "#475569",
-        "fixedsize": "true",
-        "fontcolor": "#475569",
-        "fontsize": "8",
-        "height": "0.12",
-        "shape": "point",
-        "style": "filled",
-        "width": "0.12",
-    }
-
-
-def _logical_node_label(node: GraphNodeSpec) -> str:
-    stroke, fill = _LOGICAL_NODE_COLORS[node.kind]
-    title = html.escape(node.title)
-    body_rows = "".join(
-        (
-            "<TR>"
-            f'<TD ALIGN="LEFT" BGCOLOR="{fill}" BALIGN="LEFT">'
-            f'<FONT FACE="Helvetica" POINT-SIZE="11">{html.escape(line)}</FONT>'
-            "</TD>"
-            "</TR>"
-        )
-        for line in node.lines
-    )
-    return (
-        "<"
-        '<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" '
-        f'COLOR="{stroke}" BGCOLOR="{fill}">'
-        "<TR>"
-        f'<TD ALIGN="LEFT" BGCOLOR="{stroke}">'
-        f'<FONT FACE="Helvetica-Bold" POINT-SIZE="12" COLOR="white">{title}</FONT>'
-        "</TD>"
-        "</TR>"
-        f"{body_rows}"
-        "</TABLE>"
-        ">"
-    )
-
-
 def _plain_multiline_label(node: GraphNodeSpec) -> str:
     parts = [node.title, *node.lines]
     return "\n".join(parts)
@@ -582,23 +491,18 @@ def _edge_attributes(edge: GraphEdgeSpec) -> dict[str, str]:
     if edge.kind == "component":
         return {
             "color": "#64748b",
-            "len": "1.8",
+            "len": "1.0",
             "penwidth": "1.6",
-        }
-    if edge.kind == "fragment":
-        return {
-            "color": "#94a3b8",
-            "len": "2.0",
-            "penwidth": "1.2",
-            "style": "dashed",
         }
     attributes = {
         "color": "#64748b",
         "fontcolor": "#334155",
-        "fontsize": "9",
+        "fontsize": "10",
         "labelfloat": "false",
-        "len": "7.8",
+        "labeldistance": "1.0",
+        "len": "1.0",
         "penwidth": "1.3",
+        "labeljust": "l",
     }
     if edge.label:
         attributes["label"] = edge.label

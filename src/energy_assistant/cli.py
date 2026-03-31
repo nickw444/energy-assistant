@@ -17,15 +17,21 @@ import yaml
 
 from energy_assistant.api.server import create_app
 from energy_assistant.config import load_app_config
+from energy_assistant.ems.fixtures.graphs import (
+    build_logical_component_graph,
+    build_topology_graph,
+    render_graph_svg,
+)
 from energy_assistant.ems.fixtures.harness import (
     EmsFixturePaths,
     compute_plan_hash,
+    compute_text_hash,
     render_fixture_json,
     resolve_ems_fixture_paths,
     serialize_plan,
 )
 from energy_assistant.ems.models import GridComponentPlan
-from energy_assistant.ems.planner import EmsMilpPlanner
+from energy_assistant.ems.planner import EmsMilpPlanner, EmsSolvedRun
 from energy_assistant.ems.system.factory import EmsSystemFactory
 from energy_assistant.inputs.fixtures import (
     load_fixture_input_provider,
@@ -89,9 +95,43 @@ def _resolve_input_registry_for_capture(
     captured_at: datetime,
 ) -> ResolvedInputRegistry:
     with freeze_hass_source_time(captured_at):
-        horizon = EmsSystemFactory(app_config).horizon_shape.build(now=captured_at)
+        horizon = EmsSystemFactory.create(app_config).horizon_shape.build(now=captured_at)
         window = InputWindow(now=horizon.now, end=horizon.slots[-1].end)
         return input_provider.resolve_for_window(window=window)
+
+
+def _build_live_input_provider(
+    app_config: AppConfig,
+) -> tuple[ResolverBackedInputProvider, HomeAssistantClient]:
+    hass_client = HomeAssistantClient(config=app_config.homeassistant)
+    hass_data_provider = HassDataProviderImpl(hass_client=hass_client)
+    resolver = ValueResolverImpl(hass_data_provider=hass_data_provider)
+    return (
+        ResolverBackedInputProvider(app_config=app_config, resolver=resolver),
+        hass_client,
+    )
+
+
+def _build_live_planner(
+    app_config: AppConfig,
+) -> tuple[EmsMilpPlanner, ResolverBackedInputProvider, HomeAssistantClient]:
+    input_provider, hass_client = _build_live_input_provider(app_config)
+    planner = EmsMilpPlanner(
+        input_provider=input_provider,
+        system_factory=EmsSystemFactory.create(app_config),
+    )
+    return planner, input_provider, hass_client
+
+
+def _build_worker(app_config: AppConfig) -> tuple[Worker, HomeAssistantClient]:
+    planner, input_provider, hass_client = _build_live_planner(app_config)
+    ha_ws_client = HomeAssistantWebSocketClientImpl(config=app_config.homeassistant)
+    worker = Worker(
+        planner=planner,
+        price_entity_ids=input_provider.grid_price_watch_entity_ids(),
+        ha_ws_client=ha_ws_client,
+    )
+    return worker, hass_client
 
 
 def _common_options[**P, R](func: Callable[P, R]) -> Callable[P, R]:
@@ -126,12 +166,7 @@ def cli(ctx: click.Context, config: Path | None, log_level: str) -> int | None:
 
     app_config = load_app_config(config)
 
-    hass_client = HomeAssistantClient(config=app_config.homeassistant)
-    hass_data_provider = HassDataProviderImpl(hass_client=hass_client)
-
-    resolver = ValueResolverImpl(hass_data_provider=hass_data_provider)
-    ha_ws_client = HomeAssistantWebSocketClientImpl(config=app_config.homeassistant)
-    worker = Worker(app_config=app_config, resolver=resolver, ha_ws_client=ha_ws_client)
+    worker, _hass_client = _build_worker(app_config)
     shutdown_event = Event()
 
     def _handle_signal(signum: int, _frame: object) -> None:
@@ -273,7 +308,10 @@ def ems_solve(
                 raise click.ClickException("Fixture paths not resolved.")
             input_provider, captured_at = load_fixture_input_provider(path=paths.fixture_path)
             now = datetime.fromisoformat(captured_at) if captured_at else None
-            planner = EmsMilpPlanner(app_config, input_provider=input_provider)
+            planner = EmsMilpPlanner(
+                input_provider=input_provider,
+                system_factory=EmsSystemFactory.create(app_config),
+            )
 
             click.echo("Solving EMS MILP (fixture replay)...")
             plan = planner.generate_ems_plan(
@@ -281,12 +319,7 @@ def ems_solve(
                 solver_msg=solver_msg,
             )
         else:
-            hass_client = HomeAssistantClient(config=app_config.homeassistant)
-            hass_data_provider = HassDataProviderImpl(hass_client=hass_client)
-
-            resolver = ValueResolverImpl(hass_data_provider=hass_data_provider)
-            input_provider = ResolverBackedInputProvider(app_config=app_config, resolver=resolver)
-            planner = EmsMilpPlanner(app_config, input_provider=input_provider)
+            planner, input_provider, _hass_client = _build_live_planner(app_config)
             planner.mark_for_hydration()
             planner.hydrate_all()
 
@@ -383,12 +416,7 @@ def ems_record_scenario(
     )
 
     try:
-        hass_client = HomeAssistantClient(config=app_config.homeassistant)
-        hass_data_provider = HassDataProviderImpl(hass_client=hass_client)
-
-        resolver = ValueResolverImpl(hass_data_provider=hass_data_provider)
-        input_provider = ResolverBackedInputProvider(app_config=app_config, resolver=resolver)
-        planner = EmsMilpPlanner(app_config, input_provider=input_provider)
+        planner, input_provider, _hass_client = _build_live_planner(app_config)
         planner.mark_for_hydration()
         planner.hydrate_all()
 
@@ -414,11 +442,15 @@ def ems_record_scenario(
 
         if write_plan:
             fixture_input_provider, _ = load_fixture_input_provider(path=paths.fixture_path)
-            fixture_planner = EmsMilpPlanner(app_config, input_provider=fixture_input_provider)
-            plan = fixture_planner.generate_ems_plan(
+            fixture_planner = EmsMilpPlanner(
+                input_provider=fixture_input_provider,
+                system_factory=EmsSystemFactory.create(app_config),
+            )
+            run = fixture_planner.generate_ems_run(
                 now=captured_at,
                 solver_msg=solver_msg,
             )
+            plan = run.plan
             plan_payload = serialize_plan(plan)
             paths.plan_path.write_text(render_fixture_json(plan_payload))
             click.echo(f"Wrote EMS output baseline to {paths.plan_path}")
@@ -429,6 +461,11 @@ def ems_record_scenario(
 
             paths.hash_path.write_text(plan_hash + "\n")
             click.echo(f"Wrote plan hash to {paths.hash_path}")
+            _write_fixture_graph_artifacts(
+                paths=paths,
+                run=run,
+                force=True,
+            )
     except Exception as exc:
         raise click.ClickException(traceback.format_exc()) from exc
 
@@ -461,10 +498,10 @@ def ems_record_scenario(
     help="Enable solver output (CBC).",
 )
 @click.option(
-    "--force-image/--no-force-image",
+    "--force-visuals/--no-force-visuals",
     default=False,
     show_default=True,
-    help="Regenerate the plot image even if the plan hash is unchanged.",
+    help="Regenerate the plot image and SVG graph artifacts even if unchanged.",
 )
 @click.pass_context
 def ems_refresh_baseline(
@@ -473,7 +510,7 @@ def ems_refresh_baseline(
     name: str | None,
     scenario_dir: Path,
     solver_msg: bool,
-    force_image: bool,
+    force_visuals: bool,
 ) -> None:
     """Recompute the baseline output from a recorded fixture."""
     _configure_logging(str(ctx.obj.get("log_level", "INFO")))
@@ -486,7 +523,11 @@ def ems_refresh_baseline(
                 f"Expected {paths.fixture_path} and {paths.config_path}."
             )
         try:
-            _refresh_baseline_bundle(paths, solver_msg=solver_msg, force_image=force_image)
+            _refresh_baseline_bundle(
+                paths,
+                solver_msg=solver_msg,
+                force_visuals=force_visuals,
+            )
         except Exception as exc:
             raise click.ClickException(traceback.format_exc()) from exc
         return
@@ -500,7 +541,11 @@ def ems_refresh_baseline(
         paths = resolve_ems_fixture_paths(scenario_dir, fixture_name, scenario_name)
         click.echo(f"Refreshing EMS baseline for {paths.scenario_dir}")
         try:
-            _refresh_baseline_bundle(paths, solver_msg=solver_msg, force_image=force_image)
+            _refresh_baseline_bundle(
+                paths,
+                solver_msg=solver_msg,
+                force_visuals=force_visuals,
+            )
         except Exception as exc:
             failures.append(((fixture_name, scenario_name), _format_exception_message(exc)))
 
@@ -525,7 +570,7 @@ def _refresh_baseline_bundle(
     paths: EmsFixturePaths,
     *,
     solver_msg: bool,
-    force_image: bool,
+    force_visuals: bool,
 ) -> None:
     if not paths.fixture_path.exists() or not paths.config_path.exists():
         raise click.ClickException(
@@ -536,18 +581,22 @@ def _refresh_baseline_bundle(
     app_config = load_app_config(paths.config_path)
     input_provider, captured_at = load_fixture_input_provider(path=paths.fixture_path)
     now = datetime.fromisoformat(captured_at) if captured_at else None
-    planner = EmsMilpPlanner(app_config, input_provider=input_provider)
-    plan = planner.generate_ems_plan(
+    planner = EmsMilpPlanner(
+        input_provider=input_provider,
+        system_factory=EmsSystemFactory.create(app_config),
+    )
+    run = planner.generate_ems_run(
         now=now,
         solver_msg=solver_msg,
     )
+    plan = run.plan
     plan_payload = serialize_plan(plan)
     paths.plan_path.write_text(render_fixture_json(plan_payload))
     click.echo(f"Wrote EMS output baseline to {paths.plan_path}")
 
     new_hash = compute_plan_hash(plan_payload)
     old_hash = paths.hash_path.read_text().strip() if paths.hash_path.exists() else None
-    if new_hash != old_hash or force_image:
+    if new_hash != old_hash or force_visuals:
         write_plan_image(plan, paths.plot_path)
         click.echo(f"Wrote plan image to {paths.plot_path}")
 
@@ -556,12 +605,62 @@ def _refresh_baseline_bundle(
     else:
         click.echo("Plan unchanged, skipping image regeneration.")
 
+    _write_fixture_graph_artifacts(
+        paths=paths,
+        run=run,
+        force=force_visuals,
+    )
+
 
 def _format_exception_message(exc: Exception) -> str:
     message = str(exc).strip()
     if message:
         return message.splitlines()[0]
     return type(exc).__name__
+
+
+def _write_fixture_graph_artifacts(
+    *,
+    paths: EmsFixturePaths,
+    run: EmsSolvedRun,
+    force: bool,
+) -> None:
+    logical_svg = render_graph_svg(build_logical_component_graph(run.system))
+    topology_svg = render_graph_svg(build_topology_graph(run.snapshot.graph))
+
+    _write_text_artifact(
+        path=paths.logical_graph_path,
+        hash_path=paths.logical_graph_hash_path,
+        payload=logical_svg,
+        label="logical graph",
+        force=force,
+    )
+    _write_text_artifact(
+        path=paths.topology_graph_path,
+        hash_path=paths.topology_graph_hash_path,
+        payload=topology_svg,
+        label="topology graph",
+        force=force,
+    )
+
+
+def _write_text_artifact(
+    *,
+    path: Path,
+    hash_path: Path,
+    payload: str,
+    label: str,
+    force: bool,
+) -> None:
+    new_hash = compute_text_hash(payload)
+    old_hash = hash_path.read_text().strip() if hash_path.exists() else None
+    if force or new_hash != old_hash or not path.exists():
+        path.write_text(payload)
+        hash_path.write_text(new_hash + "\n")
+        click.echo(f"Wrote {label} to {path}")
+        click.echo(f"Wrote {label} hash to {hash_path}")
+        return
+    click.echo(f"{label.capitalize()} unchanged, skipping regeneration.")
 
 
 def _discover_fixture_scenarios(
@@ -665,7 +764,10 @@ def ems_scenario_report(
             app_config = load_app_config(paths.config_path)
             input_provider, captured_at = load_fixture_input_provider(path=paths.fixture_path)
             now = datetime.fromisoformat(captured_at) if captured_at else None
-            planner = EmsMilpPlanner(app_config, input_provider=input_provider)
+            planner = EmsMilpPlanner(
+                input_provider=input_provider,
+                system_factory=EmsSystemFactory.create(app_config),
+            )
             plan = planner.generate_ems_plan(
                 now=now,
                 solver_msg=solver_msg,
@@ -707,14 +809,10 @@ def hydrate_load_forecast(ctx: click.Context, limit: int) -> None:
     app_config = load_app_config(ctx.obj.get("config"))
 
     try:
-        hass_client = HomeAssistantClient(config=app_config.homeassistant)
-        hass_data_provider = HassDataProviderImpl(hass_client=hass_client)
-
-        resolver = ValueResolverImpl(hass_data_provider=hass_data_provider)
-        input_provider = ResolverBackedInputProvider(app_config=app_config, resolver=resolver)
+        _planner, input_provider, _hass_client = _build_live_planner(app_config)
         input_provider.mark_for_hydration()
         input_provider.hydrate_all()
-        system_factory = EmsSystemFactory(app_config)
+        system_factory = EmsSystemFactory.create(app_config)
         horizon = system_factory.horizon_shape.build(now=datetime.now().astimezone())
         resolved = input_provider.resolve_for_window(
             window=InputWindow(now=horizon.now, end=horizon.slots[-1].end)

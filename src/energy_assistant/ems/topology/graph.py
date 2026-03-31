@@ -65,6 +65,18 @@ class EnergyGraph:
             self.add_element(element)
 
     @property
+    def nodes(self) -> dict[str, Node]:
+        return dict(sorted(self._nodes.items()))
+
+    @property
+    def connections(self) -> dict[str, Connection]:
+        return dict(sorted(self._connections.items()))
+
+    @property
+    def extra_fragments(self) -> list[Fragment]:
+        return list(self._extra_fragments)
+
+    @property
     def fragments(self) -> list[Fragment]:
         # Keep stable ordering for debugging.
         fragments: list[Fragment] = []

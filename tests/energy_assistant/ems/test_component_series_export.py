@@ -12,6 +12,7 @@ from energy_assistant.ems.models import (
     PvComponentPlan,
 )
 from energy_assistant.ems.planner import EmsMilpPlanner
+from energy_assistant.ems.system.factory import EmsSystemFactory
 from energy_assistant.inputs.fixtures import load_fixture_input_provider
 
 
@@ -24,7 +25,10 @@ def test_plan_exports_flat_component_series_from_fixture() -> None:
     input_provider, captured_at = load_fixture_input_provider(path=fixture_path)
     now = datetime.fromisoformat(captured_at) if captured_at else None
 
-    plan = EmsMilpPlanner(app_config, input_provider=input_provider).generate_ems_plan(now=now)
+    plan = EmsMilpPlanner(
+        input_provider=input_provider,
+        system_factory=EmsSystemFactory.create(app_config),
+    ).generate_ems_plan(now=now)
 
     assert set(plan.components) == {
         "switchboard",

@@ -1,142 +1,99 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<svg width="1250pt" height="1301pt"
- viewBox="18.00 18.00 1232.00 1283.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(43.2 1257.91)">
+<svg width="558pt" height="535pt"
+ viewBox="14.00 14.00 544.00 520.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(28.8 505.94)">
 <title>logical_component_graph</title>
-<polygon fill="#f7fafb" stroke="none" points="-25.2,25.2 -25.2,-1239.91 1189.14,-1239.91 1189.14,25.2 -25.2,25.2"/>
-<text xml:space="preserve" text-anchor="middle" x="581.97" y="-1189.81" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="22.00">Logical Component Graph</text>
+<polygon fill="#f7fafb" stroke="none" points="-14.4,14.4 -14.4,-491.54 514.96,-491.54 514.96,14.4 -14.4,14.4"/>
+<text xml:space="preserve" text-anchor="middle" x="250.28" y="-452.24" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="22.00">Logical Component Graph</text>
 <g id="edge1" class="edge">
 <title>n_inverter_primary_adc5ddc9&#45;&gt;n_eq4800_adee8c37</title>
-<path fill="none" stroke="#64748b" stroke-width="1.6" d="M392.61,-699.01C318.64,-689.63 205.29,-675.25 133.71,-666.17"/>
+<path fill="none" stroke="#64748b" stroke-width="1.6" d="M304.64,-149.23C338.01,-153.97 357.84,-158.69 374.97,-167.36"/>
 </g>
 <g id="edge2" class="edge">
 <title>n_inverter_primary_adc5ddc9&#45;&gt;n_pv_9b879864</title>
-<path fill="none" stroke="#64748b" stroke-width="1.6" d="M464.19,-769.42C462.36,-841.34 459.31,-960.66 457.35,-1037.49"/>
+<path fill="none" stroke="#64748b" stroke-width="1.6" d="M293.34,-105.3C328.45,-85.79 348.61,-76.35 368.53,-71.62"/>
 </g>
 <g id="edge6" class="edge">
 <title>n_switchboard_1b8cb242&#45;&gt;n_tessie_9214d04b</title>
-<path fill="none" stroke="#64748b" stroke-width="1.6" d="M834.16,-398.81C891.79,-351.71 987.65,-273.37 1046.44,-225.32"/>
+<path fill="none" stroke="#64748b" stroke-width="1.6" d="M57.95,-234.18C90.71,-322.6 102.78,-339.82 181.32,-380.75"/>
 </g>
 <g id="edge4" class="edge">
 <title>n_switchboard_1b8cb242&#45;&gt;n_grid_f3c543ad</title>
-<path fill="none" stroke="#64748b" stroke-width="1.6" d="M763.73,-389.05C733.08,-320.6 677.64,-196.8 644.39,-122.54"/>
+<path fill="none" stroke="#64748b" stroke-width="1.6" d="M92.88,-234.3C111.45,-243.36 132.97,-249.18 177.56,-258.84"/>
 </g>
 <g id="edge5" class="edge">
 <title>n_switchboard_1b8cb242&#45;&gt;n_inverter_primary_adc5ddc9</title>
-<path fill="none" stroke="#64748b" stroke-width="1.6" d="M737.19,-479.33C684.29,-523.95 599.15,-595.76 538.33,-647.06"/>
+<path fill="none" stroke="#64748b" stroke-width="1.6" d="M82.61,-176.55C102.73,-162.3 120.34,-156.29 159.29,-150.13"/>
 </g>
 <g id="edge3" class="edge">
 <title>n_switchboard_1b8cb242&#45;&gt;n_base_load_a82f7aa3</title>
-<path fill="none" stroke="#64748b" stroke-width="1.6" d="M834.4,-472.1C902.29,-519.25 1024.13,-603.88 1086.29,-647.06"/>
+<path fill="none" stroke="#64748b" stroke-width="1.6" d="M59.84,-176.61C98.3,-88.87 110.37,-75.17 193.6,-38.75"/>
 </g>
 <g id="node1" class="node">
 <title>n_eq4800_adee8c37</title>
-<polygon fill="#ede9fe" stroke="none" points="0,-572.34 0,-743.09 134,-743.09 134,-572.34 0,-572.34"/>
-<polygon fill="#7c3aed" stroke="none" points="1,-717.34 1,-742.09 133,-742.09 133,-717.34 1,-717.34"/>
-<text xml:space="preserve" text-anchor="start" x="7" y="-726.34" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="12.00" fill="white">EQ4800</text>
-<polygon fill="#ede9fe" stroke="none" points="1,-693.34 1,-717.34 133,-717.34 133,-693.34 1,-693.34"/>
-<text xml:space="preserve" text-anchor="start" x="7" y="-702.34" font-family="Helvetica,sans-Serif" font-size="11.00">kind: battery</text>
-<polygon fill="#ede9fe" stroke="none" points="1,-669.34 1,-693.34 133,-693.34 133,-669.34 1,-669.34"/>
-<text xml:space="preserve" text-anchor="start" x="7" y="-678.34" font-family="Helvetica,sans-Serif" font-size="11.00">id: eq4800</text>
-<polygon fill="#ede9fe" stroke="none" points="1,-645.34 1,-669.34 133,-669.34 133,-645.34 1,-645.34"/>
-<text xml:space="preserve" text-anchor="start" x="7" y="-654.34" font-family="Helvetica,sans-Serif" font-size="11.00">inverter: inverter_primary</text>
-<polygon fill="#ede9fe" stroke="none" points="1,-621.34 1,-645.34 133,-645.34 133,-621.34 1,-621.34"/>
-<text xml:space="preserve" text-anchor="start" x="7" y="-630.34" font-family="Helvetica,sans-Serif" font-size="11.00">capacity: 41.9kWh</text>
-<polygon fill="#ede9fe" stroke="none" points="1,-597.34 1,-621.34 133,-621.34 133,-597.34 1,-597.34"/>
-<text xml:space="preserve" text-anchor="start" x="7" y="-606.34" font-family="Helvetica,sans-Serif" font-size="11.00">charge max: 11.0kW</text>
-<polygon fill="#ede9fe" stroke="none" points="1,-573.34 1,-597.34 133,-597.34 133,-573.34 1,-573.34"/>
-<text xml:space="preserve" text-anchor="start" x="7" y="-582.34" font-family="Helvetica,sans-Serif" font-size="11.00">discharge max: 10.0kW</text>
-<polygon fill="none" stroke="#7c3aed" points="0,-572.34 0,-743.09 134,-743.09 134,-572.34 0,-572.34"/>
+<path fill="#ede9fe" stroke="#7c3aed" stroke-width="1.4" d="M488.56,-260.64C488.56,-260.64 381.04,-260.64 381.04,-260.64 375.04,-260.64 369.04,-254.64 369.04,-248.64 369.04,-248.64 369.04,-180 369.04,-180 369.04,-174 375.04,-168 381.04,-168 381.04,-168 488.56,-168 488.56,-168 494.56,-168 500.56,-174 500.56,-180 500.56,-180 500.56,-248.64 500.56,-248.64 500.56,-254.64 494.56,-260.64 488.56,-260.64"/>
+<text xml:space="preserve" text-anchor="middle" x="434.8" y="-245.87" font-family="Helvetica,sans-Serif" font-size="11.00">EQ4800</text>
+<text xml:space="preserve" text-anchor="middle" x="434.8" y="-233.87" font-family="Helvetica,sans-Serif" font-size="11.00">kind: battery</text>
+<text xml:space="preserve" text-anchor="middle" x="434.8" y="-221.87" font-family="Helvetica,sans-Serif" font-size="11.00">id: eq4800</text>
+<text xml:space="preserve" text-anchor="middle" x="434.8" y="-209.87" font-family="Helvetica,sans-Serif" font-size="11.00">inverter: inverter_primary</text>
+<text xml:space="preserve" text-anchor="middle" x="434.8" y="-197.87" font-family="Helvetica,sans-Serif" font-size="11.00">capacity: 41.9kWh</text>
+<text xml:space="preserve" text-anchor="middle" x="434.8" y="-185.87" font-family="Helvetica,sans-Serif" font-size="11.00">charge max: 11.0kW</text>
+<text xml:space="preserve" text-anchor="middle" x="434.8" y="-173.87" font-family="Helvetica,sans-Serif" font-size="11.00">discharge max: 10.0kW</text>
 </g>
 <g id="node2" class="node">
 <title>n_tessie_9214d04b</title>
-<polygon fill="#dcfce7" stroke="none" points="1046.26,-110.21 1046.26,-256.96 1148.76,-256.96 1148.76,-110.21 1046.26,-110.21"/>
-<polygon fill="#166534" stroke="none" points="1047.26,-231.21 1047.26,-255.96 1147.76,-255.96 1147.76,-231.21 1047.26,-231.21"/>
-<text xml:space="preserve" text-anchor="start" x="1053.26" y="-240.21" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="12.00" fill="white">Tessie</text>
-<polygon fill="#dcfce7" stroke="none" points="1047.26,-207.21 1047.26,-231.21 1147.76,-231.21 1147.76,-207.21 1047.26,-207.21"/>
-<text xml:space="preserve" text-anchor="start" x="1053.26" y="-216.21" font-family="Helvetica,sans-Serif" font-size="11.00">kind: ev</text>
-<polygon fill="#dcfce7" stroke="none" points="1047.26,-183.21 1047.26,-207.21 1147.76,-207.21 1147.76,-183.21 1047.26,-183.21"/>
-<text xml:space="preserve" text-anchor="start" x="1053.26" y="-192.21" font-family="Helvetica,sans-Serif" font-size="11.00">id: tessie</text>
-<polygon fill="#dcfce7" stroke="none" points="1047.26,-159.21 1047.26,-183.21 1147.76,-183.21 1147.76,-159.21 1047.26,-159.21"/>
-<text xml:space="preserve" text-anchor="start" x="1053.26" y="-168.21" font-family="Helvetica,sans-Serif" font-size="11.00">energy: 78.0kWh</text>
-<polygon fill="#dcfce7" stroke="none" points="1047.26,-135.21 1047.26,-159.21 1147.76,-159.21 1147.76,-135.21 1047.26,-135.21"/>
-<text xml:space="preserve" text-anchor="start" x="1053.26" y="-144.21" font-family="Helvetica,sans-Serif" font-size="11.00">charge: 2.4&#45;7.4kW</text>
-<polygon fill="#dcfce7" stroke="none" points="1047.26,-111.21 1047.26,-135.21 1147.76,-135.21 1147.76,-111.21 1047.26,-111.21"/>
-<text xml:space="preserve" text-anchor="start" x="1053.26" y="-120.21" font-family="Helvetica,sans-Serif" font-size="11.00">incentives: 4</text>
-<polygon fill="none" stroke="#166534" points="1046.26,-110.21 1046.26,-256.96 1148.76,-256.96 1148.76,-110.21 1046.26,-110.21"/>
+<path fill="#dcfce7" stroke="#166534" stroke-width="1.4" d="M269.92,-446.64C269.92,-446.64 193.9,-446.64 193.9,-446.64 187.9,-446.64 181.9,-440.64 181.9,-434.64 181.9,-434.64 181.9,-378 181.9,-378 181.9,-372 187.9,-366 193.9,-366 193.9,-366 269.92,-366 269.92,-366 275.92,-366 281.92,-372 281.92,-378 281.92,-378 281.92,-434.64 281.92,-434.64 281.92,-440.64 275.92,-446.64 269.92,-446.64"/>
+<text xml:space="preserve" text-anchor="middle" x="231.91" y="-431.87" font-family="Helvetica,sans-Serif" font-size="11.00">Tessie</text>
+<text xml:space="preserve" text-anchor="middle" x="231.91" y="-419.87" font-family="Helvetica,sans-Serif" font-size="11.00">kind: ev</text>
+<text xml:space="preserve" text-anchor="middle" x="231.91" y="-407.87" font-family="Helvetica,sans-Serif" font-size="11.00">id: tessie</text>
+<text xml:space="preserve" text-anchor="middle" x="231.91" y="-395.87" font-family="Helvetica,sans-Serif" font-size="11.00">energy: 78.0kWh</text>
+<text xml:space="preserve" text-anchor="middle" x="231.91" y="-383.87" font-family="Helvetica,sans-Serif" font-size="11.00">charge: 2.4&#45;7.4kW</text>
+<text xml:space="preserve" text-anchor="middle" x="231.91" y="-371.87" font-family="Helvetica,sans-Serif" font-size="11.00">incentives: 4</text>
 </g>
 <g id="node3" class="node">
 <title>n_grid_f3c543ad</title>
-<polygon fill="#ccfbf1" stroke="none" points="562,0 562,-122.75 672,-122.75 672,0 562,0"/>
-<polygon fill="#0f766e" stroke="none" points="563,-97 563,-121.75 671,-121.75 671,-97 563,-97"/>
-<text xml:space="preserve" text-anchor="start" x="569" y="-106" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="12.00" fill="white">Grid</text>
-<polygon fill="#ccfbf1" stroke="none" points="563,-73 563,-97 671,-97 671,-73 563,-73"/>
-<text xml:space="preserve" text-anchor="start" x="569" y="-82" font-family="Helvetica,sans-Serif" font-size="11.00">kind: grid</text>
-<polygon fill="#ccfbf1" stroke="none" points="563,-49 563,-73 671,-73 671,-49 563,-49"/>
-<text xml:space="preserve" text-anchor="start" x="569" y="-58" font-family="Helvetica,sans-Serif" font-size="11.00">id: grid</text>
-<polygon fill="#ccfbf1" stroke="none" points="563,-25 563,-49 671,-49 671,-25 563,-25"/>
-<text xml:space="preserve" text-anchor="start" x="569" y="-34" font-family="Helvetica,sans-Serif" font-size="11.00">bus: switchboard</text>
-<polygon fill="#ccfbf1" stroke="none" points="563,-1 563,-25 671,-25 671,-1 563,-1"/>
-<text xml:space="preserve" text-anchor="start" x="569" y="-10" font-family="Helvetica,sans-Serif" font-size="11.00">export max: 13.0kW</text>
-<polygon fill="none" stroke="#0f766e" points="562,0 562,-122.75 672,-122.75 672,0 562,0"/>
+<path fill="#ccfbf1" stroke="#0f766e" stroke-width="1.4" d="M273.67,-304.64C273.67,-304.64 190.15,-304.64 190.15,-304.64 184.15,-304.64 178.15,-298.64 178.15,-292.64 178.15,-292.64 178.15,-248 178.15,-248 178.15,-242 184.15,-236 190.15,-236 190.15,-236 273.67,-236 273.67,-236 279.67,-236 285.67,-242 285.67,-248 285.67,-248 285.67,-292.64 285.67,-292.64 285.67,-298.64 279.67,-304.64 273.67,-304.64"/>
+<text xml:space="preserve" text-anchor="middle" x="231.91" y="-289.87" font-family="Helvetica,sans-Serif" font-size="11.00">Grid</text>
+<text xml:space="preserve" text-anchor="middle" x="231.91" y="-277.87" font-family="Helvetica,sans-Serif" font-size="11.00">kind: grid</text>
+<text xml:space="preserve" text-anchor="middle" x="231.91" y="-265.87" font-family="Helvetica,sans-Serif" font-size="11.00">id: grid</text>
+<text xml:space="preserve" text-anchor="middle" x="231.91" y="-253.87" font-family="Helvetica,sans-Serif" font-size="11.00">bus: switchboard</text>
+<text xml:space="preserve" text-anchor="middle" x="231.91" y="-241.87" font-family="Helvetica,sans-Serif" font-size="11.00">export max: 13.0kW</text>
 </g>
 <g id="node4" class="node">
 <title>n_inverter_primary_adc5ddc9</title>
-<polygon fill="#dbeafe" stroke="none" points="392.37,-646.91 392.37,-769.66 539.12,-769.66 539.12,-646.91 392.37,-646.91"/>
-<polygon fill="#1d4ed8" stroke="none" points="393.37,-743.91 393.37,-768.66 538.12,-768.66 538.12,-743.91 393.37,-743.91"/>
-<text xml:space="preserve" text-anchor="start" x="399.37" y="-752.91" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="12.00" fill="white">Primary</text>
-<polygon fill="#dbeafe" stroke="none" points="393.37,-719.91 393.37,-743.91 538.12,-743.91 538.12,-719.91 393.37,-719.91"/>
-<text xml:space="preserve" text-anchor="start" x="399.37" y="-728.91" font-family="Helvetica,sans-Serif" font-size="11.00">kind: inverter</text>
-<polygon fill="#dbeafe" stroke="none" points="393.37,-695.91 393.37,-719.91 538.12,-719.91 538.12,-695.91 393.37,-695.91"/>
-<text xml:space="preserve" text-anchor="start" x="399.37" y="-704.91" font-family="Helvetica,sans-Serif" font-size="11.00">id: inverter_primary</text>
-<polygon fill="#dbeafe" stroke="none" points="393.37,-671.91 393.37,-695.91 538.12,-695.91 538.12,-671.91 393.37,-671.91"/>
-<text xml:space="preserve" text-anchor="start" x="399.37" y="-680.91" font-family="Helvetica,sans-Serif" font-size="11.00">peak: 10.0kW</text>
-<polygon fill="#dbeafe" stroke="none" points="393.37,-647.91 393.37,-671.91 538.12,-671.91 538.12,-647.91 393.37,-647.91"/>
-<text xml:space="preserve" text-anchor="start" x="399.37" y="-656.91" font-family="Helvetica,sans-Serif" font-size="11.00">dc bus: inverter_primary_dc</text>
-<polygon fill="none" stroke="#1d4ed8" points="392.37,-646.91 392.37,-769.66 539.12,-769.66 539.12,-646.91 392.37,-646.91"/>
+<path fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.4" d="M292.04,-174.64C292.04,-174.64 171.77,-174.64 171.77,-174.64 165.77,-174.64 159.77,-168.64 159.77,-162.64 159.77,-162.64 159.77,-118 159.77,-118 159.77,-112 165.77,-106 171.77,-106 171.77,-106 292.04,-106 292.04,-106 298.04,-106 304.04,-112 304.04,-118 304.04,-118 304.04,-162.64 304.04,-162.64 304.04,-168.64 298.04,-174.64 292.04,-174.64"/>
+<text xml:space="preserve" text-anchor="middle" x="231.91" y="-159.87" font-family="Helvetica,sans-Serif" font-size="11.00">Primary</text>
+<text xml:space="preserve" text-anchor="middle" x="231.91" y="-147.87" font-family="Helvetica,sans-Serif" font-size="11.00">kind: inverter</text>
+<text xml:space="preserve" text-anchor="middle" x="231.91" y="-135.87" font-family="Helvetica,sans-Serif" font-size="11.00">id: inverter_primary</text>
+<text xml:space="preserve" text-anchor="middle" x="231.91" y="-123.87" font-family="Helvetica,sans-Serif" font-size="11.00">peak: 10.0kW</text>
+<text xml:space="preserve" text-anchor="middle" x="231.91" y="-111.87" font-family="Helvetica,sans-Serif" font-size="11.00">dc bus: inverter_primary_dc</text>
 </g>
 <g id="node5" class="node">
 <title>n_base_load_a82f7aa3</title>
-<polygon fill="#ffedd5" stroke="none" points="1086.19,-636.62 1086.19,-711.37 1163.94,-711.37 1163.94,-636.62 1086.19,-636.62"/>
-<polygon fill="#7c2d12" stroke="none" points="1087.19,-685.62 1087.19,-710.37 1162.94,-710.37 1162.94,-685.62 1087.19,-685.62"/>
-<text xml:space="preserve" text-anchor="start" x="1093.19" y="-694.62" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="12.00" fill="white">Base Load</text>
-<polygon fill="#ffedd5" stroke="none" points="1087.19,-661.62 1087.19,-685.62 1162.94,-685.62 1162.94,-661.62 1087.19,-661.62"/>
-<text xml:space="preserve" text-anchor="start" x="1093.19" y="-670.62" font-family="Helvetica,sans-Serif" font-size="11.00">kind: load</text>
-<polygon fill="#ffedd5" stroke="none" points="1087.19,-637.62 1087.19,-661.62 1162.94,-661.62 1162.94,-637.62 1087.19,-637.62"/>
-<text xml:space="preserve" text-anchor="start" x="1093.19" y="-646.62" font-family="Helvetica,sans-Serif" font-size="11.00">id: base_load</text>
-<polygon fill="none" stroke="#7c2d12" points="1086.19,-636.62 1086.19,-711.37 1163.94,-711.37 1163.94,-636.62 1086.19,-636.62"/>
+<path fill="#ffedd5" stroke="#7c2d12" stroke-width="1.4" d="M257.54,-44.64C257.54,-44.64 206.27,-44.64 206.27,-44.64 200.27,-44.64 194.27,-38.64 194.27,-32.64 194.27,-32.64 194.27,-12 194.27,-12 194.27,-6 200.27,0 206.27,0 206.27,0 257.54,0 257.54,0 263.54,0 269.54,-6 269.54,-12 269.54,-12 269.54,-32.64 269.54,-32.64 269.54,-38.64 263.54,-44.64 257.54,-44.64"/>
+<text xml:space="preserve" text-anchor="middle" x="231.91" y="-29.87" font-family="Helvetica,sans-Serif" font-size="11.00">Base Load</text>
+<text xml:space="preserve" text-anchor="middle" x="231.91" y="-17.87" font-family="Helvetica,sans-Serif" font-size="11.00">kind: load</text>
+<text xml:space="preserve" text-anchor="middle" x="231.91" y="-5.87" font-family="Helvetica,sans-Serif" font-size="11.00">id: base_load</text>
 </g>
 <g id="node6" class="node">
 <title>n_pv_9b879864</title>
-<polygon fill="#fef3c7" stroke="none" points="388.48,-1037.46 388.48,-1184.21 522.48,-1184.21 522.48,-1037.46 388.48,-1037.46"/>
-<polygon fill="#92400e" stroke="none" points="389.48,-1158.46 389.48,-1183.21 521.48,-1183.21 521.48,-1158.46 389.48,-1158.46"/>
-<text xml:space="preserve" text-anchor="start" x="395.48" y="-1167.46" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="12.00" fill="white">PV</text>
-<polygon fill="#fef3c7" stroke="none" points="389.48,-1134.46 389.48,-1158.46 521.48,-1158.46 521.48,-1134.46 389.48,-1134.46"/>
-<text xml:space="preserve" text-anchor="start" x="395.48" y="-1143.46" font-family="Helvetica,sans-Serif" font-size="11.00">kind: pv</text>
-<polygon fill="#fef3c7" stroke="none" points="389.48,-1110.46 389.48,-1134.46 521.48,-1134.46 521.48,-1110.46 389.48,-1110.46"/>
-<text xml:space="preserve" text-anchor="start" x="395.48" y="-1119.46" font-family="Helvetica,sans-Serif" font-size="11.00">id: pv</text>
-<polygon fill="#fef3c7" stroke="none" points="389.48,-1086.46 389.48,-1110.46 521.48,-1110.46 521.48,-1086.46 389.48,-1086.46"/>
-<text xml:space="preserve" text-anchor="start" x="395.48" y="-1095.46" font-family="Helvetica,sans-Serif" font-size="11.00">inverter: inverter_primary</text>
-<polygon fill="#fef3c7" stroke="none" points="389.48,-1062.46 389.48,-1086.46 521.48,-1086.46 521.48,-1062.46 389.48,-1062.46"/>
-<text xml:space="preserve" text-anchor="start" x="395.48" y="-1071.46" font-family="Helvetica,sans-Serif" font-size="11.00">peak: 10.0kW</text>
-<polygon fill="#fef3c7" stroke="none" points="389.48,-1038.46 389.48,-1062.46 521.48,-1062.46 521.48,-1038.46 389.48,-1038.46"/>
-<text xml:space="preserve" text-anchor="start" x="395.48" y="-1047.46" font-family="Helvetica,sans-Serif" font-size="11.00">curtailment: load&#45;aware</text>
-<polygon fill="none" stroke="#92400e" points="388.48,-1037.46 388.48,-1184.21 522.48,-1184.21 522.48,-1037.46 388.48,-1037.46"/>
+<path fill="#fef3c7" stroke="#92400e" stroke-width="1.4" d="M488.56,-106.64C488.56,-106.64 381.04,-106.64 381.04,-106.64 375.04,-106.64 369.04,-100.64 369.04,-94.64 369.04,-94.64 369.04,-38 369.04,-38 369.04,-32 375.04,-26 381.04,-26 381.04,-26 488.56,-26 488.56,-26 494.56,-26 500.56,-32 500.56,-38 500.56,-38 500.56,-94.64 500.56,-94.64 500.56,-100.64 494.56,-106.64 488.56,-106.64"/>
+<text xml:space="preserve" text-anchor="middle" x="434.8" y="-91.87" font-family="Helvetica,sans-Serif" font-size="11.00">PV</text>
+<text xml:space="preserve" text-anchor="middle" x="434.8" y="-79.87" font-family="Helvetica,sans-Serif" font-size="11.00">kind: pv</text>
+<text xml:space="preserve" text-anchor="middle" x="434.8" y="-67.87" font-family="Helvetica,sans-Serif" font-size="11.00">id: pv</text>
+<text xml:space="preserve" text-anchor="middle" x="434.8" y="-55.87" font-family="Helvetica,sans-Serif" font-size="11.00">inverter: inverter_primary</text>
+<text xml:space="preserve" text-anchor="middle" x="434.8" y="-43.87" font-family="Helvetica,sans-Serif" font-size="11.00">peak: 10.0kW</text>
+<text xml:space="preserve" text-anchor="middle" x="434.8" y="-31.87" font-family="Helvetica,sans-Serif" font-size="11.00">curtailment: load&#45;aware</text>
 </g>
 <g id="node7" class="node">
 <title>n_switchboard_1b8cb242</title>
-<polygon fill="#dbeafe" stroke="none" points="737.17,-388.96 737.17,-487.71 834.42,-487.71 834.42,-388.96 737.17,-388.96"/>
-<polygon fill="#0f172a" stroke="none" points="738.17,-461.96 738.17,-486.71 833.42,-486.71 833.42,-461.96 738.17,-461.96"/>
-<text xml:space="preserve" text-anchor="start" x="744.17" y="-470.96" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="12.00" fill="white">Switchboard</text>
-<polygon fill="#dbeafe" stroke="none" points="738.17,-437.96 738.17,-461.96 833.42,-461.96 833.42,-437.96 738.17,-437.96"/>
-<text xml:space="preserve" text-anchor="start" x="744.17" y="-446.96" font-family="Helvetica,sans-Serif" font-size="11.00">kind: switchboard</text>
-<polygon fill="#dbeafe" stroke="none" points="738.17,-413.96 738.17,-437.96 833.42,-437.96 833.42,-413.96 738.17,-413.96"/>
-<text xml:space="preserve" text-anchor="start" x="744.17" y="-422.96" font-family="Helvetica,sans-Serif" font-size="11.00">id: switchboard</text>
-<polygon fill="#dbeafe" stroke="none" points="738.17,-389.96 738.17,-413.96 833.42,-413.96 833.42,-389.96 738.17,-389.96"/>
-<text xml:space="preserve" text-anchor="start" x="744.17" y="-398.96" font-family="Helvetica,sans-Serif" font-size="11.00">bus: switchboard</text>
-<polygon fill="none" stroke="#0f172a" points="737.17,-388.96 737.17,-487.71 834.42,-487.71 834.42,-388.96 737.17,-388.96"/>
+<path fill="#dbeafe" stroke="#0f172a" stroke-width="1.4" d="M82.77,-233.64C82.77,-233.64 12,-233.64 12,-233.64 6,-233.64 0,-227.64 0,-221.64 0,-221.64 0,-189 0,-189 0,-183 6,-177 12,-177 12,-177 82.77,-177 82.77,-177 88.77,-177 94.77,-183 94.77,-189 94.77,-189 94.77,-221.64 94.77,-221.64 94.77,-227.64 88.77,-233.64 82.77,-233.64"/>
+<text xml:space="preserve" text-anchor="middle" x="47.38" y="-218.87" font-family="Helvetica,sans-Serif" font-size="11.00">Switchboard</text>
+<text xml:space="preserve" text-anchor="middle" x="47.38" y="-206.87" font-family="Helvetica,sans-Serif" font-size="11.00">kind: switchboard</text>
+<text xml:space="preserve" text-anchor="middle" x="47.38" y="-194.87" font-family="Helvetica,sans-Serif" font-size="11.00">id: switchboard</text>
+<text xml:space="preserve" text-anchor="middle" x="47.38" y="-182.87" font-family="Helvetica,sans-Serif" font-size="11.00">bus: switchboard</text>
 </g>
 </g>
 </svg>

@@ -23,10 +23,16 @@ from energy_assistant.models.inputs import InputConfig, InputValueKind, input_va
 
 
 class EmsInputApplicator:
-    def __init__(self, *, input_configs: dict[str, InputConfig]) -> None:
+    def __init__(
+        self,
+        *,
+        input_configs: dict[str, InputConfig],
+        power_aligner: PowerForecastAligner,
+        price_aligner: PriceForecastAligner,
+    ) -> None:
         self._input_configs = dict(input_configs)
-        self._power_aligner = PowerForecastAligner()
-        self._price_aligner = PriceForecastAligner()
+        self._power_aligner = power_aligner
+        self._price_aligner = price_aligner
 
     def apply_to_horizon(
         self,

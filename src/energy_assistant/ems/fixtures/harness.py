@@ -31,6 +31,10 @@ class EmsFixturePaths:
     plan_path: Path
     plot_path: Path
     hash_path: Path
+    logical_graph_path: Path
+    logical_graph_hash_path: Path
+    topology_graph_path: Path
+    topology_graph_hash_path: Path
 
 
 def resolve_ems_fixture_paths(
@@ -54,6 +58,10 @@ def resolve_ems_fixture_paths(
         plan_path=scenario_dir / "output.json",
         plot_path=scenario_dir / "output.jpeg",
         hash_path=scenario_dir / "output.json.hash",
+        logical_graph_path=scenario_dir / "logical-graph.svg",
+        logical_graph_hash_path=scenario_dir / "logical-graph.svg.hash",
+        topology_graph_path=scenario_dir / "topology-graph.svg",
+        topology_graph_hash_path=scenario_dir / "topology-graph.svg.hash",
     )
 
 
@@ -67,6 +75,10 @@ def compute_plan_hash(plan_summary: dict[str, Any]) -> str:
         normalized["meta"] = meta
     serialized = json.dumps(normalized, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(serialized.encode()).hexdigest()[:16]
+
+
+def compute_text_hash(payload: str) -> str:
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
 
 def render_fixture_json(payload: dict[str, Any]) -> str:

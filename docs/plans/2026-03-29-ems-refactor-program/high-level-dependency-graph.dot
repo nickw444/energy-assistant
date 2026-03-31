@@ -1,0 +1,114 @@
+digraph EnergyAssistantArchitecture {
+  graph [
+    rankdir=LR,
+    splines=ortho,
+    nodesep=0.45,
+    ranksep=0.8,
+    pad=0.2,
+    fontname="Helvetica"
+  ];
+
+  node [
+    shape=box,
+    style="rounded,filled",
+    fontname="Helvetica",
+    fontsize=11,
+    color="#24445c",
+    fillcolor="#eef5f8",
+    margin="0.14,0.08"
+  ];
+
+  edge [
+    color="#4e6b7a",
+    arrowsize=0.7,
+    penwidth=1.1,
+    fontname="Helvetica",
+    fontsize=10
+  ];
+
+  cli [label="CLI\nsrc/energy_assistant/cli.py", fillcolor="#dceef2"];
+  cli_oneoff [label="CLI One-off EMS Commands\nems solve\nrecord-scenario\nrefresh-baseline\nscenario-report", fillcolor="#dceef2"];
+  config [label="Config Models + Loader\nmodels.config\nmodels.inputs\nmodels.plant", fillcolor="#dceef2"];
+
+  subgraph cluster_runtime {
+    label="Runtime Services";
+    color="#bdd3de";
+    style="rounded";
+
+    api [label="FastAPI Server\napi.server\napi.routes", fillcolor="#edf6ea"];
+    worker [label="Worker\nworker.service", fillcolor="#edf6ea"];
+  }
+
+  subgraph cluster_inputs {
+    label="Input Resolution Boundary";
+    color="#d6c6b8";
+    style="rounded";
+
+    input_provider [label="ResolverBackedInputProvider\ninputs.provider", fillcolor="#faf2e8"];
+    source_resolver [label="ValueResolver\nlib/source_resolver/resolver.py", fillcolor="#faf2e8"];
+    hass_provider [label="HassDataProvider\nlib/source_resolver/hass_provider.py", fillcolor="#faf2e8"];
+    ha_http [label="HomeAssistantClient\nlib/home_assistant.py", fillcolor="#faf2e8"];
+    ha_ws [label="HA WebSocket Client\nlib/home_assistant_ws.py", fillcolor="#faf2e8"];
+  }
+
+  subgraph cluster_ems {
+    label="EMS Planner";
+    color="#c9d7bf";
+    style="rounded";
+
+    planner [label="EmsMilpPlanner\nems/planner.py", fillcolor="#eef6e8"];
+    factory [label="EmsSystemFactory\nems/system/factory.py", fillcolor="#eef6e8"];
+    applicator [label="EmsInputApplicator\nems/inputs/application.py", fillcolor="#eef6e8"];
+    system [label="EmsSystem\nems/system/system.py", fillcolor="#eef6e8"];
+    components [label="Logical Components\nems/components/*", fillcolor="#eef6e8"];
+    topology [label="Topology Graph\nems/topology/*", fillcolor="#eef6e8"];
+    milp [label="MILP Snapshot + PuLP\nems/milp/*", fillcolor="#eef6e8"];
+    ems_models [label="EMS Models + Plan DTOs\nems/models.py", fillcolor="#eef6e8"];
+  }
+
+  plotting [label="Plotting + Fixture Harness\nplotting/*\nems/fixtures/*", fillcolor="#f5f0e4"];
+  integration [label="Home Assistant Integration\ncustom_components/energy_assistant/*", fillcolor="#f2e8f4"];
+
+  cli -> config [label="loads"];
+  cli -> cli_oneoff [label="dispatches"];
+  cli -> api [label="creates"];
+  cli -> worker [label="creates"];
+  cli -> source_resolver [label="creates"];
+  cli -> ha_ws [label="creates"];
+  cli -> plotting [label="invokes in ems commands"];
+  cli_oneoff -> planner [label="calls directly"];
+  cli_oneoff -> input_provider [label="live or fixture input provider"];
+  cli_oneoff -> plotting [label="writes plots/reports"];
+  cli_oneoff -> config [label="loads fixture or app config"];
+
+  api -> worker [label="reads/triggers"];
+  api -> config [label="serves"];
+  integration -> api [label="HTTP client"];
+
+  worker -> planner [label="owns"];
+  worker -> input_provider [label="owns"];
+  worker -> ha_ws [label="subscribes"];
+
+  planner -> factory [label="uses"];
+  planner -> input_provider [label="resolves raw inputs"];
+  planner -> applicator [label="applies horizon"];
+  planner -> system [label="updates/builds"];
+  planner -> milp [label="solves"];
+  planner -> ems_models [label="returns plan"];
+
+  factory -> config [label="builds from"];
+  factory -> applicator [label="creates"];
+  factory -> system [label="creates"];
+  factory -> components [label="instantiates"];
+
+  system -> components [label="updates + extracts"];
+  system -> topology [label="assembles graph"];
+  system -> milp [label="creates snapshot"];
+  components -> topology [label="emit graph elements"];
+  topology -> milp [label="constraints/objective"];
+
+  input_provider -> config [label="reads inputs"];
+  input_provider -> source_resolver [label="marks + resolves"];
+  source_resolver -> hass_provider [label="hydrates + reads"];
+  hass_provider -> ha_http [label="fetches states/history"];
+}

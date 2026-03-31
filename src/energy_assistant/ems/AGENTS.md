@@ -22,13 +22,20 @@ Key files:
 - `src/energy_assistant/ems/fixtures/harness.py` supports offline plan baselines and reports.
 - `src/energy_assistant/inputs/fixtures.py` supports raw resolved-input fixture capture and replay.
 
+Design rules:
+- Keep constructor dependencies explicit. Persistent runtime classes should accept required collaborators through `__init__` rather than constructing them internally.
+- Use `EmsSystemFactory.create(app_config)` as the EMS composition root for production wiring of components and helper services.
+- Keep solve-scoped topology and MILP objects created inside per-solve methods; the explicit-DI rule is for persistent collaborators, not ephemeral solve artifacts.
+
 Testing workflow:
 - EMS tests live under `tests/energy_assistant/ems/`.
 - Fixture baselines live under `tests/fixtures/ems/<fixture>/<scenario>/`.
 - Record a new scenario: `uv run energy-assistant ems record-scenario --fixture <fixture> --name <scenario>`; this writes canonical resolved planner inputs to `input.json`.
 - Replay a fixture: `uv run energy-assistant ems solve --fixture <fixture> --scenario <scenario>`
-- Refresh baselines: `uv run energy-assistant ems refresh-baseline [--fixture ...] [--name ...]`
+- Refresh baselines: `uv run energy-assistant ems refresh-baseline [--fixture ...] [--name ...] [--force-visuals]`
 - Render a report: `uv run energy-assistant ems scenario-report [--fixture ...]`
+- Fixture scenario outputs now include `output.json`, `output.jpeg`, `logical-graph.svg`, and `topology-graph.svg` plus adjacent hash files.
+- Fixture graph SVG regeneration now uses Graphviz (`neato`), so developers refreshing visuals need Graphviz installed locally.
 
 ## Continuous learning
 - Update this file when EMS developer workflows or the high-level mental model changes.

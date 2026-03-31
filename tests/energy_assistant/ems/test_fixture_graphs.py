@@ -53,18 +53,16 @@ def test_fixture_graphs_emit_expected_dot() -> None:
     assert "#dcfce7" in logical_dot
     assert "EV incentives" not in logical_dot
     assert "Battery reserve" not in logical_dot
-    assert "shape=point" in topology_dot
-    assert 'label="ev_tessie_link.directional_limit' in topology_dot
-    assert 'label="grid_link.import_soft_limit' in topology_dot
-    assert 'label="pv_primary_link.curtail_tracking' in topology_dot
-    assert 'label="battery_primary_link.efficiency' in topology_dot
-    assert 'label="base_load_link.fixed_flow' in topology_dot
+    assert "shape=point" not in topology_dot
+    assert 'label="E' in topology_dot
+    assert "connection_note" not in topology_dot
+    assert "dir=forward" not in topology_dot
+    assert "style=dashed" not in topology_dot
     assert 'xlabel=' not in topology_dot
-    assert 'K=5.4' in topology_dot
-    assert 'esep="+56"' in topology_dot
-    assert 'sep=2.60' in topology_dot
-    assert 'pad=0.35' in topology_dot
-    assert 'len=7.8' in topology_dot
+    assert 'rankdir=LR' in topology_dot
+    assert 'nodesep=1.45' in topology_dot
+    assert 'ranksep=1.35' in topology_dot
+    assert 'len=1.0' in topology_dot
     assert 'headlabel=' not in topology_dot
     assert 'taillabel=' not in topology_dot
     assert "battery reserve" in topology_dot
@@ -78,46 +76,35 @@ def test_fixture_graphs_emit_expected_dot() -> None:
     assert "segment:primary_acdc:000:directional_limit" not in {
         node.id for node in topology_graph.nodes
     }
+    assert all(node.kind != "connection_note" for node in topology_graph.nodes)
     assert any(
         edge.source_id == "primary_dc"
         and edge.target_id == "switchboard"
         and edge.label is not None
-        and edge.label == "primary_acdc.directional_limit\ndirectional limit"
+        and "E05" in edge.label
+        and "- directional limit" in edge.label
         for edge in topology_graph.edges
     )
-    pv_segment_nodes = [node.id for node in topology_graph.nodes if "pv_primary_link" in node.id]
-    assert pv_segment_nodes == [
-        "segment:pv_primary_link:000:directional_limit",
-        "segment:pv_primary_link:001:upper_bound",
-    ]
+    pv_segment_nodes = [node.id for node in topology_graph.nodes if node.id.startswith("segment:")]
+    assert pv_segment_nodes == []
     pv_segment_edges = [
         (edge.source_id, edge.target_id, edge.label)
         for edge in topology_graph.edges
-        if "pv_primary_link" in edge.source_id
-        or "pv_primary_link" in edge.target_id
-        or (edge.source_id, edge.target_id) == ("pv_primary", "primary_dc")
+        if edge.kind == "segment" and (edge.source_id, edge.target_id) == ("pv_primary", "primary_dc")
     ]
     assert pv_segment_edges == [
         (
             "pv_primary",
-            "segment:pv_primary_link:000:directional_limit",
-            "pv_primary_link.directional_limit\ndirectional limit",
-        ),
-        (
-            "segment:pv_primary_link:000:directional_limit",
-            "segment:pv_primary_link:001:upper_bound",
-            "pv_primary_link.upper_bound\nupper bound",
-        ),
-        (
-            "segment:pv_primary_link:001:upper_bound",
             "primary_dc",
-            "pv_primary_link.curtail_tracking\ncurtail tracking",
+            "E06\\l- directional limit\\l"
+            "- upper bound\\l"
+            "- curtail tracking\\l",
         ),
     ]
 
 
 def test_fixture_graphs_render_expected_svg() -> None:
-    if shutil.which("neato") is None:
+    if shutil.which("dot") is None:
         pytest.skip("Graphviz is not installed.")
 
     config_path = Path("tests/fixtures/ems/nwhass/short-horizon/config.yaml")
@@ -144,16 +131,12 @@ def test_fixture_graphs_render_expected_svg() -> None:
     assert "Switchboard" in logical_svg
     assert "EV incentives" not in logical_svg
     assert "Battery reserve" not in logical_svg
-    assert "grid_link.directional_limit" in topology_svg
-    assert "primary_acdc.directional_limit" in topology_svg
-    assert "grid_link.import_soft_limit" in topology_svg
-    assert "ev_tessie_link.directional_limit" in topology_svg
-    assert "ev_tessie_link.charge_control" in topology_svg
-    assert "pv_primary_link.upper_bound" in topology_svg
-    assert "pv_primary_link.curtail_tracking" in topology_svg
+    assert "E01" in topology_svg
+    assert "base_load" in topology_svg
     assert "directional limit" in topology_svg
+    assert "soft limit" in topology_svg
     assert "charge control" in topology_svg
-    assert "upper bound" in topology_svg
+    assert "curtail tracking" in topology_svg
     assert "battery reserve" in topology_svg
     assert "ev incentives" in topology_svg
     assert "a->b 10.0kW" not in topology_svg
@@ -181,7 +164,7 @@ def test_render_graph_svg_requires_graphviz(
 
 
 def test_render_graph_svg_is_deterministic() -> None:
-    if shutil.which("neato") is None:
+    if shutil.which("dot") is None:
         pytest.skip("Graphviz is not installed.")
 
     config_path = Path("tests/fixtures/ems/nwhass/short-horizon/config.yaml")

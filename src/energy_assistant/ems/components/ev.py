@@ -48,6 +48,7 @@ class EvComponent:
         switchboard_bus_id: str,
         load: ControlledEvComponentConfig,
         grid_export_bias_pct: float,
+        time_window_matcher: TimeWindowMatcher,
     ) -> None:
         self.id = str(component_id)
         self.name = str(load.name)
@@ -59,7 +60,7 @@ class EvComponent:
         self._grid_price_bias = float(grid_export_bias_pct) / 100.0
 
         self._load = load
-        self._matcher = TimeWindowMatcher()
+        self._matcher = time_window_matcher
 
         self.node_id = self.id
         self.connection_id = f"ev_{self.id}_link"
@@ -387,6 +388,18 @@ class EvSocIncentivesFragment:
         self._built = False
         self._constraints: list[ConstraintSpec] = []
         self._objective: pulp.LpAffineExpression = pulp.LpAffineExpression()
+
+    @property
+    def storage_node_id(self) -> str:
+        return self._storage.id
+
+    @property
+    def incentive_count(self) -> int:
+        return len(self._incentives)
+
+    @property
+    def grid_price_bias(self) -> float:
+        return self._grid_price_bias
 
     def _ensure_built(self) -> None:
         if self._built:

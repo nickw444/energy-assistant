@@ -145,6 +145,10 @@ class Connection:
             return [("passthrough", Passthrough())]
         return list(self.policies.items())
 
+    @property
+    def ordered_policies(self) -> list[tuple[str, ConnectionPolicy]]:
+        return list(self._ordered_policies)
+
     def _build_policy_bindings(self) -> list[_PolicyBinding]:
         policy_count = len(self._ordered_policies)
         ab_points: list[dict[int, pulp.LpVariable]] = [self.power_in_ab]

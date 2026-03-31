@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
 from dataclasses import dataclass
 
 from energy_assistant.ems.inputs.models import AppliedInputRegistry
@@ -22,7 +21,6 @@ from energy_assistant.models.plant import (
     BatteryComponentConfig,
     InputReference,
     InverterComponentConfig,
-    PvComponentConfig,
 )
 
 from .battery import BatteryComponent, BatterySolveState
@@ -43,9 +41,9 @@ class InverterComponent:
         component_id: str,
         switchboard_bus_id: str,
         inverter: InverterComponentConfig,
-        battery_components: Sequence[tuple[str, BatteryComponentConfig]],
-        pv_components: Sequence[tuple[str, PvComponentConfig]],
-        grid_max_export_kw: float,
+        battery_cfgs: dict[str, BatteryComponentConfig],
+        pvs: dict[str, PvComponent],
+        batteries: dict[str, BatteryComponent],
     ) -> None:
         self.id = str(component_id)
         self.name = str(inverter.name)
@@ -56,31 +54,9 @@ class InverterComponent:
         self.dc_bus_id = f"{self.id}_dc"
         self.inverter_link_id = f"{self.id}_acdc"
 
-        self._battery_cfgs: dict[str, BatteryComponentConfig] = {
-            battery_id: battery for battery_id, battery in battery_components
-        }
-
-        self.pvs: dict[str, PvComponent] = {
-            pv_id: PvComponent(
-                component_id=pv_id,
-                inverter_id=self.id,
-                inverter=inverter,
-                pv=pv,
-                dc_bus_id=self.dc_bus_id,
-            )
-            for pv_id, pv in pv_components
-        }
-        self.batteries: dict[str, BatteryComponent] = {
-            battery_id: BatteryComponent(
-                component_id=battery_id,
-                inverter_id=self.id,
-                dc_bus_id=self.dc_bus_id,
-                inverter_peak_kw=self.peak_power_kw,
-                battery=battery,
-                grid_max_export_kw=float(grid_max_export_kw),
-            )
-            for battery_id, battery in battery_components
-        }
+        self._battery_cfgs = dict(battery_cfgs)
+        self.pvs = dict(pvs)
+        self.batteries = dict(batteries)
 
     def update_inputs(
         self,

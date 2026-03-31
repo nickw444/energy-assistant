@@ -215,6 +215,22 @@ class BatteryExportReservePolicy:
         self._export_ok_by_connection: dict[str, dict[int, pulp.LpVariable]] = {}
 
     @property
+    def battery_node_id(self) -> str:
+        return self._battery.id
+
+    @property
+    def grid_connection_id(self) -> str:
+        return self._grid.id
+
+    @property
+    def grid_node_ids(self) -> tuple[str, str]:
+        return (self._grid.a_node_id, self._grid.b_node_id)
+
+    @property
+    def reserve_kwh(self) -> float:
+        return self._reserve_kwh
+
+    @property
     def constraints(self) -> list[ConstraintSpec]:
         batt = self._battery
         grid = self._grid

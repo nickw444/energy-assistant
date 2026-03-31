@@ -63,7 +63,7 @@ def test_app_config_allows_multiple_pvs_and_batteries_per_inverter() -> None:
 def test_factory_keeps_all_inverter_children() -> None:
     app_config = _multi_attachment_app_config()
 
-    system = EmsSystemFactory(app_config).system
+    system = EmsSystemFactory.create(app_config).system
     inverter = system.inverters["primary"]
 
     assert set(inverter.pvs) == {"pv_primary", "pv_secondary"}
@@ -137,7 +137,10 @@ def test_plan_exports_all_inverter_children_from_fixture_inputs() -> None:
     input_provider, captured_at = load_fixture_input_provider(path=FIXTURE_DIR / "input.json")
     now = datetime.fromisoformat(captured_at) if captured_at else None
 
-    plan = EmsMilpPlanner(app_config, input_provider=input_provider).generate_ems_plan(now=now)
+    plan = EmsMilpPlanner(
+        input_provider=input_provider,
+        system_factory=EmsSystemFactory.create(app_config),
+    ).generate_ems_plan(now=now)
 
     assert set(plan.components) == {
         "switchboard",

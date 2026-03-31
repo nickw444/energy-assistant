@@ -42,6 +42,8 @@ class GridComponent:
         bus_id: str,
         component_id: str,
         grid: GridComponentConfig,
+        time_window_matcher: TimeWindowMatcher,
+        price_series_builder: PriceSeriesBuilder,
     ) -> None:
         self.id = str(component_id)
         self.bus_id = str(bus_id)
@@ -49,8 +51,8 @@ class GridComponent:
         self.connection_id = f"{self.id}_link"
         self._grid_cfg = grid
 
-        self._time_window_matcher = TimeWindowMatcher()
-        self._price_series_builder = PriceSeriesBuilder()
+        self._time_window_matcher = time_window_matcher
+        self._price_series_builder = price_series_builder
 
         self._price_import_raw = SeriesParameter[float](f"{self.id}_price_import_raw")
         self._price_export_raw = SeriesParameter[float](f"{self.id}_price_export_raw")

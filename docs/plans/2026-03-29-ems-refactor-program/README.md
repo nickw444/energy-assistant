@@ -93,6 +93,21 @@ Forecast handling was split into two stages:
 
 That change was important because forecast alignment, realtime slot replacement, coverage validation, and price forecast extension are planner concerns, not generic input concerns.
 
+### Construction and dependency wiring
+The refactor also depends on keeping object construction explicit.
+
+Runtime objects should receive their required instance dependencies through their constructors rather than constructing subdependencies internally. In other words: `new` is glue.
+
+That rule matters because hidden constructor-time wiring weakens the seams the refactor was meant to introduce. If a component instantiates helpers internally, tests can no longer provide explicit fakes or mocks at the real boundary, and the code quietly reintroduces local service-location behavior inside otherwise modular classes.
+
+Automatic wiring is still allowed, but it should live at an outer composition boundary:
+
+- the existing system factory may assemble production dependencies,
+- a class may expose a convenience `create(...)` classmethod that constructs default subdependencies,
+- the primary `__init__` path should continue to accept those dependencies explicitly.
+
+This keeps the runtime graph easy to inspect, keeps tests honest, and preserves the refactor goal that data flow and ownership boundaries remain visible in code.
+
 ### Fixture and regression workflow
 Scenario fixtures became a first-class validation mechanism during the refactor.
 
@@ -100,9 +115,16 @@ The fixture system now supports:
 
 - scenario-specific EMS configuration,
 - replay from captured data or resolved planner inputs,
-- stable scenario baselines used to validate refactor safety.
+- stable scenario baselines used to validate refactor safety,
+- per-scenario visual outputs that show both the logical component graph and the deeper solve-time topology graph.
 
 This is what allowed the refactor to proceed while preserving confidence that the planner still behaves acceptably across historical scenarios.
+
+Those graph artifacts intentionally reflect the two-layer refactor model:
+
+- `logical-graph.svg` shows the user-facing plant/component relationships,
+- `topology-graph.svg` shows the expanded solve-scoped node/connection/policy topology used by the MILP.
+- the SVGs are generated from DOT via Graphviz, so refreshing fixture visuals requires Graphviz installed locally.
 
 ## Important Outcomes
 The refactor achieved the original goals in a practical way:
@@ -134,11 +156,23 @@ Those logical outputs now include a flat component-keyed series export that mirr
 
 This is the core mental model future agent sessions should start from.
 
+## Architecture Diagrams
+The current code architecture and runtime data flow are captured in two DOT-backed SVG diagrams:
+
+- [High-level dependency graph](./high-level-dependency-graph.svg)
+- [Plan-generation data flow](./plan-generation-data-flow.svg)
+
+The DOT sources live alongside the rendered diagrams:
+
+- [high-level-dependency-graph.dot](./high-level-dependency-graph.dot)
+- [plan-generation-data-flow.dot](./plan-generation-data-flow.dot)
+
 ## What to Preserve Going Forward
 Future work should preserve these boundaries unless there is a compelling reason to collapse them again:
 
 - keep topology separate from logical component behavior,
 - keep input resolution outside the planner model,
+- keep constructor dependency wiring explicit; do not instantiate required collaborators inside `__init__`,
 - keep connection-local flow behavior explicit,
 - keep scenario baselines as a hard regression signal,
 - keep configuration focused on logical wiring and typed inputs rather than leaking implementation details.

@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
+from typing import cast
 
 import pytest
 
+from energy_assistant.ems.models import EmsPlanOutput
+from energy_assistant.ems.planner import EmsMilpPlanner
 from energy_assistant.lib.home_assistant import HomeAssistantStateDict
 from energy_assistant.lib.home_assistant_ws import HomeAssistantWebSocketClient
-from energy_assistant.lib.source_resolver.resolver import ValueResolver
-from energy_assistant.lib.source_resolver.sources import EntitySource
 from energy_assistant.models.config import AppConfig
 from energy_assistant.worker.service import PRICE_DEBOUNCE_SECONDS, Worker
 
@@ -36,24 +37,24 @@ class _StubWsClient(HomeAssistantWebSocketClient):
             yield state
 
 
-class _StubResolver:
-    def mark_for_hydration(self, value: object) -> None:
-        _ = value
+class _StubPlanner:
+    def __init__(self) -> None:
+        self.mark_for_hydration_calls = 0
+        self.hydrate_all_calls = 0
+        self.generate_ems_plan_calls = 0
+        self.plan: EmsPlanOutput | None = None
+
+    def mark_for_hydration(self) -> None:
+        self.mark_for_hydration_calls += 1
 
     def hydrate_all(self) -> None:
-        return None
+        self.hydrate_all_calls += 1
 
-    def hydrate_history(self) -> None:
-        return None
-
-    def hydrate_states(self) -> None:
-        return None
-
-    def resolve[Q, R](self, source: EntitySource[Q, R]) -> R:
-        raise AssertionError(f"Unexpected resolve call: {source}")
-
-    def mark(self, source: object) -> None:
-        _ = source
+    def generate_ems_plan(self) -> EmsPlanOutput:
+        self.generate_ems_plan_calls += 1
+        if self.plan is None:
+            raise AssertionError("Test planner missing plan")
+        return self.plan
 
 
 def _app_config() -> AppConfig:
@@ -136,14 +137,18 @@ class TestWorkerDebounce:
         return _app_config()
 
     @pytest.fixture
-    def mock_resolver(self) -> ValueResolver:
-        return _StubResolver()
+    def planner(self) -> _StubPlanner:
+        return _StubPlanner()
 
     async def test_debounce_coalesces_multiple_calls(
-        self, app_config: AppConfig, mock_resolver: ValueResolver
+        self, app_config: AppConfig, planner: _StubPlanner
     ) -> None:
         ws_client = _StubWsClient()
-        worker = Worker(app_config=app_config, resolver=mock_resolver, ha_ws_client=ws_client)
+        worker = Worker(
+            planner=cast(EmsMilpPlanner, planner),
+            price_entity_ids={"sensor.price_import", "sensor.price_export"},
+            ha_ws_client=ws_client,
+        )
         worker.start(start_scheduler=False)
         trigger_count = 0
 
@@ -193,10 +198,14 @@ class TestWorkerDebounce:
         assert trigger_count == 1
 
     async def test_debounce_cancels_on_stop(
-        self, app_config: AppConfig, mock_resolver: ValueResolver
+        self, app_config: AppConfig, planner: _StubPlanner
     ) -> None:
         ws_client = _StubWsClient()
-        worker = Worker(app_config=app_config, resolver=mock_resolver, ha_ws_client=ws_client)
+        worker = Worker(
+            planner=cast(EmsMilpPlanner, planner),
+            price_entity_ids={"sensor.price_import", "sensor.price_export"},
+            ha_ws_client=ws_client,
+        )
         worker.start(start_scheduler=False)
         trigger_count = 0
 
@@ -224,3 +233,13 @@ class TestWorkerDebounce:
         await ws_client.close()
 
         assert trigger_count == 0
+
+    def test_worker_marks_planner_for_hydration_on_init(self, planner: _StubPlanner) -> None:
+        worker = Worker(
+            planner=cast(EmsMilpPlanner, planner),
+            price_entity_ids={"sensor.price_import"},
+            ha_ws_client=_StubWsClient(),
+        )
+
+        assert worker is not None
+        assert planner.mark_for_hydration_calls == 1

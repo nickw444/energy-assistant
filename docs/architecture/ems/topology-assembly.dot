@@ -1,0 +1,112 @@
+digraph EmsTopologyAssembly {
+  graph [
+    rankdir=LR,
+    splines=ortho,
+    nodesep=0.45,
+    ranksep=0.8,
+    pad=0.2,
+    fontname="Helvetica"
+  ];
+
+  node [
+    shape=box,
+    style="rounded,filled",
+    fontname="Helvetica",
+    fontsize=11,
+    color="#24445c",
+    fillcolor="#eef5f8",
+    margin="0.14,0.08"
+  ];
+
+  edge [
+    color="#4e6b7a",
+    arrowsize=0.7,
+    penwidth=1.1,
+    fontname="Helvetica",
+    fontsize=10
+  ];
+
+  horizon [label="Horizon\ncurrent solve window", fillcolor="#dceef2"];
+  system [label="EmsSystem\npersistent logical components", fillcolor="#eef6e8"];
+  solve_state [label="EmsSystemSolveState\nsolve-scoped references for plan extraction", fillcolor="#f5f0e4"];
+
+  subgraph cluster_components {
+    label="Component Emission";
+    color="#c9d7bf";
+    style="rounded";
+
+    switchboard [label="SwitchboardComponent\ngraph_elements()", fillcolor="#eef6e8"];
+    grid [label="GridComponent\ngraph_elements()", fillcolor="#eef6e8"];
+    load [label="BaseLoadComponent\ngraph_elements()", fillcolor="#eef6e8"];
+    inverter [label="InverterComponent[*]\ngraph_elements()", fillcolor="#eef6e8"];
+    ev [label="EvComponent[*]\ngraph_elements()", fillcolor="#eef6e8"];
+  }
+
+  subgraph cluster_topology {
+    label="Solve-scoped Topology";
+    color="#bdd3de";
+    style="rounded";
+
+    energy_graph [label="EnergyGraph\ncollects GraphElement values", fillcolor="#edf6ea"];
+    topology_node [label="Node\nbus / producer / consumer / prosumer", fillcolor="#edf6ea"];
+    storage_node [label="StorageNode\nSoC dynamics + terminal behaviour", fillcolor="#edf6ea"];
+    topology_connection [label="Connection\nexplicit directional flow vars", fillcolor="#edf6ea"];
+    extra_fragment [label="Extra Fragment\ncross-cutting constraint/objective object", fillcolor="#edf6ea"];
+    policies [label="Ordered Connection Policies\nDirectionalLimit\nEfficiency\nLinearCost\nFixedFlow\nUpperBound\nSoftDirectionalLimit\n...", fillcolor="#edf6ea"];
+  }
+
+  subgraph cluster_snapshot {
+    label="MILP Assembly";
+    color="#d6c6b8";
+    style="rounded";
+
+    snapshot [label="ModelSnapshot\nbuild from graph.fragments", fillcolor="#faf2e8"];
+    constraints [label="ConstraintSpec list\nstable unique names", fillcolor="#faf2e8"];
+    objective [label="objective term sum", fillcolor="#faf2e8"];
+    problem [label="PuLP LpProblem\nems_optimisation", fillcolor="#faf2e8"];
+  }
+
+  extract [label="build_component_plans(snapshot, solve_state)\nmap solved values back to logical component plans", fillcolor="#f5f0e4"];
+  plan [label="EmsPlanOutput.components\nflat logical export", fillcolor="#f5f0e4"];
+
+  horizon -> system [label="build_snapshot(horizon)"];
+  system -> switchboard;
+  system -> grid;
+  system -> load;
+  system -> inverter;
+  system -> ev;
+
+  switchboard -> energy_graph [label="bus node"];
+  grid -> energy_graph [label="node + connection"];
+  load -> energy_graph [label="node + connection"];
+  inverter -> energy_graph [label="DC bus + AC/DC link\n+ child PV/Battery elements"];
+  ev -> energy_graph [label="storage + connection\n+ optional fragment"];
+
+  switchboard -> solve_state [label="implicit", style=dashed];
+  grid -> solve_state [label="connection + price series", style=dashed];
+  load -> solve_state [label="connection + series", style=dashed];
+  inverter -> solve_state [label="connection + child states", style=dashed];
+  ev -> solve_state [label="storage + connection", style=dashed];
+
+  energy_graph -> topology_node [label="contains"];
+  energy_graph -> storage_node [label="contains"];
+  energy_graph -> topology_connection [label="contains"];
+  energy_graph -> extra_fragment [label="contains"];
+  topology_connection -> policies [label="composes as ordered segments"];
+
+  topology_node -> snapshot [label="constraints"];
+  storage_node -> snapshot [label="constraints + objective"];
+  topology_connection -> snapshot [label="constraints + objective"];
+  extra_fragment -> snapshot [label="constraints + objective"];
+
+  energy_graph -> snapshot [label="fragments()"];
+  snapshot -> constraints [label="collect"];
+  snapshot -> objective [label="collect"];
+  constraints -> problem [label="attach"];
+  objective -> problem [label="set minimization target"];
+
+  problem -> extract [label="solved variables"];
+  solve_state -> extract [label="typed references"];
+  horizon -> extract [label="time axis"];
+  extract -> plan [label="component id -> typed plan"];
+}
