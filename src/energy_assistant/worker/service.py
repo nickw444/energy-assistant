@@ -10,8 +10,6 @@ from typing import Literal
 from energy_assistant.ems.models import EmsPlanOutput
 from energy_assistant.ems.planner import EmsMilpPlanner
 from energy_assistant.lib.home_assistant_ws import HomeAssistantWebSocketClient
-from energy_assistant.lib.source_resolver.resolver import ValueResolver
-from energy_assistant.models.config import AppConfig
 
 logger = logging.getLogger(__name__)
 
@@ -41,13 +39,12 @@ class Worker:
     def __init__(
         self,
         *,
-        app_config: AppConfig,
-        resolver: ValueResolver,
+        planner: EmsMilpPlanner,
+        price_entity_ids: set[str],
         ha_ws_client: HomeAssistantWebSocketClient,
     ) -> None:
-        self._app_config = app_config
-        self._resolver = resolver
-        self._resolver.mark_for_hydration(app_config)
+        self._planner = planner
+        self._planner.mark_for_hydration()
 
         self._condition = asyncio.Condition()
         self._in_progress = False
@@ -64,10 +61,7 @@ class Worker:
         self._run_requested = asyncio.Event()
         self._last_run_finished_at: datetime | None = None
 
-        self._price_entity_ids = {
-            app_config.plant.grid.realtime_price_import.entity,
-            app_config.plant.grid.realtime_price_export.entity,
-        }
+        self._price_entity_ids = set(price_entity_ids)
         self._ha_ws_client = ha_ws_client
 
     def start(self, *, start_scheduler: bool = True, start_price_watcher: bool = True) -> None:
@@ -227,8 +221,8 @@ class Worker:
             self._condition.notify_all()
 
     def _solve_once_blocking(self) -> EmsPlanOutput:
-        self._resolver.hydrate_all()
-        return EmsMilpPlanner(self._app_config, resolver=self._resolver).generate_ems_plan()
+        self._planner.hydrate_all()
+        return self._planner.generate_ems_plan()
 
     async def _run_scheduler(self) -> None:
         """Scheduler loop: runs immediately, then waits for fallback interval after each run."""
