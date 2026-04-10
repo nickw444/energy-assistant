@@ -13,6 +13,8 @@ from energy_assistant.ems.models import PvComponentPlan
 from energy_assistant.ems.parameters import SeriesParameter
 from energy_assistant.ems.planning.horizon import Horizon
 from energy_assistant.ems.series import bool_series, interval_series_points
+from energy_assistant.ems.system.component import EmsComponent
+from energy_assistant.ems.system.topology import ComponentTopology, GraphBuildContext, PlanContext
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import GraphElement
 from energy_assistant.ems.topology.nodes import Node
@@ -40,7 +42,7 @@ class PvSolveState:
     connection: Connection
 
 
-class PvComponent:
+class PvComponent(EmsComponent[PvSolveState, PvComponentPlan]):
     def __init__(
         self,
         *,
@@ -63,6 +65,13 @@ class PvComponent:
 
         self._available_kw = SeriesParameter[float](f"{self.id}_available_kw")
 
+    def describe_topology(self) -> ComponentTopology:
+        return ComponentTopology(
+            component_id=self.id,
+            component_type="pv",
+            connection_target_id=self.inverter_id,
+        )
+
     def update_inputs(self, *, horizon: Horizon, inputs: AppliedInputRegistry) -> None:
         pv_series = inputs.forecast(self._pv_cfg.forecast.key, kind=InputValueKind.POWER)
         if len(pv_series) != horizon.num_intervals:
@@ -73,6 +82,15 @@ class PvComponent:
             skip_first_slot=False,
         )
         self._available_kw.set([float(x) for x in pv_series])
+
+    def build_graph(
+        self,
+        *,
+        horizon: Horizon,
+        build_ctx: GraphBuildContext,
+    ) -> tuple[list[GraphElement], PvSolveState]:
+        _ = build_ctx
+        return self.graph_elements(horizon=horizon)
 
     def graph_elements(self, *, horizon: Horizon) -> tuple[list[GraphElement], PvSolveState]:
         available_kw = self._available_kw.get()
@@ -173,7 +191,9 @@ class PvComponent:
         snapshot: ModelSnapshot,
         *,
         solve_state: PvSolveState,
+        plan_ctx: PlanContext,
     ) -> PvComponentPlan:
+        _ = plan_ctx
         horizon = snapshot.ctx.horizon
         actual_kw = [self.pv_kw(snapshot, t, solve_state=solve_state) for t in horizon.T]
         curtail_kw = [

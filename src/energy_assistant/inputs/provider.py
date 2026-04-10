@@ -123,15 +123,15 @@ class ResolverBackedInputProvider:
         return ResolvedInputRegistry(scalars=scalars, forecasts=forecasts)
 
     def grid_price_watch_entity_ids(self) -> set[str]:
-        grid = _grid_component(self._app_config)
         entity_ids: set[str] = set()
-        for binding in (grid.price_import, grid.price_export):
-            input_config = self._app_config.inputs[binding.source.key]
-            if not isinstance(input_config, ForecastInputConfig):
-                continue
-            realtime = input_config.realtime
-            if realtime is not None:
-                entity_ids.add(realtime.entity)
+        for grid in _grid_components(self._app_config):
+            for binding in (grid.price_import, grid.price_export):
+                input_config = self._app_config.inputs[binding.source.key]
+                if not isinstance(input_config, ForecastInputConfig):
+                    continue
+                realtime = input_config.realtime
+                if realtime is not None:
+                    entity_ids.add(realtime.entity)
         return entity_ids
 
     def _resolve_scalar(self, input_config: ScalarInputConfig) -> float | bool:
@@ -306,11 +306,12 @@ class FixtureResolvedInputProvider:
         return set(self._price_watch_entity_ids)
 
 
-def _grid_component(app_config: AppConfig) -> GridComponentConfig:
-    for component in app_config.plant.values():
-        if isinstance(component, GridComponentConfig):
-            return component
-    raise ValueError("plant must define exactly one grid component")
+def _grid_components(app_config: AppConfig) -> list[GridComponentConfig]:
+    return [
+        component
+        for component in app_config.plant.values()
+        if isinstance(component, GridComponentConfig)
+    ]
 
 
 def _validate_point_reconstruction(

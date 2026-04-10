@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import cast
 
 import pulp
 
+from energy_assistant.ems.components.grid import GridComponent
 from energy_assistant.ems.inputs.models import AppliedInputRegistry
 from energy_assistant.ems.milp.context import ConstraintSpec, value_of
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
@@ -11,6 +13,8 @@ from energy_assistant.ems.models import BatteryComponentPlan
 from energy_assistant.ems.parameters import ScalarParameter
 from energy_assistant.ems.planning.horizon import Horizon
 from energy_assistant.ems.series import interval_series_points, state_series_points
+from energy_assistant.ems.system.component import EmsComponent
+from energy_assistant.ems.system.topology import ComponentTopology, GraphBuildContext, PlanContext
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import GraphElement
 from energy_assistant.ems.topology.nodes import StorageNode
@@ -29,7 +33,7 @@ class BatterySolveState:
     connection: Connection
 
 
-class BatteryComponent:
+class BatteryComponent(EmsComponent[BatterySolveState, BatteryComponentPlan]):
     def __init__(
         self,
         *,
@@ -76,6 +80,17 @@ class BatteryComponent:
             f"{self.id}_initial_soc_kwh"
         )
 
+    @property
+    def battery_config(self) -> BatteryComponentConfig:
+        return self._battery_cfg
+
+    def describe_topology(self) -> ComponentTopology:
+        return ComponentTopology(
+            component_id=self.id,
+            component_type="battery",
+            connection_target_id=self.inverter_id,
+        )
+
     def update_inputs(
         self,
         *,
@@ -90,14 +105,48 @@ class BatteryComponent:
         initial_soc_kwh = self.capacity_kwh * initial_soc_pct / 100.0
         self._initial_soc_kwh.set(max(0.0, min(self.capacity_kwh, initial_soc_kwh)))
 
+    def build_graph(
+        self,
+        *,
+        horizon: Horizon,
+        build_ctx: GraphBuildContext,
+    ) -> tuple[list[GraphElement], BatterySolveState]:
+        attachment = build_ctx.topology.attachment_for(self.inverter_id)
+        if attachment is None:
+            raise ValueError(f"Battery {self.id!r} requires an inverter attachment")
+        grid_ids = [
+            child_id
+            for child_id in build_ctx.topology.children_of(attachment.target_component_id)
+            if build_ctx.topology.description_for(child_id).component_type == "grid"
+        ]
+        grid_connections = [
+            connection
+            for grid_id in grid_ids
+            if (connection := build_ctx.connection(grid_id)) is not None
+        ]
+        grid_price_import_raw = [0.0] * int(horizon.num_intervals)
+        if grid_ids:
+            grid_component = cast(GridComponent, build_ctx.components[grid_ids[0]])
+            grid_solve_state = build_ctx.solve_states.get(grid_component)
+            grid_price_import_raw = list(grid_solve_state.price_import_raw)
+        return self.graph_elements(
+            horizon=horizon,
+            grid_connection=grid_connections[0] if grid_connections else None,
+            grid_connections=grid_connections,
+            price_import_raw=grid_price_import_raw,
+        )
+
     def graph_elements(
         self,
         *,
         horizon: Horizon,
-        grid_connection: Connection,
+        grid_connection: Connection | None = None,
+        grid_connections: list[Connection] | None = None,
         price_import_raw: list[float],
     ) -> tuple[list[GraphElement], BatterySolveState]:
         initial_soc_kwh = self._initial_soc_kwh.get()
+        if grid_connections is None:
+            grid_connections = [grid_connection] if grid_connection is not None else []
 
         charge_cost_per_kwh = [
             float(self._battery_cfg.charge_cost_per_kwh)
@@ -157,7 +206,7 @@ class BatteryComponent:
         reserve_policy = BatteryExportReservePolicy(
             horizon=horizon,
             battery=storage,
-            grid_connection=grid_connection,
+            grid_connections=grid_connections,
             reserve_kwh=self.reserve_kwh,
             soc_min_kwh=self.soc_min_kwh,
             soc_max_kwh=self.soc_max_kwh,
@@ -172,7 +221,9 @@ class BatteryComponent:
         snapshot: ModelSnapshot,
         *,
         solve_state: BatterySolveState,
+        plan_ctx: PlanContext,
     ) -> BatteryComponentPlan:
+        _ = plan_ctx
         horizon = snapshot.ctx.horizon
         storage = solve_state.storage
         connection = solve_state.connection
@@ -199,7 +250,7 @@ class BatteryExportReservePolicy:
         *,
         horizon: Horizon,
         battery: StorageNode,
-        grid_connection: Connection,
+        grid_connections: list[Connection],
         reserve_kwh: float,
         soc_min_kwh: float,
         soc_max_kwh: float,
@@ -207,7 +258,7 @@ class BatteryExportReservePolicy:
     ) -> None:
         self._horizon = horizon
         self._battery = battery
-        self._grid = grid_connection
+        self._grids = list(grid_connections)
         self._reserve_kwh = float(reserve_kwh)
         self._soc_min_kwh = float(soc_min_kwh)
         self._soc_max_kwh = float(soc_max_kwh)
@@ -217,43 +268,45 @@ class BatteryExportReservePolicy:
     @property
     def constraints(self) -> list[ConstraintSpec]:
         batt = self._battery
-        grid = self._grid
+        if not self._grids:
+            return []
 
-        if grid.id not in self._export_ok_by_connection:
-            self._export_ok_by_connection[grid.id] = pulp.LpVariable.dicts(
-                f"Export_ok_{batt.id}_{grid.id}",
-                self._horizon.T,
-                lowBound=0,
-                upBound=1,
-                cat="Binary",
-            )
-        export_ok = self._export_ok_by_connection[grid.id]
         reserve_kwh = float(self._reserve_kwh)
         soc_m = float(self._soc_max_kwh) - float(self._soc_min_kwh)
-
-        # Grid export is a_to_b on the grid connection (AC -> Grid).
-        P_grid_export = grid.flow_out_of_node(grid.a_node_id)
-
         constraints: list[ConstraintSpec] = []
-        for t in self._horizon.T:
-            constraints.append(
-                ConstraintSpec(
-                    f"batt_export_reserve_start_{batt.id}_t{t}",
-                    batt.E_by_i[t] >= reserve_kwh - soc_m * (1 - export_ok[t]),
+
+        for grid in self._grids:
+            if grid.id not in self._export_ok_by_connection:
+                self._export_ok_by_connection[grid.id] = pulp.LpVariable.dicts(
+                    f"Export_ok_{batt.id}_{grid.id}",
+                    self._horizon.T,
+                    lowBound=0,
+                    upBound=1,
+                    cat="Binary",
                 )
-            )
-            constraints.append(
-                ConstraintSpec(
-                    f"batt_export_reserve_end_{batt.id}_t{t}",
-                    batt.E_by_i[t + 1] >= reserve_kwh - soc_m * (1 - export_ok[t]),
+            export_ok = self._export_ok_by_connection[grid.id]
+            # Grid export is a_to_b on the grid connection (AC -> Grid).
+            P_grid_export = grid.flow_out_of_node(grid.a_node_id)
+
+            for t in self._horizon.T:
+                constraints.append(
+                    ConstraintSpec(
+                        f"batt_export_reserve_start_{batt.id}_{grid.id}_t{t}",
+                        batt.E_by_i[t] >= reserve_kwh - soc_m * (1 - export_ok[t]),
+                    )
                 )
-            )
-            constraints.append(
-                ConstraintSpec(
-                    f"grid_export_reserve_{batt.id}_t{t}",
-                    P_grid_export[t] <= float(self._grid_max_export_kw) * export_ok[t],
+                constraints.append(
+                    ConstraintSpec(
+                        f"batt_export_reserve_end_{batt.id}_{grid.id}_t{t}",
+                        batt.E_by_i[t + 1] >= reserve_kwh - soc_m * (1 - export_ok[t]),
+                    )
                 )
-            )
+                constraints.append(
+                    ConstraintSpec(
+                        f"grid_export_reserve_{batt.id}_{grid.id}_t{t}",
+                        P_grid_export[t] <= float(self._grid_max_export_kw) * export_ok[t],
+                    )
+                )
         return constraints
 
     @property

@@ -11,6 +11,8 @@ from energy_assistant.ems.planning.horizon import Horizon
 from energy_assistant.ems.planning.pricing import PriceSeriesBuilder
 from energy_assistant.ems.planning.time_windows import TimeWindowMatcher
 from energy_assistant.ems.series import bool_series, interval_series_points
+from energy_assistant.ems.system.component import EmsComponent
+from energy_assistant.ems.system.topology import ComponentTopology, GraphBuildContext, PlanContext
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import GraphElement
 from energy_assistant.ems.topology.nodes import Node
@@ -33,7 +35,7 @@ class GridSolveState:
     import_allowed: list[bool]
 
 
-class GridComponent:
+class GridComponent(EmsComponent[GridSolveState, GridComponentPlan]):
     """Grid import/export interface on the AC bus."""
 
     def __init__(
@@ -50,6 +52,7 @@ class GridComponent:
         self.node_id = self.id
         self.connection_id = f"{self.id}_link"
         self._grid_cfg = grid
+        self._connection_target_id = str(bus_id)
 
         self._time_window_matcher = time_window_matcher
         self._price_series_builder = price_series_builder
@@ -59,6 +62,13 @@ class GridComponent:
         self._price_import_effective = SeriesParameter[float](f"{self.id}_price_import_effective")
         self._price_export_effective = SeriesParameter[float](f"{self.id}_price_export_effective")
         self._import_allowed = SeriesParameter[bool](f"{self.id}_import_allowed")
+
+    def describe_topology(self) -> ComponentTopology:
+        return ComponentTopology(
+            component_id=self.id,
+            component_type="grid",
+            connection_target_id=self._connection_target_id,
+        )
 
     def update_inputs(self, *, horizon: Horizon, inputs: AppliedInputRegistry) -> None:
         price_import_raw = inputs.forecast(
@@ -88,6 +98,15 @@ class GridComponent:
         self._price_import_effective.set(price_series.import_effective)
         self._price_export_effective.set(price_series.export_effective)
         self._import_allowed.set(import_allowed)
+
+    def build_graph(
+        self,
+        *,
+        horizon: Horizon,
+        build_ctx: GraphBuildContext,
+    ) -> tuple[list[GraphElement], GridSolveState]:
+        _ = build_ctx
+        return self.graph_elements(horizon=horizon)
 
     def graph_elements(self, *, horizon: Horizon) -> tuple[list[GraphElement], GridSolveState]:
         cfg = self._grid_cfg
@@ -182,7 +201,9 @@ class GridComponent:
         snapshot: ModelSnapshot,
         *,
         solve_state: GridSolveState,
+        plan_ctx: PlanContext,
     ) -> GridComponentPlan:
+        _ = plan_ctx
         horizon = snapshot.ctx.horizon
         connection = solve_state.connection
         import_kw = [

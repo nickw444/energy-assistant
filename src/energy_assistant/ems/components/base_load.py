@@ -3,10 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from energy_assistant.ems.inputs.models import AppliedInputRegistry
+from energy_assistant.ems.milp.snapshot import ModelSnapshot
 from energy_assistant.ems.models import LoadComponentPlan
 from energy_assistant.ems.parameters import SeriesParameter
 from energy_assistant.ems.planning.horizon import Horizon
 from energy_assistant.ems.series import interval_series_points
+from energy_assistant.ems.system.component import EmsComponent
+from energy_assistant.ems.system.topology import ComponentTopology, GraphBuildContext, PlanContext
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import GraphElement
 from energy_assistant.ems.topology.nodes import Node
@@ -21,7 +24,7 @@ class BaseLoadSolveState:
     base_load_kw: list[float]
 
 
-class BaseLoadComponent:
+class BaseLoadComponent(EmsComponent[BaseLoadSolveState, LoadComponentPlan]):
     """Fixed baseline plant load (kW) on the AC bus."""
 
     def __init__(
@@ -37,8 +40,16 @@ class BaseLoadComponent:
         self.connection_id = f"{self.id}_link"
         self.name = str(load.name)
         self._power_input_key = load.power.key
+        self._connection_target_id = str(bus_id)
 
         self._base_load_kw = SeriesParameter[float](f"{self.id}_kw")
+
+    def describe_topology(self) -> ComponentTopology:
+        return ComponentTopology(
+            component_id=self.id,
+            component_type="load",
+            connection_target_id=self._connection_target_id,
+        )
 
     def update_inputs(
         self,
@@ -50,6 +61,15 @@ class BaseLoadComponent:
         if len(series) != horizon.num_intervals:
             raise ValueError("Base load series length does not match horizon")
         self._base_load_kw.set(series)
+
+    def build_graph(
+        self,
+        *,
+        horizon: Horizon,
+        build_ctx: GraphBuildContext,
+    ) -> tuple[list[GraphElement], BaseLoadSolveState]:
+        _ = build_ctx
+        return self.graph_elements(horizon=horizon)
 
     def graph_elements(
         self,
@@ -86,10 +106,13 @@ class BaseLoadComponent:
 
     def build_plan(
         self,
-        snapshot_horizon: Horizon,
+        snapshot: ModelSnapshot,
         *,
         solve_state: BaseLoadSolveState,
+        plan_ctx: PlanContext,
     ) -> LoadComponentPlan:
+        _ = plan_ctx
+        horizon = snapshot.ctx.horizon
         return LoadComponentPlan(
-            power_kw=interval_series_points(snapshot_horizon, solve_state.base_load_kw),
+            power_kw=interval_series_points(horizon, solve_state.base_load_kw),
         )

@@ -16,6 +16,8 @@ from energy_assistant.ems.parameters import ScalarParameter, SeriesParameter
 from energy_assistant.ems.planning.horizon import Horizon
 from energy_assistant.ems.planning.time_windows import TimeWindowMatcher
 from energy_assistant.ems.series import bool_series, interval_series_points, state_series_points
+from energy_assistant.ems.system.component import EmsComponent
+from energy_assistant.ems.system.topology import ComponentTopology, GraphBuildContext, PlanContext
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import GraphElement
 from energy_assistant.ems.topology.nodes import StorageNode
@@ -40,7 +42,7 @@ class EvSolveState:
     gate_series: list[float]
 
 
-class EvComponent:
+class EvComponent(EmsComponent[EvSolveState, LoadControlledEvComponentPlan]):
     def __init__(
         self,
         *,
@@ -71,6 +73,13 @@ class EvComponent:
         self._initial_soc_kwh = ScalarParameter[float](f"{self.id}_initial_soc_kwh")
         self._gate_series = SeriesParameter[float](f"{self.id}_gate_series")
 
+    def describe_topology(self) -> ComponentTopology:
+        return ComponentTopology(
+            component_id=self.id,
+            component_type="load_controlled_ev",
+            connection_target_id=self.switchboard_bus_id,
+        )
+
     def update_inputs(self, *, horizon: Horizon, inputs: AppliedInputRegistry) -> None:
         connected = inputs.scalar_bool(self._load.connected.key)
         can_connect = True
@@ -98,6 +107,15 @@ class EvComponent:
         self._realtime_power_kw.set(realtime_power_kw)
         self._initial_soc_kwh.set(max(0.0, min(self.capacity_kwh, initial_soc_kwh)))
         self._gate_series.set(gate_series)
+
+    def build_graph(
+        self,
+        *,
+        horizon: Horizon,
+        build_ctx: GraphBuildContext,
+    ) -> tuple[list[GraphElement], EvSolveState]:
+        _ = build_ctx
+        return self.graph_elements(horizon=horizon)
 
     def graph_elements(self, *, horizon: Horizon) -> tuple[list[GraphElement], EvSolveState]:
         connected = self._connected.get()
@@ -196,7 +214,9 @@ class EvComponent:
         snapshot: ModelSnapshot,
         *,
         solve_state: EvSolveState,
+        plan_ctx: PlanContext,
     ) -> LoadControlledEvComponentPlan:
+        _ = plan_ctx
         horizon = snapshot.ctx.horizon
         storage = solve_state.storage
         connection = solve_state.connection

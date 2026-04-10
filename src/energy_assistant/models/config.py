@@ -5,6 +5,7 @@ from typing import Any, cast
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from energy_assistant.ems.system.topology import infer_attachment_kind
 from energy_assistant.lib.home_assistant import HomeAssistantConfig
 from energy_assistant.models.inputs import (
     ForecastInputConfig,
@@ -15,7 +16,6 @@ from energy_assistant.models.inputs import (
 )
 from energy_assistant.models.plant import (
     BatteryComponentConfig,
-    ControlledEvComponentConfig,
     GridComponentConfig,
     InputReference,
     InverterComponentConfig,
@@ -96,44 +96,12 @@ class AppConfig(BaseModel):
 
     @model_validator(mode="after")
     def _validate_ems_schema(self) -> AppConfig:
-        switchboards = {
-            key: component
-            for key, component in self.plant.items()
-            if isinstance(component, SwitchboardComponentConfig)
-        }
-        grids = {
-            key: component
-            for key, component in self.plant.items()
-            if isinstance(component, GridComponentConfig)
-        }
-        loads = {
-            key: component
-            for key, component in self.plant.items()
-            if isinstance(component, LoadComponentConfig)
-        }
-        inverters = {
-            key: component
-            for key, component in self.plant.items()
-            if isinstance(component, InverterComponentConfig)
-        }
-
-        if len(switchboards) != 1:
-            raise ValueError("plant must define exactly one switchboard component")
-        if len(grids) != 1:
-            raise ValueError("plant must define exactly one grid component")
-        if len(loads) != 1:
-            raise ValueError("plant must define exactly one load component")
-
-        batteries_by_inverter: set[str] = set()
-        pv_by_inverter: set[str] = set()
-
         for key, component in self.plant.items():
+            if isinstance(component, SwitchboardComponentConfig):
+                continue
+
             if isinstance(component, GridComponentConfig):
-                self._expect_connection_target(
-                    key,
-                    component.connection,
-                    SwitchboardComponentConfig,
-                )
+                self._expect_connection_target(key, component.connection, component.type)
                 self._expect_input(
                     component.price_import.source,
                     ForecastInputConfig,
@@ -153,29 +121,16 @@ class AppConfig(BaseModel):
                 continue
 
             if isinstance(component, LoadComponentConfig):
-                self._expect_connection_target(
-                    key,
-                    component.connection,
-                    SwitchboardComponentConfig,
-                )
+                self._expect_connection_target(key, component.connection, component.type)
                 self._expect_input(component.power, ForecastInputConfig, InputValueKind.POWER)
                 continue
 
             if isinstance(component, InverterComponentConfig):
-                self._expect_connection_target(
-                    key,
-                    component.connection,
-                    SwitchboardComponentConfig,
-                )
+                self._expect_connection_target(key, component.connection, component.type)
                 continue
 
             if isinstance(component, BatteryComponentConfig):
-                self._expect_connection_target(
-                    key,
-                    component.connection,
-                    InverterComponentConfig,
-                )
-                batteries_by_inverter.add(component.connection)
+                self._expect_connection_target(key, component.connection, component.type)
                 self._expect_input(
                     component.state_of_charge_pct,
                     ScalarInputConfig,
@@ -189,49 +144,38 @@ class AppConfig(BaseModel):
                 continue
 
             if isinstance(component, PvComponentConfig):
-                self._expect_connection_target(
-                    key,
-                    component.connection,
-                    InverterComponentConfig,
-                )
-                pv_by_inverter.add(component.connection)
+                self._expect_connection_target(key, component.connection, component.type)
                 self._expect_input(component.forecast, ForecastInputConfig, InputValueKind.POWER)
                 continue
 
-            if isinstance(component, ControlledEvComponentConfig):
-                self._expect_connection_target(
-                    key,
-                    component.connection,
-                    SwitchboardComponentConfig,
-                )
-                self._expect_input(component.connected, ScalarInputConfig, InputValueKind.BOOLEAN)
-                if component.can_connect is not None:
-                    self._expect_input(
-                        component.can_connect,
-                        ScalarInputConfig,
-                        InputValueKind.BOOLEAN,
-                    )
+            ev_component = component
+            self._expect_connection_target(key, ev_component.connection, ev_component.type)
+            self._expect_input(ev_component.connected, ScalarInputConfig, InputValueKind.BOOLEAN)
+            if ev_component.can_connect is not None:
                 self._expect_input(
-                    component.realtime_power,
+                    ev_component.can_connect,
                     ScalarInputConfig,
-                    InputValueKind.POWER,
+                    InputValueKind.BOOLEAN,
                 )
-                self._expect_input(
-                    component.state_of_charge_pct,
-                    ScalarInputConfig,
-                    InputValueKind.PERCENTAGE,
-                )
-                continue
+            self._expect_input(
+                ev_component.realtime_power,
+                ScalarInputConfig,
+                InputValueKind.POWER,
+            )
+            self._expect_input(
+                ev_component.state_of_charge_pct,
+                ScalarInputConfig,
+                InputValueKind.PERCENTAGE,
+            )
+            continue
 
-        if not inverters and (batteries_by_inverter or pv_by_inverter):
-            raise ValueError("battery/pv components require an inverter component")
         return self
 
     def _expect_connection_target(
         self,
         component_key: str,
         target_key: str,
-        expected_type: type[PlantComponentConfig],
+        component_type: str,
     ) -> None:
         if component_key == target_key:
             raise ValueError(f"component {component_key} cannot connect to itself")
@@ -241,12 +185,12 @@ class AppConfig(BaseModel):
                 "component "
                 f"{component_key} references missing connection target {target_key}"
             )
-        if not isinstance(target, expected_type):
-            expected_name = expected_type.__name__.removesuffix("Config")
+        try:
+            infer_attachment_kind(component_type, target.type)
+        except ValueError as exc:
             raise ValueError(
-                f"component {component_key} must connect to a {expected_name}; "
-                f"got {type(target).__name__}"
-            )
+                f"component {component_key} must connect to a compatible target; {exc}"
+            ) from exc
 
     def _expect_input(
         self,

@@ -120,6 +120,10 @@ class Connection:
     def flow_out_ba(self) -> dict[int, pulp.LpVariable]:
         return self.power_out_ba
 
+    @property
+    def segment_key(self) -> str:
+        return self.id
+
     def flow_out_of_node(self, node_id: str) -> dict[int, pulp.LpVariable]:
         nid = str(node_id)
         if nid == self.a_node_id:

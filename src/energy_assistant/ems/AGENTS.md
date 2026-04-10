@@ -9,10 +9,11 @@ inspection and baseline regeneration. Canonical implementation notes live in
 
 Key files:
 - `src/energy_assistant/ems/planner.py` orchestrates build, solve, and plan extraction.
+- `src/energy_assistant/ems/system/component.py`, `src/energy_assistant/ems/system/state.py`, and `src/energy_assistant/ems/system/topology.py` define the typed EMS component contract, solve-state store, and normalized attachment graph.
 - `src/energy_assistant/ems/system/factory.py` wires the flat `plant` registry into a persistent `EmsSystem` plus the configured rolling `HorizonShape`.
 - `src/energy_assistant/inputs/provider.py` resolves configured sources into per-solve raw planner datapoints.
 - `src/energy_assistant/ems/inputs/application.py` applies raw forecast inputs to the current horizon and produces the aligned `AppliedInputRegistry` consumed by components.
-- `src/energy_assistant/ems/system/system.py` updates component inputs from the applied registry, builds the solve-scoped MILP snapshot, and merges per-component plans.
+- `src/energy_assistant/ems/system/system.py` updates component inputs from the applied registry, builds the solve-scoped MILP snapshot from the normalized topology, and merges per-component plans.
 - `src/energy_assistant/ems/topology/*` contains Layer 0 topology primitives (nodes, connections, policies).
 - `src/energy_assistant/ems/components/*` contains Layer 1 logical components (Grid, PV, Battery, EV, etc).
 - `src/energy_assistant/ems/planning/horizon.py` defines the persistent rolling `HorizonShape` and per-solve `Horizon`.
@@ -25,6 +26,7 @@ Key files:
 Design rules:
 - Keep constructor dependencies explicit. Persistent runtime classes should accept required collaborators through `__init__` rather than constructing them internally.
 - Use `EmsSystemFactory.create(app_config)` as the EMS composition root for production wiring of components and helper services.
+- Treat `connection: "<component_id>"` in plant config as a target component reference. Attachment side/port is inferred from the source and target component types, not from explicit port labels.
 - Keep solve-scoped topology and MILP objects created inside per-solve methods; the explicit-DI rule is for persistent collaborators, not ephemeral solve artifacts.
 
 Testing workflow:

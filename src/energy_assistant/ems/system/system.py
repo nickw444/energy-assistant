@@ -1,20 +1,20 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from typing import Any, cast
 
-from energy_assistant.ems.components.base_load import BaseLoadComponent, BaseLoadSolveState
-from energy_assistant.ems.components.ev import EvComponent, EvSolveState
-from energy_assistant.ems.components.grid import GridComponent, GridSolveState
-from energy_assistant.ems.components.inverter import InverterComponent, InverterSolveState
-from energy_assistant.ems.components.switchboard import SwitchboardComponent
+from energy_assistant.ems.components.battery import BatteryComponent
+from energy_assistant.ems.components.inverter import InverterComponent
+from energy_assistant.ems.components.pv import PvComponent
 from energy_assistant.ems.inputs.models import AppliedInputRegistry
 from energy_assistant.ems.milp.context import ModelContext
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
-from energy_assistant.ems.models import (
-    ComponentPlan,
-)
+from energy_assistant.ems.models import ComponentPlan
 from energy_assistant.ems.planning.horizon import Horizon
+from energy_assistant.ems.system.component import EmsComponent
+from energy_assistant.ems.system.state import EmsSystemSolveState, SolveStateStore
+from energy_assistant.ems.system.topology import GraphBuildContext, PlanContext, PlantTopology
 from energy_assistant.ems.topology.graph import EnergyGraph
+from energy_assistant.models.plant import BatteryComponentConfig
 
 
 class EmsSystem:
@@ -23,60 +23,59 @@ class EmsSystem:
     def __init__(
         self,
         *,
-        switchboard: SwitchboardComponent,
-        base_load: BaseLoadComponent,
-        grid: GridComponent,
-        inverters: dict[str, InverterComponent],
-        evs: dict[str, EvComponent],
+        components: dict[str, EmsComponent[Any, Any]],
+        topology: PlantTopology,
     ) -> None:
-        self.switchboard = switchboard
-        self.base_load = base_load
-        self.grid = grid
-        self.inverters = dict(inverters)
-        self.evs = dict(evs)
+        self.components = dict(components)
+        self.topology = topology
+
+        expected_ids = set(self.topology.component_ids)
+        actual_ids = set(self.components)
+        if actual_ids != expected_ids:
+            missing = sorted(expected_ids - actual_ids)
+            extra = sorted(actual_ids - expected_ids)
+            raise ValueError(
+                "components and topology ids must match exactly; "
+                f"missing={missing} extra={extra}"
+            )
+
+        self._inverter_child_ids = self._wire_inverter_children()
+
+    @property
+    def inverters(self) -> dict[str, InverterComponent]:
+        return {
+            component_id: cast(InverterComponent, self.components[component_id])
+            for component_id in self.topology.component_ids_of_type("inverter")
+            if isinstance(self.components[component_id], InverterComponent)
+        }
 
     def update_inputs(self, *, horizon: Horizon, inputs: AppliedInputRegistry) -> None:
-        self.base_load.update_inputs(horizon=horizon, inputs=inputs)
-        self.grid.update_inputs(horizon=horizon, inputs=inputs)
-        for inv in self.inverters.values():
-            inv.update_inputs(horizon=horizon, inputs=inputs)
-        for ev in self.evs.values():
-            ev.update_inputs(horizon=horizon, inputs=inputs)
+        for component_id in self.topology.component_order:
+            if component_id in self._inverter_child_ids:
+                continue
+            self.components[component_id].update_inputs(horizon=horizon, inputs=inputs)
 
-    def build_snapshot(self, *, horizon: Horizon) -> tuple[ModelSnapshot, EmsSystemSolveState]:
+    def build_snapshot(self, *, horizon: Horizon) -> tuple[ModelSnapshot, SolveStateStore]:
         graph = EnergyGraph()
-        graph.add_elements(self.switchboard.graph_elements(horizon=horizon))
-        base_load_elements, base_load_solve_state = self.base_load.graph_elements(horizon=horizon)
-        graph.add_elements(base_load_elements)
-        grid_elements, grid_solve_state = self.grid.graph_elements(horizon=horizon)
-        graph.add_elements(grid_elements)
+        solve_states = SolveStateStore()
+        build_ctx = GraphBuildContext(
+            topology=self.topology,
+            components=self.components,
+            solve_states=solve_states,
+        )
 
-        grid_connection = grid_solve_state.connection
-        price_import_raw = grid_solve_state.price_import_raw
-
-        inverter_solve_states: dict[str, InverterSolveState] = {}
-        for inv in self.inverters.values():
-            inverter_elements, inverter_solve_state = inv.graph_elements(
+        for component_id in self.topology.component_order:
+            component = self.components[component_id]
+            elements, component_solve_state = component.build_graph(
                 horizon=horizon,
-                grid_connection=grid_connection,
-                price_import_raw=price_import_raw,
+                build_ctx=build_ctx,
             )
-            graph.add_elements(inverter_elements)
-            inverter_solve_states[inv.id] = inverter_solve_state
-
-        ev_solve_states: dict[str, EvSolveState] = {}
-        for ev in self.evs.values():
-            ev_elements, ev_solve_state = ev.graph_elements(horizon=horizon)
-            graph.add_elements(ev_elements)
-            ev_solve_states[ev.id] = ev_solve_state
+            graph.add_elements(elements)
+            solve_states.put(component, component_solve_state)
+            build_ctx.register(component_id, elements)
 
         ctx = ModelContext(horizon=horizon)
-        return ModelSnapshot(ctx=ctx, graph=graph), EmsSystemSolveState(
-            base_load=base_load_solve_state,
-            grid=grid_solve_state,
-            inverters=inverter_solve_states,
-            evs=ev_solve_states,
-        )
+        return ModelSnapshot(ctx=ctx, graph=graph), solve_states
 
     def build_component_plans(
         self,
@@ -84,42 +83,49 @@ class EmsSystem:
         *,
         solve_state: EmsSystemSolveState,
     ) -> dict[str, ComponentPlan]:
-        grid_plan = self.grid.build_plan(snapshot, solve_state=solve_state.grid)
-        grid_import_kw = [float(point.value) for point in grid_plan.import_kw]
-        grid_export_kw = [float(point.value) for point in grid_plan.export_kw]
-        grid_price_export = [float(point.value) for point in grid_plan.price_export_raw]
-        export_limit_normal_kw = self.grid.max_export_kw
+        plan_ctx = PlanContext(
+            topology=self.topology,
+            components=self.components,
+            solve_states=solve_state,
+        )
 
-        component_plans: dict[str, ComponentPlan] = {
-            self.switchboard.id: self.switchboard.build_plan(),
-            self.base_load.id: self.base_load.build_plan(
-                snapshot.ctx.horizon,
-                solve_state=solve_state.base_load,
-            ),
-            self.grid.id: grid_plan,
-        }
-        for inverter_id, inverter in self.inverters.items():
-            component_plans.update(
-                inverter.build_component_plans(
+        component_plans: dict[str, ComponentPlan] = {}
+        for component_id in self.topology.component_order:
+            component = self.components[component_id]
+            component_plans[component_id] = cast(
+                ComponentPlan,
+                component.build_plan(
                     snapshot,
-                    solve_state=solve_state.inverters[inverter_id],
-                    grid_import_kw=grid_import_kw,
-                    grid_export_kw=grid_export_kw,
-                    grid_price_export=grid_price_export,
-                    export_limit_normal_kw=export_limit_normal_kw,
-                )
-            )
-        for ev_id, ev in self.evs.items():
-            component_plans[ev_id] = ev.build_plan(
-                snapshot,
-                solve_state=solve_state.evs[ev_id],
+                    solve_state=solve_state.get(component),
+                    plan_ctx=plan_ctx,
+                ),
             )
         return component_plans
 
+    def _wire_inverter_children(self) -> set[str]:
+        child_ids: set[str] = set()
+        for inverter_id in self.topology.component_ids_of_type("inverter"):
+            inverter = self.components[inverter_id]
+            if not isinstance(inverter, InverterComponent):
+                continue
 
-@dataclass(frozen=True, slots=True)
-class EmsSystemSolveState:
-    base_load: BaseLoadSolveState
-    grid: GridSolveState
-    inverters: dict[str, InverterSolveState]
-    evs: dict[str, EvSolveState]
+            battery_cfgs: dict[str, BatteryComponentConfig] = {}
+            pvs: dict[str, PvComponent] = {}
+            batteries: dict[str, BatteryComponent] = {}
+            for child_id in self.topology.children_of(inverter_id):
+                child = self.components[child_id]
+                if isinstance(child, BatteryComponent):
+                    batteries[child_id] = child
+                    battery_cfgs[child_id] = child.battery_config
+                    child_ids.add(child_id)
+                elif isinstance(child, PvComponent):
+                    pvs[child_id] = child
+                    child_ids.add(child_id)
+
+            inverter.set_children(
+                battery_cfgs=battery_cfgs,
+                pvs=pvs,
+                batteries=batteries,
+            )
+
+        return child_ids
