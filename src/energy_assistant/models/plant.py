@@ -292,7 +292,3 @@ PlantComponentConfig = Annotated[
     | ControlledEvComponentConfig,
     Field(discriminator="type"),
 ]
-
-
-def plant_component_type(component: PlantComponentConfig) -> str:
-    return component.type

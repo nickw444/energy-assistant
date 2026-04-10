@@ -115,11 +115,6 @@ class EnergyAssistantCoordinator(DataUpdateCoordinator[PlanPayload | None]):
             )
         )
 
-
-def sorted_items[T](values: dict[str, T]) -> list[tuple[str, T]]:
-    return sorted(values.items(), key=lambda item: str(item[0]))
-
-
 def build_plan_series(
     points: list[EmsSeriesPoint],
     transform: Callable[[Any], Any] | None = None,
