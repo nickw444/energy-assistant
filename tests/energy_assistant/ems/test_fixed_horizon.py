@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any, cast
 
 import yaml
@@ -80,8 +81,15 @@ class StubResolver:
 
 
 def _load_fixture_config() -> AppConfig:
-    fixture_path = "/Users/nickw/repos/energy-assistant/tests/fixtures/ems/nwhass/config.yaml"
-    loaded_raw: Any = yaml.safe_load(open(fixture_path).read())
+    fixture_path = (
+        Path(__file__).resolve().parents[3]
+        / "tests"
+        / "fixtures"
+        / "ems"
+        / "nwhass"
+        / "config.yaml"
+    )
+    loaded_raw: Any = yaml.safe_load(fixture_path.read_text())
     assert isinstance(loaded_raw, dict)
     return AppConfig.model_validate(cast(dict[str, Any], loaded_raw))
 
