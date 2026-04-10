@@ -35,10 +35,6 @@ class Horizon:
     def dt_hours(self, t: int) -> float:
         return self.slots[t].duration_h
 
-    def time_window(self, t: int) -> tuple[datetime, datetime]:
-        slot = self.slots[t]
-        return slot.start, slot.end
-
 
 @dataclass(frozen=True, slots=True)
 class HorizonShape:
@@ -46,10 +42,6 @@ class HorizonShape:
     horizon_minutes: int
     high_res_timestep_minutes: int | None = None
     high_res_horizon_minutes: int | None = None
-
-    @property
-    def base_interval_minutes(self) -> int:
-        return self.high_res_timestep_minutes or self.timestep_minutes
 
     def build(self, *, now: datetime) -> Horizon:
         return build_horizon(

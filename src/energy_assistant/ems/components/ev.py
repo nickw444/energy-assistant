@@ -389,18 +389,6 @@ class EvSocIncentivesFragment:
         self._constraints: list[ConstraintSpec] = []
         self._objective: pulp.LpAffineExpression = pulp.LpAffineExpression()
 
-    @property
-    def storage_node_id(self) -> str:
-        return self._storage.id
-
-    @property
-    def incentive_count(self) -> int:
-        return len(self._incentives)
-
-    @property
-    def grid_price_bias(self) -> float:
-        return self._grid_price_bias
-
     def _ensure_built(self) -> None:
         if self._built:
             return

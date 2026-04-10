@@ -35,10 +35,6 @@ class EmsSystem:
         self.inverters = dict(inverters)
         self.evs = dict(evs)
 
-    @property
-    def switchboard_bus_id(self) -> str:
-        return str(self.switchboard.bus_id)
-
     def update_inputs(self, *, horizon: Horizon, inputs: AppliedInputRegistry) -> None:
         self.base_load.update_inputs(horizon=horizon, inputs=inputs)
         self.grid.update_inputs(horizon=horizon, inputs=inputs)

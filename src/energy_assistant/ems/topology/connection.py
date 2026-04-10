@@ -109,10 +109,6 @@ class Connection:
         return self.power_in_ab
 
     @property
-    def segment_key(self) -> str:
-        return self.id
-
-    @property
     def flow_out_ab(self) -> dict[int, pulp.LpVariable]:
         return self.power_out_ab
 
@@ -144,10 +140,6 @@ class Connection:
         if not self.policies:
             return [("passthrough", Passthrough())]
         return list(self.policies.items())
-
-    @property
-    def ordered_policies(self) -> list[tuple[str, ConnectionPolicy]]:
-        return list(self._ordered_policies)
 
     def _build_policy_bindings(self) -> list[_PolicyBinding]:
         policy_count = len(self._ordered_policies)

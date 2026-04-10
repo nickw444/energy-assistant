@@ -47,7 +47,6 @@ class EmsMilpPlanner:
         system_factory: EmsSystemFactory,
     ) -> None:
         self._input_provider = input_provider
-        self._last_timings: EmsPlanTimings | None = None
         self._system_factory = system_factory
 
     def mark_for_hydration(self) -> None:
@@ -89,7 +88,6 @@ class EmsMilpPlanner:
             solve_seconds=solve_seconds,
             total_seconds=total_seconds,
         )
-        self._last_timings = timings
         logger.info(
             "EMS plan timings: build=%.3fs solve=%.3fs total=%.3fs",
             built.build_seconds,
@@ -109,10 +107,6 @@ class EmsMilpPlanner:
             system=built.system,
             solve_state=built.solve_state,
         )
-
-    @property
-    def last_timings(self) -> EmsPlanTimings | None:
-        return self._last_timings
 
     def build_snapshot(self, *, now: datetime | None = None) -> EmsBuiltSnapshot:
         solve_time = now or datetime.now().astimezone()
