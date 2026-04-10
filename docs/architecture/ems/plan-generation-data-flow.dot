@@ -1,0 +1,82 @@
+digraph PlanGenerationDataFlow {
+  graph [
+    rankdir=TB,
+    splines=ortho,
+    nodesep=0.4,
+    ranksep=0.7,
+    pad=0.2,
+    fontname="Helvetica"
+  ];
+
+  node [
+    shape=box,
+    style="rounded,filled",
+    fontname="Helvetica",
+    fontsize=11,
+    color="#24445c",
+    fillcolor="#eef5f8",
+    margin="0.14,0.08"
+  ];
+
+  edge [
+    color="#4e6b7a",
+    arrowsize=0.7,
+    penwidth=1.1,
+    fontname="Helvetica",
+    fontsize=10
+  ];
+
+  trigger [label="Trigger\nmanual API call\nfallback scheduler\nprice-change event", fillcolor="#dceef2"];
+  cli_trigger [label="CLI One-off Trigger\nenergy-assistant ems solve\nfixture replay / baseline tools", fillcolor="#dceef2"];
+  worker [label="Worker.trigger_run()\nworker/service.py", fillcolor="#edf6ea"];
+  planner [label="EmsMilpPlanner.generate_ems_plan()", fillcolor="#eef6e8"];
+  horizon [label="Build Horizon\nHorizonShape -> Horizon", fillcolor="#eef6e8"];
+  raw_inputs [label="Resolve Raw Inputs\nResolvedInputRegistry", fillcolor="#faf2e8"];
+  applied_inputs [label="Apply to Horizon\nAppliedInputRegistry", fillcolor="#faf2e8"];
+  component_update [label="Update Persistent Components\nupdate_inputs(horizon, inputs)", fillcolor="#eef6e8"];
+  graph_build [label="Build Solve Snapshot\ncomponents -> EnergyGraph\n+ EmsSystemSolveState", fillcolor="#eef6e8"];
+  solve [label="Solve PuLP Model\nModelSnapshot.problem.solve()", fillcolor="#eef6e8"];
+  extract [label="Extract Logical Component Plans\nbuild_component_plans()", fillcolor="#eef6e8"];
+  publish [label="Publish Latest Plan\nWorker stores latest run + plan", fillcolor="#edf6ea"];
+  api [label="API responses\n/plan/latest\n/plan/await", fillcolor="#edf6ea"];
+  integration [label="Home Assistant custom integration\npolls/awaits plan", fillcolor="#f2e8f4"];
+
+  ext_config [label="AppConfig\ninputs registry\nplant registry", fillcolor="#dceef2"];
+  ext_ha_http [label="Home Assistant HTTP\nstates + history", fillcolor="#faf2e8"];
+  ext_ha_ws [label="Home Assistant WebSocket\nprice entity updates", fillcolor="#faf2e8"];
+  fixture_store [label="Fixture Files\ninput.json\nconfig.yaml\nbaseline artifacts", fillcolor="#f5f0e4"];
+  cli_outputs [label="CLI Outputs\noutput.json\nHTML plot\nPNG/report artifacts", fillcolor="#f5f0e4"];
+
+  trigger -> worker;
+  ext_ha_ws -> trigger [label="price change"];
+  worker -> planner;
+  cli_trigger -> planner [label="direct one-off solve"];
+
+  ext_config -> planner [label="system factory"];
+  planner -> horizon [label="1"];
+  planner -> raw_inputs [label="2"];
+  ext_config -> raw_inputs [label="input definitions"];
+  ext_ha_http -> raw_inputs [label="resolver hydration"];
+  fixture_store -> raw_inputs [label="fixture replay path"];
+  ext_config -> cli_trigger [label="live config path"];
+  fixture_store -> cli_trigger [label="fixture config path"];
+
+  raw_inputs -> applied_inputs [label="3"];
+  horizon -> applied_inputs [label="slot shape"];
+
+  applied_inputs -> component_update [label="4"];
+  horizon -> component_update [label="current solve window"];
+
+  component_update -> graph_build [label="5"];
+  ext_config -> graph_build [label="persistent logical components"];
+
+  graph_build -> solve [label="6"];
+  solve -> extract [label="7"];
+  graph_build -> extract [label="solve-state artifacts"];
+  horizon -> extract [label="time axis"];
+
+  extract -> publish [label="8"];
+  publish -> api [label="9"];
+  api -> integration [label="10"];
+  extract -> cli_outputs [label="direct CLI output path"];
+}

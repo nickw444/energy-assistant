@@ -1,0 +1,107 @@
+digraph EmsPlantComposition {
+  graph [
+    rankdir=TB,
+    splines=ortho,
+    nodesep=0.45,
+    ranksep=0.8,
+    pad=0.2,
+    fontname="Helvetica"
+  ];
+
+  node [
+    shape=box,
+    style="rounded,filled",
+    fontname="Helvetica",
+    fontsize=11,
+    color="#24445c",
+    fillcolor="#eef5f8",
+    margin="0.14,0.08"
+  ];
+
+  edge [
+    color="#4e6b7a",
+    arrowsize=0.7,
+    penwidth=1.1,
+    fontname="Helvetica",
+    fontsize=10
+  ];
+
+  app_config [label="AppConfig.plant\nflat registry keyed by component id", fillcolor="#dceef2"];
+  factory [label="EmsSystemFactory\n_validate + instantiate persistent components_", fillcolor="#dceef2"];
+  system [label="EmsSystem\npersistent logical component set", fillcolor="#eef6e8"];
+
+  subgraph cluster_registry {
+    label="Logical Plant Registry";
+    color="#bdd3de";
+    style="rounded";
+
+    switchboard_cfg [label="SwitchboardComponentConfig\nexactly one", fillcolor="#edf6ea"];
+    grid_cfg [label="GridComponentConfig\nexactly one\nconnection -> switchboard", fillcolor="#edf6ea"];
+    load_cfg [label="LoadComponentConfig\nexactly one\nconnection -> switchboard", fillcolor="#edf6ea"];
+    inverter_cfg [label="InverterComponentConfig\nzero or more\nconnection -> switchboard", fillcolor="#edf6ea"];
+    ev_cfg [label="ControlledEvComponentConfig\nzero or more\nconnection -> switchboard", fillcolor="#edf6ea"];
+    pv_cfg [label="PvComponentConfig\nzero or more\nconnection -> inverter", fillcolor="#edf6ea"];
+    batt_cfg [label="BatteryComponentConfig\nzero or more\nconnection -> inverter", fillcolor="#edf6ea"];
+  }
+
+  subgraph cluster_components {
+    label="Persistent Logical Components";
+    color="#c9d7bf";
+    style="rounded";
+
+    switchboard [label="SwitchboardComponent\nAC bus root", fillcolor="#eef6e8"];
+    grid [label="GridComponent\nattached to switchboard bus", fillcolor="#eef6e8"];
+    base_load [label="BaseLoadComponent\nattached to switchboard bus", fillcolor="#eef6e8"];
+    inverter [label="InverterComponent[*]\none per inverter registry entry", fillcolor="#eef6e8"];
+    ev [label="EvComponent[*]\none per EV registry entry", fillcolor="#eef6e8"];
+    pv [label="PvComponent[*]\nowned by parent inverter", fillcolor="#eef6e8"];
+    battery [label="BatteryComponent[*]\nowned by parent inverter", fillcolor="#eef6e8"];
+  }
+
+  note_flat [label="Flat export rule\nplan.components keys mirror plant registry keys", fillcolor="#f5f0e4"];
+  note_attach [label="Logical wiring rule\nusers wire components logically;\nAC/DC attach side is inferred by component type", fillcolor="#f5f0e4"];
+
+  app_config -> factory [label="build from"];
+  factory -> system [label="returns"];
+
+  app_config -> switchboard_cfg;
+  app_config -> grid_cfg;
+  app_config -> load_cfg;
+  app_config -> inverter_cfg;
+  app_config -> ev_cfg;
+  app_config -> pv_cfg;
+  app_config -> batt_cfg;
+
+  switchboard_cfg -> factory [label="singleton lookup"];
+  grid_cfg -> factory [label="singleton lookup"];
+  load_cfg -> factory [label="singleton lookup"];
+  inverter_cfg -> factory [label="collect all"];
+  ev_cfg -> factory [label="collect all"];
+  pv_cfg -> factory [label="group by connection"];
+  batt_cfg -> factory [label="group by connection"];
+
+  factory -> switchboard;
+  factory -> grid;
+  factory -> base_load;
+  factory -> inverter;
+  factory -> ev;
+
+  inverter -> pv [label="contains matching PV children"];
+  inverter -> battery [label="contains matching battery children"];
+
+  switchboard -> system;
+  grid -> system;
+  base_load -> system;
+  inverter -> system;
+  ev -> system;
+
+  grid -> switchboard [label="switchboard bus"];
+  base_load -> switchboard [label="switchboard bus"];
+  inverter -> switchboard [label="switchboard bus"];
+  ev -> switchboard [label="switchboard bus"];
+  pv -> inverter [label="via inverter.connection"];
+  battery -> inverter [label="via inverter.connection"];
+
+  note_flat -> system [label="plan extraction"];
+  note_attach -> factory [label="schema + assembly"];
+}

@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="514pt" height="535pt"
+ viewBox="14.00 14.00 500.00 520.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(28.8 505.94)">
+<title>logical_component_graph</title>
+<polygon fill="#f7fafb" stroke="none" points="-14.4,14.4 -14.4,-491.54 470.71,-491.54 470.71,14.4 -14.4,14.4"/>
+<text xml:space="preserve" text-anchor="middle" x="228.15" y="-452.24" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="22.00">Logical Component Graph</text>
+<g id="edge1" class="edge">
+<title>n_primary_e3b7c980&#45;&gt;n_battery_primary_ed7a7ec3</title>
+<path fill="none" stroke="#64748b" stroke-width="1.6" d="M265.26,-147.53C302.34,-153.1 322.72,-157.86 339.91,-167.34"/>
+</g>
+<g id="edge2" class="edge">
+<title>n_primary_e3b7c980&#45;&gt;n_pv_primary_41277534</title>
+<path fill="none" stroke="#64748b" stroke-width="1.6" d="M265.12,-108.1C296.14,-89.12 314.28,-79.49 331.74,-74.19"/>
+</g>
+<g id="edge6" class="edge">
+<title>n_switchboard_1b8cb242&#45;&gt;n_tessie_9214d04b</title>
+<path fill="none" stroke="#64748b" stroke-width="1.6" d="M56.69,-234.07C85.32,-321.48 96.27,-339.92 163.18,-378.48"/>
+</g>
+<g id="edge4" class="edge">
+<title>n_switchboard_1b8cb242&#45;&gt;n_grid_f3c543ad</title>
+<path fill="none" stroke="#64748b" stroke-width="1.6" d="M87.69,-234.18C103.72,-242.99 122.15,-248.69 159.23,-257.65"/>
+</g>
+<g id="edge5" class="edge">
+<title>n_switchboard_1b8cb242&#45;&gt;n_primary_e3b7c980</title>
+<path fill="none" stroke="#64748b" stroke-width="1.6" d="M79.3,-176.47C99.71,-160.46 117.16,-154.85 161.92,-147.81"/>
+</g>
+<g id="edge3" class="edge">
+<title>n_switchboard_1b8cb242&#45;&gt;n_base_load_a82f7aa3</title>
+<path fill="none" stroke="#64748b" stroke-width="1.6" d="M58.68,-176.53C92.97,-90.05 104.06,-75.34 175.46,-40.45"/>
+</g>
+<g id="node1" class="node">
+<title>n_battery_primary_ed7a7ec3</title>
+<path fill="#ede9fe" stroke="#7c3aed" stroke-width="1.4" d="M444.31,-260.64C444.31,-260.64 344.29,-260.64 344.29,-260.64 338.29,-260.64 332.29,-254.64 332.29,-248.64 332.29,-248.64 332.29,-180 332.29,-180 332.29,-174 338.29,-168 344.29,-168 344.29,-168 444.31,-168 444.31,-168 450.31,-168 456.31,-174 456.31,-180 456.31,-180 456.31,-248.64 456.31,-248.64 456.31,-254.64 450.31,-260.64 444.31,-260.64"/>
+<text xml:space="preserve" text-anchor="middle" x="394.3" y="-245.87" font-family="Helvetica,sans-Serif" font-size="11.00">Battery Primary</text>
+<text xml:space="preserve" text-anchor="middle" x="394.3" y="-233.87" font-family="Helvetica,sans-Serif" font-size="11.00">kind: battery</text>
+<text xml:space="preserve" text-anchor="middle" x="394.3" y="-221.87" font-family="Helvetica,sans-Serif" font-size="11.00">id: battery_primary</text>
+<text xml:space="preserve" text-anchor="middle" x="394.3" y="-209.87" font-family="Helvetica,sans-Serif" font-size="11.00">inverter: primary</text>
+<text xml:space="preserve" text-anchor="middle" x="394.3" y="-197.87" font-family="Helvetica,sans-Serif" font-size="11.00">capacity: 41.9kWh</text>
+<text xml:space="preserve" text-anchor="middle" x="394.3" y="-185.87" font-family="Helvetica,sans-Serif" font-size="11.00">charge max: 11.0kW</text>
+<text xml:space="preserve" text-anchor="middle" x="394.3" y="-173.87" font-family="Helvetica,sans-Serif" font-size="11.00">discharge max: 10.0kW</text>
+</g>
+<g id="node2" class="node">
+<title>n_tessie_9214d04b</title>
+<path fill="#dcfce7" stroke="#166534" stroke-width="1.4" d="M251.54,-446.64C251.54,-446.64 175.52,-446.64 175.52,-446.64 169.52,-446.64 163.52,-440.64 163.52,-434.64 163.52,-434.64 163.52,-378 163.52,-378 163.52,-372 169.52,-366 175.52,-366 175.52,-366 251.54,-366 251.54,-366 257.54,-366 263.54,-372 263.54,-378 263.54,-378 263.54,-434.64 263.54,-434.64 263.54,-440.64 257.54,-446.64 251.54,-446.64"/>
+<text xml:space="preserve" text-anchor="middle" x="213.53" y="-431.87" font-family="Helvetica,sans-Serif" font-size="11.00">Tessie</text>
+<text xml:space="preserve" text-anchor="middle" x="213.53" y="-419.87" font-family="Helvetica,sans-Serif" font-size="11.00">kind: ev</text>
+<text xml:space="preserve" text-anchor="middle" x="213.53" y="-407.87" font-family="Helvetica,sans-Serif" font-size="11.00">id: tessie</text>
+<text xml:space="preserve" text-anchor="middle" x="213.53" y="-395.87" font-family="Helvetica,sans-Serif" font-size="11.00">energy: 78.0kWh</text>
+<text xml:space="preserve" text-anchor="middle" x="213.53" y="-383.87" font-family="Helvetica,sans-Serif" font-size="11.00">charge: 2.4&#45;7.4kW</text>
+<text xml:space="preserve" text-anchor="middle" x="213.53" y="-371.87" font-family="Helvetica,sans-Serif" font-size="11.00">incentives: 5</text>
+</g>
+<g id="node3" class="node">
+<title>n_grid_f3c543ad</title>
+<path fill="#ccfbf1" stroke="#0f766e" stroke-width="1.4" d="M255.29,-304.64C255.29,-304.64 171.77,-304.64 171.77,-304.64 165.77,-304.64 159.77,-298.64 159.77,-292.64 159.77,-292.64 159.77,-248 159.77,-248 159.77,-242 165.77,-236 171.77,-236 171.77,-236 255.29,-236 255.29,-236 261.29,-236 267.29,-242 267.29,-248 267.29,-248 267.29,-292.64 267.29,-292.64 267.29,-298.64 261.29,-304.64 255.29,-304.64"/>
+<text xml:space="preserve" text-anchor="middle" x="213.53" y="-289.87" font-family="Helvetica,sans-Serif" font-size="11.00">Grid</text>
+<text xml:space="preserve" text-anchor="middle" x="213.53" y="-277.87" font-family="Helvetica,sans-Serif" font-size="11.00">kind: grid</text>
+<text xml:space="preserve" text-anchor="middle" x="213.53" y="-265.87" font-family="Helvetica,sans-Serif" font-size="11.00">id: grid</text>
+<text xml:space="preserve" text-anchor="middle" x="213.53" y="-253.87" font-family="Helvetica,sans-Serif" font-size="11.00">bus: switchboard</text>
+<text xml:space="preserve" text-anchor="middle" x="213.53" y="-241.87" font-family="Helvetica,sans-Serif" font-size="11.00">export max: 13.0kW</text>
+</g>
+<g id="node4" class="node">
+<title>n_primary_e3b7c980</title>
+<path fill="#dbeafe" stroke="#1d4ed8" stroke-width="1.4" d="M252.66,-174.64C252.66,-174.64 174.39,-174.64 174.39,-174.64 168.39,-174.64 162.39,-168.64 162.39,-162.64 162.39,-162.64 162.39,-118 162.39,-118 162.39,-112 168.39,-106 174.39,-106 174.39,-106 252.66,-106 252.66,-106 258.66,-106 264.66,-112 264.66,-118 264.66,-118 264.66,-162.64 264.66,-162.64 264.66,-168.64 258.66,-174.64 252.66,-174.64"/>
+<text xml:space="preserve" text-anchor="middle" x="213.53" y="-159.87" font-family="Helvetica,sans-Serif" font-size="11.00">Primary</text>
+<text xml:space="preserve" text-anchor="middle" x="213.53" y="-147.87" font-family="Helvetica,sans-Serif" font-size="11.00">kind: inverter</text>
+<text xml:space="preserve" text-anchor="middle" x="213.53" y="-135.87" font-family="Helvetica,sans-Serif" font-size="11.00">id: primary</text>
+<text xml:space="preserve" text-anchor="middle" x="213.53" y="-123.87" font-family="Helvetica,sans-Serif" font-size="11.00">peak: 10.0kW</text>
+<text xml:space="preserve" text-anchor="middle" x="213.53" y="-111.87" font-family="Helvetica,sans-Serif" font-size="11.00">dc bus: primary_dc</text>
+</g>
+<g id="node5" class="node">
+<title>n_base_load_a82f7aa3</title>
+<path fill="#ffedd5" stroke="#7c2d12" stroke-width="1.4" d="M239.16,-44.64C239.16,-44.64 187.89,-44.64 187.89,-44.64 181.89,-44.64 175.89,-38.64 175.89,-32.64 175.89,-32.64 175.89,-12 175.89,-12 175.89,-6 181.89,0 187.89,0 187.89,0 239.16,0 239.16,0 245.16,0 251.16,-6 251.16,-12 251.16,-12 251.16,-32.64 251.16,-32.64 251.16,-38.64 245.16,-44.64 239.16,-44.64"/>
+<text xml:space="preserve" text-anchor="middle" x="213.53" y="-29.87" font-family="Helvetica,sans-Serif" font-size="11.00">Base Load</text>
+<text xml:space="preserve" text-anchor="middle" x="213.53" y="-17.87" font-family="Helvetica,sans-Serif" font-size="11.00">kind: load</text>
+<text xml:space="preserve" text-anchor="middle" x="213.53" y="-5.87" font-family="Helvetica,sans-Serif" font-size="11.00">id: base_load</text>
+</g>
+<g id="node6" class="node">
+<title>n_pv_primary_41277534</title>
+<path fill="#fef3c7" stroke="#92400e" stroke-width="1.4" d="M444.31,-106.64C444.31,-106.64 344.29,-106.64 344.29,-106.64 338.29,-106.64 332.29,-100.64 332.29,-94.64 332.29,-94.64 332.29,-38 332.29,-38 332.29,-32 338.29,-26 344.29,-26 344.29,-26 444.31,-26 444.31,-26 450.31,-26 456.31,-32 456.31,-38 456.31,-38 456.31,-94.64 456.31,-94.64 456.31,-100.64 450.31,-106.64 444.31,-106.64"/>
+<text xml:space="preserve" text-anchor="middle" x="394.3" y="-91.87" font-family="Helvetica,sans-Serif" font-size="11.00">PV primary</text>
+<text xml:space="preserve" text-anchor="middle" x="394.3" y="-79.87" font-family="Helvetica,sans-Serif" font-size="11.00">kind: pv</text>
+<text xml:space="preserve" text-anchor="middle" x="394.3" y="-67.87" font-family="Helvetica,sans-Serif" font-size="11.00">id: pv_primary</text>
+<text xml:space="preserve" text-anchor="middle" x="394.3" y="-55.87" font-family="Helvetica,sans-Serif" font-size="11.00">inverter: primary</text>
+<text xml:space="preserve" text-anchor="middle" x="394.3" y="-43.87" font-family="Helvetica,sans-Serif" font-size="11.00">peak: 10.0kW</text>
+<text xml:space="preserve" text-anchor="middle" x="394.3" y="-31.87" font-family="Helvetica,sans-Serif" font-size="11.00">curtailment: load&#45;aware</text>
+</g>
+<g id="node7" class="node">
+<title>n_switchboard_1b8cb242</title>
+<path fill="#dbeafe" stroke="#0f172a" stroke-width="1.4" d="M82.77,-233.64C82.77,-233.64 12,-233.64 12,-233.64 6,-233.64 0,-227.64 0,-221.64 0,-221.64 0,-189 0,-189 0,-183 6,-177 12,-177 12,-177 82.77,-177 82.77,-177 88.77,-177 94.77,-183 94.77,-189 94.77,-189 94.77,-221.64 94.77,-221.64 94.77,-227.64 88.77,-233.64 82.77,-233.64"/>
+<text xml:space="preserve" text-anchor="middle" x="47.38" y="-218.87" font-family="Helvetica,sans-Serif" font-size="11.00">Switchboard</text>
+<text xml:space="preserve" text-anchor="middle" x="47.38" y="-206.87" font-family="Helvetica,sans-Serif" font-size="11.00">kind: switchboard</text>
+<text xml:space="preserve" text-anchor="middle" x="47.38" y="-194.87" font-family="Helvetica,sans-Serif" font-size="11.00">id: switchboard</text>
+<text xml:space="preserve" text-anchor="middle" x="47.38" y="-182.87" font-family="Helvetica,sans-Serif" font-size="11.00">bus: switchboard</text>
+</g>
+</g>
+</svg>
