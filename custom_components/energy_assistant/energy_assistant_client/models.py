@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -37,68 +37,9 @@ class PlanRunResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class GridTimestepPlan(BaseModel):
-    import_kw: float
-    export_kw: float
-    net_kw: float
-    import_allowed: bool | None
-    import_violation_kw: float | None
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class InverterTimestepPlan(BaseModel):
-    name: str
-    pv_kw: float | None
-    pv_curtail_kw: float | None = None
-    ac_net_kw: float
-    battery_charge_kw: float | None
-    battery_discharge_kw: float | None
-    battery_soc_kwh: float | None
-    battery_soc_pct: float | None
-    curtailment: bool | None
-
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-
-
-class EvTimestepPlan(BaseModel):
-    name: str
-    charge_kw: float
-    soc_kwh: float
-    soc_pct: float | None
-    connected: bool
-
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-
-
-class LoadsTimestepPlan(BaseModel):
-    base_kw: float
-    evs: dict[str, EvTimestepPlan]
-    total_kw: float
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class EconomicsTimestepPlan(BaseModel):
-    price_import: float
-    price_export: float
-    price_import_effective: float
-    price_export_effective: float
-    segment_cost: float
-    cumulative_cost: float
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class TimestepPlan(BaseModel):
-    index: int
-    start: datetime
-    end: datetime
-    duration_s: float
-    grid: GridTimestepPlan
-    inverters: dict[str, InverterTimestepPlan]
-    loads: LoadsTimestepPlan
-    economics: EconomicsTimestepPlan
+class EmsSeriesPoint(BaseModel):
+    time: datetime
+    value: float | bool
 
     model_config = ConfigDict(extra="forbid")
 
@@ -111,16 +52,6 @@ class EmsPlanTimings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class EmsPlanOutput(BaseModel):
-    generated_at: datetime
-    status: PlanStatus
-    objective_value: float | None
-    timings: EmsPlanTimings
-    timesteps: list[TimestepPlan]
-
-    model_config = ConfigDict(extra="forbid")
-
-
 class PlanIntentMode(StrEnum):
     BACKUP = "Back-up"
     FORCE_CHARGE = "Force Charge"
@@ -129,7 +60,7 @@ class PlanIntentMode(StrEnum):
     SELF_USE = "Self Use"
 
 
-class InverterPlanIntent(BaseModel):
+class InverterIntent(BaseModel):
     mode: PlanIntentMode
     export_limit_kw: float
     force_charge_kw: float
@@ -138,16 +69,98 @@ class InverterPlanIntent(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class LoadPlanIntent(BaseModel):
+class LoadControlledEvIntent(BaseModel):
     charge_kw: float
     charge_on: bool
 
     model_config = ConfigDict(extra="forbid")
 
 
-class PlanIntent(BaseModel):
-    inverters: dict[str, InverterPlanIntent]
-    loads: dict[str, LoadPlanIntent]
+class SwitchboardComponentPlan(BaseModel):
+    type: Literal["switchboard"] = "switchboard"
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class GridComponentPlan(BaseModel):
+    type: Literal["grid"] = "grid"
+    price_import_raw: list[EmsSeriesPoint]
+    price_export_raw: list[EmsSeriesPoint]
+    price_import_effective: list[EmsSeriesPoint]
+    price_export_effective: list[EmsSeriesPoint]
+    import_allowed: list[EmsSeriesPoint]
+    import_kw: list[EmsSeriesPoint]
+    export_kw: list[EmsSeriesPoint]
+    net_kw: list[EmsSeriesPoint]
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class LoadComponentPlan(BaseModel):
+    type: Literal["load"] = "load"
+    power_kw: list[EmsSeriesPoint]
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class InverterComponentPlan(BaseModel):
+    type: Literal["inverter"] = "inverter"
+    ac_net_kw: list[EmsSeriesPoint]
+    intent: InverterIntent
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class PvComponentPlan(BaseModel):
+    type: Literal["pv"] = "pv"
+    available_kw: list[EmsSeriesPoint]
+    actual_kw: list[EmsSeriesPoint]
+    curtail_kw: list[EmsSeriesPoint]
+    curtailment: list[EmsSeriesPoint]
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class BatteryComponentPlan(BaseModel):
+    type: Literal["battery"] = "battery"
+    charge_kw: list[EmsSeriesPoint]
+    discharge_kw: list[EmsSeriesPoint]
+    soc_kwh: list[EmsSeriesPoint]
+    soc_pct: list[EmsSeriesPoint]
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class LoadControlledEvComponentPlan(BaseModel):
+    type: Literal["load_controlled_ev"] = "load_controlled_ev"
+    charge_kw: list[EmsSeriesPoint]
+    soc_kwh: list[EmsSeriesPoint]
+    soc_pct: list[EmsSeriesPoint]
+    connected: list[EmsSeriesPoint]
+    charge_allowed: list[EmsSeriesPoint]
+    intent: LoadControlledEvIntent
+
+    model_config = ConfigDict(extra="forbid")
+
+
+ComponentPlan = Annotated[
+    SwitchboardComponentPlan
+    | GridComponentPlan
+    | LoadComponentPlan
+    | InverterComponentPlan
+    | PvComponentPlan
+    | BatteryComponentPlan
+    | LoadControlledEvComponentPlan,
+    Field(discriminator="type"),
+]
+
+
+class EmsPlanOutput(BaseModel):
+    generated_at: datetime
+    status: PlanStatus
+    objective_value: float | None
+    timings: EmsPlanTimings
+    components: dict[str, ComponentPlan]
 
     model_config = ConfigDict(extra="forbid")
 
@@ -155,7 +168,6 @@ class PlanIntent(BaseModel):
 class PlanLatestResponse(BaseModel):
     run: PlanRunState
     plan: EmsPlanOutput
-    intent: PlanIntent
 
     model_config = ConfigDict(extra="forbid")
 
@@ -163,7 +175,6 @@ class PlanLatestResponse(BaseModel):
 class PlanAwaitResponse(BaseModel):
     run: PlanRunState
     plan: EmsPlanOutput
-    intent: PlanIntent
 
     model_config = ConfigDict(extra="forbid")
 
@@ -177,7 +188,7 @@ class TerminalSocConfig(BaseModel):
 
 class EmsConfig(BaseModel):
     timestep_minutes: int
-    min_horizon_minutes: int
+    horizon_minutes: int
     high_res_timestep_minutes: int | None = None
     high_res_horizon_minutes: int | None = None
     terminal_soc: TerminalSocConfig = Field(default_factory=TerminalSocConfig)

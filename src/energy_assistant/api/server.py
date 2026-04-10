@@ -8,7 +8,7 @@ from energy_assistant.models.config import AppConfig
 from energy_assistant.worker import Worker
 
 
-def create_app(app_config: AppConfig, worker: Worker | None = None) -> FastAPI:
+def create_app(app_config: AppConfig, worker: Worker) -> FastAPI:
     app = FastAPI(title="Energy Assistant")
     app.state.dependencies = GlobalDependencies(config=app_config, worker=worker)
     app.include_router(plan.router)

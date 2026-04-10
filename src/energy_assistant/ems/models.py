@@ -1,14 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic.functional_serializers import PlainSerializer
-
-from energy_assistant.lib.source_resolver.models import PowerForecastInterval, PriceForecastInterval
 
 Rounded3 = Annotated[
     float,
@@ -33,72 +30,6 @@ EmsPlanStatus = Literal[
 ]
 
 
-class GridTimestepPlan(BaseModel):
-    import_kw: Rounded3
-    export_kw: Rounded3
-    net_kw: Rounded3
-    import_allowed: bool | None = None
-    import_violation_kw: Rounded3Opt = None
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class InverterTimestepPlan(BaseModel):
-    name: str
-    pv_kw: Rounded3Opt = None
-    pv_curtail_kw: Rounded3Opt = None
-    ac_net_kw: Rounded3
-    battery_charge_kw: Rounded3Opt = None
-    battery_discharge_kw: Rounded3Opt = None
-    battery_soc_kwh: Rounded3Opt = None
-    battery_soc_pct: Rounded3Opt = None
-    curtailment: bool | None = None
-
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-
-
-class EvTimestepPlan(BaseModel):
-    name: str
-    charge_kw: Rounded3
-    soc_kwh: Rounded3
-    soc_pct: Rounded3Opt = None
-    connected: bool
-
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-
-
-class LoadsTimestepPlan(BaseModel):
-    base_kw: Rounded3
-    evs: dict[str, EvTimestepPlan]
-    total_kw: Rounded3
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class EconomicsTimestepPlan(BaseModel):
-    price_import: float
-    price_export: float
-    price_import_effective: float
-    price_export_effective: float
-    segment_cost: Rounded3
-    cumulative_cost: Rounded3
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class TimestepPlan(BaseModel):
-    index: int
-    start: datetime
-    end: datetime
-    duration_s: float
-    grid: GridTimestepPlan
-    inverters: dict[str, InverterTimestepPlan]
-    loads: LoadsTimestepPlan
-    economics: EconomicsTimestepPlan
-
-    model_config = ConfigDict(extra="forbid")
-
-
 class EmsPlanTimings(BaseModel):
     build_seconds: float
     solve_seconds: float
@@ -107,12 +38,9 @@ class EmsPlanTimings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class EmsPlanOutput(BaseModel):
-    generated_at: datetime
-    status: EmsPlanStatus
-    objective_value: Rounded3Opt = None
-    timings: EmsPlanTimings
-    timesteps: list[TimestepPlan]
+class EmsSeriesPoint(BaseModel):
+    time: datetime
+    value: float | bool
 
     model_config = ConfigDict(extra="forbid")
 
@@ -125,7 +53,7 @@ class PlanIntentMode(StrEnum):
     SELF_USE = "Self Use"
 
 
-class InverterPlanIntent(BaseModel):
+class InverterIntent(BaseModel):
     mode: PlanIntentMode
     export_limit_kw: Rounded3
     force_charge_kw: Rounded3
@@ -134,24 +62,97 @@ class InverterPlanIntent(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class LoadPlanIntent(BaseModel):
+class LoadControlledEvIntent(BaseModel):
     charge_kw: Rounded3
     charge_on: bool
 
     model_config = ConfigDict(extra="forbid")
 
 
-class PlanIntent(BaseModel):
-    inverters: dict[str, InverterPlanIntent]
-    loads: dict[str, LoadPlanIntent]
+class SwitchboardComponentPlan(BaseModel):
+    type: Literal["switchboard"] = "switchboard"
 
     model_config = ConfigDict(extra="forbid")
 
 
-@dataclass(slots=True)
-class ResolvedForecasts:
-    grid_price_import: list[PriceForecastInterval]
-    grid_price_export: list[PriceForecastInterval]
-    load: list[PowerForecastInterval]
-    inverters_pv: dict[str, list[PowerForecastInterval]]
-    min_coverage_intervals: int
+class GridComponentPlan(BaseModel):
+    type: Literal["grid"] = "grid"
+    price_import_raw: list[EmsSeriesPoint]
+    price_export_raw: list[EmsSeriesPoint]
+    price_import_effective: list[EmsSeriesPoint]
+    price_export_effective: list[EmsSeriesPoint]
+    import_allowed: list[EmsSeriesPoint]
+    import_kw: list[EmsSeriesPoint]
+    export_kw: list[EmsSeriesPoint]
+    net_kw: list[EmsSeriesPoint]
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class LoadComponentPlan(BaseModel):
+    type: Literal["load"] = "load"
+    power_kw: list[EmsSeriesPoint]
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class InverterComponentPlan(BaseModel):
+    type: Literal["inverter"] = "inverter"
+    ac_net_kw: list[EmsSeriesPoint]
+    intent: InverterIntent
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class PvComponentPlan(BaseModel):
+    type: Literal["pv"] = "pv"
+    available_kw: list[EmsSeriesPoint]
+    actual_kw: list[EmsSeriesPoint]
+    curtail_kw: list[EmsSeriesPoint]
+    curtailment: list[EmsSeriesPoint]
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class BatteryComponentPlan(BaseModel):
+    type: Literal["battery"] = "battery"
+    charge_kw: list[EmsSeriesPoint]
+    discharge_kw: list[EmsSeriesPoint]
+    soc_kwh: list[EmsSeriesPoint]
+    soc_pct: list[EmsSeriesPoint]
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class LoadControlledEvComponentPlan(BaseModel):
+    type: Literal["load_controlled_ev"] = "load_controlled_ev"
+    charge_kw: list[EmsSeriesPoint]
+    soc_kwh: list[EmsSeriesPoint]
+    soc_pct: list[EmsSeriesPoint]
+    connected: list[EmsSeriesPoint]
+    charge_allowed: list[EmsSeriesPoint]
+    intent: LoadControlledEvIntent
+
+    model_config = ConfigDict(extra="forbid")
+
+
+ComponentPlan = Annotated[
+    SwitchboardComponentPlan
+    | GridComponentPlan
+    | LoadComponentPlan
+    | InverterComponentPlan
+    | PvComponentPlan
+    | BatteryComponentPlan
+    | LoadControlledEvComponentPlan,
+    Field(discriminator="type"),
+]
+
+
+class EmsPlanOutput(BaseModel):
+    generated_at: datetime
+    status: EmsPlanStatus
+    objective_value: Rounded3Opt = None
+    timings: EmsPlanTimings
+    components: dict[str, ComponentPlan]
+
+    model_config = ConfigDict(extra="forbid")

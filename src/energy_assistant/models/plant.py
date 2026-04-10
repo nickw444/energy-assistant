@@ -1,22 +1,19 @@
+from __future__ import annotations
+
 import calendar
 import re
-from typing import Literal, Self, cast
+from typing import Annotated, Literal, Self, cast
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from energy_assistant.lib.source_resolver.hass_source import (
-    HomeAssistantAmberElectricForecastSource,
-    HomeAssistantAmberExpressForecastSource,
-    HomeAssistantCurrencyEntitySource,
-    HomeAssistantHistoricalAverageForecastSource,
-    HomeAssistantPercentageEntitySource,
-    HomeAssistantPowerKwEntitySource,
-    HomeAssistantSolcastForecastSource,
-)
+_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 
-PriceForecastSource = (
-    HomeAssistantAmberElectricForecastSource | HomeAssistantAmberExpressForecastSource
-)
+
+def normalize_registry_key(value: str) -> str:
+    normalized = value.strip()
+    if not _ID_PATTERN.match(normalized):
+        raise ValueError("keys must be lowercase letters, numbers, and underscores")
+    return normalized
 
 
 class TimeWindow(BaseModel):
@@ -57,11 +54,40 @@ class TimeWindow(BaseModel):
         return [abbr for abbr in month_order if abbr in month_set]
 
 
-def _default_import_forbidden_periods() -> list[TimeWindow]:
-    return []
+class InputReference(BaseModel):
+    source: str = Field(min_length=1)
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_from_string(cls, value: object) -> object:
+        if isinstance(value, str):
+            return {"source": value}
+        return value
+
+    @field_validator("source")
+    @classmethod
+    def _normalize_source(cls, value: str) -> str:
+        normalized = value.strip()
+        if normalized.startswith("inputs."):
+            normalized = normalized[len("inputs.") :]
+        return normalize_registry_key(normalized)
+
+    @property
+    def key(self) -> str:
+        return self.source
 
 
-class GridPriceRiskConfig(BaseModel):
+class PriceBiasFilterConfig(BaseModel):
+    type: Literal["bias"]
+    bias_pct: float = Field(default=0.0, ge=0, le=100)
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+
+class PriceRiskFilterConfig(BaseModel):
+    type: Literal["risk"]
     bias_pct: float = Field(default=0.0, ge=0, le=100)
     ramp_start_after_minutes: int = Field(default=30, ge=0)
     ramp_duration_minutes: int = Field(default=90, ge=0)
@@ -78,65 +104,122 @@ class GridPriceRiskConfig(BaseModel):
         return self
 
 
-class GridConfig(BaseModel):
+PriceFilterConfig = Annotated[
+    PriceBiasFilterConfig | PriceRiskFilterConfig,
+    Field(discriminator="type"),
+]
+
+
+class PriceBindingConfig(BaseModel):
+    source: InputReference
+    filters: list[PriceBiasFilterConfig | PriceRiskFilterConfig] = []
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+
+class TerminalSocConfig(BaseModel):
+    mode: Literal["hard", "adaptive"] = "adaptive"
+    penalty_per_kwh: float | Literal["mean", "median"] | None = Field(default="median")
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("penalty_per_kwh")
+    @classmethod
+    def _validate_penalty_per_kwh(
+        cls, value: float | Literal["mean", "median"] | None
+    ) -> float | Literal["mean", "median"] | None:
+        if value is None or value in {"mean", "median"}:
+            return value
+        if float(value) < 0:
+            raise ValueError("penalty_per_kwh must be >= 0")
+        return value
+
+
+class SwitchboardComponentConfig(BaseModel):
+    type: Literal["switchboard"]
+    name: str | None = None
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+
+class GridConstraintsConfig(BaseModel):
     max_import_kw: float = Field(ge=0)
     max_export_kw: float = Field(ge=0)
-    realtime_grid_power: HomeAssistantPowerKwEntitySource
-    realtime_price_import: HomeAssistantCurrencyEntitySource
-    realtime_price_export: HomeAssistantCurrencyEntitySource
-    price_import_forecast: PriceForecastSource
-    price_export_forecast: PriceForecastSource
-    # Grid price bias: sign-aware premium on positive imports and discount on
-    # positive exports (negative prices move toward/away from zero accordingly).
-    grid_price_bias_pct: float = Field(default=0.0, ge=0, le=100)
-    # When export price is exactly zero, apply a tiny bonus or penalty to break ties
-    # between export and curtailment.
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+
+class GridComponentConfig(BaseModel):
+    type: Literal["grid"]
+    connection: str = Field(min_length=1)
+    constraints: GridConstraintsConfig
+    realtime_grid_power: InputReference | None = None
+    price_import: PriceBindingConfig
+    price_export: PriceBindingConfig
     zero_price_export_preference: Literal["export", "curtail"] = "export"
-    # Forecast price risk bias (ramps from start after minutes over duration).
-    grid_price_risk: GridPriceRiskConfig | None = None
-    import_forbidden_periods: list[TimeWindow] = Field(
-        default_factory=_default_import_forbidden_periods
-    )
+    import_forbidden_periods: list[TimeWindow] = []
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-
-class PlantLoadConfig(BaseModel):
-    realtime_load_power: HomeAssistantPowerKwEntitySource
-    forecast: HomeAssistantHistoricalAverageForecastSource
-
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    @field_validator("connection")
+    @classmethod
+    def _validate_connection(cls, value: str) -> str:
+        return normalize_registry_key(value)
 
 
-class PvConfig(BaseModel):
-    realtime_power: HomeAssistantPowerKwEntitySource | None = None
-    # Provider-agnostic scaling applied to PV forecast kW values (pessimism factor).
-    # Applies to forecast only; realtime overrides are handled separately.
-    forecast_multiplier: float = Field(default=1.0, ge=0.0, le=1.0)
-    forecast: HomeAssistantSolcastForecastSource
+class LoadComponentConfig(BaseModel):
+    type: Literal["load"]
+    connection: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+    power: InputReference
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
+    @field_validator("connection")
+    @classmethod
+    def _validate_connection(cls, value: str) -> str:
+        return normalize_registry_key(value)
 
-class BatteryConfig(BaseModel):
+
+class InverterComponentConfig(BaseModel):
+    type: Literal["inverter"]
+    connection: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+    peak_power_kw: float = Field(ge=0)
+    curtailment: Literal["load-aware", "binary"] | None = None
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    @field_validator("connection")
+    @classmethod
+    def _validate_connection(cls, value: str) -> str:
+        return normalize_registry_key(value)
+
+
+class BatteryComponentConfig(BaseModel):
+    type: Literal["battery"]
+    connection: str = Field(min_length=1)
+    name: str = Field(min_length=1)
     capacity_kwh: float = Field(ge=0)
     storage_efficiency_pct: float = Field(gt=0, le=100)
     charge_cost_per_kwh: float = Field(default=0.0, ge=0)
     discharge_cost_per_kwh: float = Field(default=0.0, ge=0)
-    # Value assigned to each kWh of stored energy at horizon end.
-    # When set, the objective includes a reward for terminal SoC, incentivizing
-    # higher battery charging when export prices are low.
-    # Default: None (disabled); typical value: 0.08-0.15 $/kWh.
     soc_value_per_kwh: float | None = Field(default=None, ge=0)
     min_soc_pct: float = Field(ge=0, le=100)
     max_soc_pct: float = Field(ge=0, le=100)
     reserve_soc_pct: float = Field(ge=0, le=100)
+    terminal_soc: TerminalSocConfig = Field(default_factory=TerminalSocConfig)
     max_charge_kw: float | None = Field(default=None, ge=0)
     max_discharge_kw: float | None = Field(default=None, ge=0)
-    state_of_charge_pct: HomeAssistantPercentageEntitySource
-    realtime_power: HomeAssistantPowerKwEntitySource
+    state_of_charge_pct: InputReference
+    realtime_power: InputReference
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    @field_validator("connection")
+    @classmethod
+    def _validate_connection(cls, value: str) -> str:
+        return normalize_registry_key(value)
 
     @model_validator(mode="after")
     def _validate_soc_bounds(self) -> Self:
@@ -147,41 +230,69 @@ class BatteryConfig(BaseModel):
         return self
 
 
-class InverterConfig(BaseModel):
-    id: str = Field(min_length=1)
+class PvComponentConfig(BaseModel):
+    type: Literal["pv"]
+    connection: str = Field(min_length=1)
+    name: str | None = None
+    forecast: InputReference
+    forecast_multiplier: float = Field(default=1.0, ge=0.0, le=1.0)
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    @field_validator("connection")
+    @classmethod
+    def _validate_connection(cls, value: str) -> str:
+        return normalize_registry_key(value)
+
+
+class SocIncentive(BaseModel):
+    target_soc_pct: float = Field(ge=0, le=100)
+    incentive: float
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+
+class ControlledEvComponentConfig(BaseModel):
+    type: Literal["load_controlled_ev"]
+    connection: str = Field(min_length=1)
     name: str = Field(min_length=1)
-    peak_power_kw: float = Field(ge=0)
-    curtailment: Literal["load-aware", "binary"] | None = None
-    pv: PvConfig
-    battery: BatteryConfig | None = None
+    min_power_kw: float = Field(ge=0)
+    max_power_kw: float = Field(ge=0)
+    energy_kwh: float = Field(ge=0)
+    connected: InputReference
+    can_connect: InputReference | None = None
+    allowed_connect_times: list[TimeWindow] = []
+    connect_grace_minutes: int = Field(default=0, ge=0)
+    realtime_power: InputReference
+    state_of_charge_pct: InputReference
+    soc_incentives: list[SocIncentive] = []
+    switch_penalty: float = Field(default=0.0, ge=0)
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    @field_validator("id")
+    @field_validator("connection")
     @classmethod
-    def _validate_id(cls, value: str) -> str:
-        if not re.match(r"^[a-z][a-z0-9_]*$", value):
-            raise ValueError("id must be lowercase letters, numbers, and underscores")
-        return value
-
-    @field_validator("name")
-    @classmethod
-    def _validate_name(cls, value: str) -> str:
-        if not any(ch.isalpha() for ch in value):
-            raise ValueError("name must include at least one letter")
-        return value
-
-
-class PlantConfig(BaseModel):
-    grid: GridConfig
-    load: PlantLoadConfig
-    inverters: list[InverterConfig]
-
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    def _validate_connection(cls, value: str) -> str:
+        return normalize_registry_key(value)
 
     @model_validator(mode="after")
-    def _validate_inverter_ids_unique(self) -> Self:
-        ids = [inv.id for inv in self.inverters]
-        if len(ids) != len(set(ids)):
-            raise ValueError("inverter ids must be unique")
+    def _validate_power_bounds(self) -> Self:
+        if self.min_power_kw > self.max_power_kw:
+            raise ValueError("min_power_kw must be <= max_power_kw")
         return self
+
+
+PlantComponentConfig = Annotated[
+    SwitchboardComponentConfig
+    | GridComponentConfig
+    | LoadComponentConfig
+    | InverterComponentConfig
+    | BatteryComponentConfig
+    | PvComponentConfig
+    | ControlledEvComponentConfig,
+    Field(discriminator="type"),
+]
+
+
+def plant_component_type(component: PlantComponentConfig) -> str:
+    return component.type

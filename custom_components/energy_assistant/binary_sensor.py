@@ -16,28 +16,27 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from . import EnergyAssistantRuntimeData
 from .coordinator import (
     EnergyAssistantCoordinator,
+    PlanLatestResponse,
     build_plan_series,
-    get_timestep0,
-    intent_load_value_getter,
-    inverter_step_getter,
-    inverter_value_getter,
-    sorted_items,
+    component_intent_value_getter,
+    component_series_getter,
+    component_value_getter,
+    components_of_type,
 )
 from .device import (
     entity_unique_id,
-    inverter_device_info,
-    load_device_info,
+    ev_device_info,
+    pv_device_info,
     suggested_object_id,
 )
-from .energy_assistant_client import EmsPlanOutput, PlanLatestResponse, TimestepPlan
+from .energy_assistant_client import (
+    EmsPlanOutput,
+    EmsSeriesPoint,
+    LoadControlledEvComponentPlan,
+    PvComponentPlan,
+)
 
 
-# NOTE: homeassistant-stubs has several type conflicts that require ignores:
-# 1. type: ignore[misc] on class - conflicting `available` property types between
-#    CoordinatorEntity and Entity (property vs cached_property).
-# 2. pyright: ignore[reportIncompatibleVariableOverride] on properties - stubs define
-#    is_on/extra_state_attributes as cached_property but we override with property.
-# These are stubs issues, not runtime issues. Remove ignores when stubs are fixed.
 class EnergyAssistantCurtailmentSensor(  # type: ignore[misc]
     CoordinatorEntity[EnergyAssistantCoordinator],
     BinarySensorEntity,
@@ -52,17 +51,17 @@ class EnergyAssistantCurtailmentSensor(  # type: ignore[misc]
         coordinator: EnergyAssistantCoordinator,
         *,
         unique_id: str,
-        suggested_object_id: str | None,
+        suggested_object_id_value: str | None,
         value_getter: Callable[[PlanLatestResponse], Any],
-        series_getter: Callable[[TimestepPlan], Any],
+        series_getter: Callable[[PlanLatestResponse], list[EmsSeriesPoint]],
         device_info: DeviceInfo,
     ) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = unique_id
         self._value_getter = value_getter
         self._series_getter = series_getter
-        if suggested_object_id is not None:
-            self._attr_suggested_object_id = suggested_object_id
+        if suggested_object_id_value is not None:
+            self._attr_suggested_object_id = suggested_object_id_value
         self._attr_device_info = device_info
         self._attr_icon = "mdi:solar-power-variant"
 
@@ -81,19 +80,12 @@ class EnergyAssistantCurtailmentSensor(  # type: ignore[misc]
             return {}
         return {
             "plan": build_plan_series(
-                payload.response.plan,
-                self._series_getter,
+                self._series_getter(payload.response),
                 _normalize_bool,
             ),
         }
 
 
-# NOTE: homeassistant-stubs has several type conflicts that require ignores:
-# 1. type: ignore[misc] on class - conflicting `available` property types between
-#    CoordinatorEntity and Entity (property vs cached_property).
-# 2. pyright: ignore[reportIncompatibleVariableOverride] on properties - stubs define
-#    is_on as cached_property but we override with property.
-# These are stubs issues, not runtime issues. Remove ignores when stubs are fixed.
 class EnergyAssistantPlanFlagSensor(  # type: ignore[misc]
     CoordinatorEntity[EnergyAssistantCoordinator],
     BinarySensorEntity,
@@ -105,7 +97,7 @@ class EnergyAssistantPlanFlagSensor(  # type: ignore[misc]
         coordinator: EnergyAssistantCoordinator,
         *,
         unique_id: str,
-        suggested_object_id: str | None,
+        suggested_object_id_value: str | None,
         name: str,
         value_getter: Callable[[PlanLatestResponse], Any],
         device_info: DeviceInfo,
@@ -115,8 +107,8 @@ class EnergyAssistantPlanFlagSensor(  # type: ignore[misc]
         self._attr_unique_id = unique_id
         self._attr_name = name
         self._value_getter = value_getter
-        if suggested_object_id is not None:
-            self._attr_suggested_object_id = suggested_object_id
+        if suggested_object_id_value is not None:
+            self._attr_suggested_object_id = suggested_object_id_value
         self._attr_device_info = device_info
         if icon:
             self._attr_icon = icon
@@ -140,7 +132,7 @@ async def async_setup_entry(
     base_url = runtime.base_url
 
     entities = _build_curtailment_entities(coordinator, base_url)
-    entities.extend(_build_intent_entities(coordinator, base_url))
+    entities.extend(_build_ev_intent_entities(coordinator, base_url))
     if entities:
         async_add_entities(entities)
 
@@ -150,70 +142,45 @@ def _build_curtailment_entities(
     base_url: str,
 ) -> list[BinarySensorEntity]:
     payload = coordinator.data
-    if not payload:
+    if payload is None:
         return []
-    return _build_curtailment_entities_for_plan(coordinator, payload.response.plan, base_url)
-
-
-def _build_intent_entities(
-    coordinator: EnergyAssistantCoordinator,
-    base_url: str,
-) -> list[BinarySensorEntity]:
-    payload = coordinator.data
-    if not payload:
-        return []
-    intent = payload.response.intent
-    if not intent.loads:
-        return []
-
+    plan: EmsPlanOutput = payload.response.plan
     entities: list[BinarySensorEntity] = []
-    for name in sorted(intent.loads.keys()):
-        load_device = load_device_info(base_url, name)
+    for component_id in components_of_type(plan, PvComponentPlan):
+        device = pv_device_info(base_url, component_id)
         entities.append(
-            EnergyAssistantPlanFlagSensor(
+            EnergyAssistantCurtailmentSensor(
                 coordinator,
-                unique_id=entity_unique_id(base_url, "plan", "ev", name, "charge_on"),
-                suggested_object_id=suggested_object_id(
-                    "intent",
-                    "ev",
-                    name,
-                    "charge_on",
-                ),
-                name="Charge On",
-                value_getter=intent_load_value_getter(name, "charge_on"),
-                device_info=load_device,
-                icon="mdi:ev-plug",
+                unique_id=entity_unique_id(base_url, "pv", component_id, "curtailment"),
+                suggested_object_id_value=suggested_object_id("pv", component_id, "curtailment"),
+                value_getter=component_value_getter(component_id, "curtailment"),
+                series_getter=component_series_getter(component_id, "curtailment"),
+                device_info=device,
             )
         )
     return entities
 
 
-def _build_curtailment_entities_for_plan(
+def _build_ev_intent_entities(
     coordinator: EnergyAssistantCoordinator,
-    plan: EmsPlanOutput,
     base_url: str,
 ) -> list[BinarySensorEntity]:
-    timestep0 = get_timestep0(plan)
-    if not timestep0:
+    payload = coordinator.data
+    if payload is None:
         return []
-
+    plan: EmsPlanOutput = payload.response.plan
     entities: list[BinarySensorEntity] = []
-    for name, inverter in sorted_items(timestep0.inverters):
-        if inverter.curtailment is None:
-            continue
-        inverter_device = inverter_device_info(base_url, name)
+    for component_id in components_of_type(plan, LoadControlledEvComponentPlan):
+        device = ev_device_info(base_url, component_id)
         entities.append(
-            EnergyAssistantCurtailmentSensor(
+            EnergyAssistantPlanFlagSensor(
                 coordinator,
-                unique_id=entity_unique_id(base_url, "inverter", name, "curtailment"),
-                suggested_object_id=suggested_object_id(
-                    "inverter",
-                    name,
-                    "curtailment",
-                ),
-                value_getter=inverter_value_getter(name, "curtailment"),
-                series_getter=inverter_step_getter(name, "curtailment"),
-                device_info=inverter_device,
+                unique_id=entity_unique_id(base_url, "ev", component_id, "charge_on"),
+                suggested_object_id_value=suggested_object_id("ev", component_id, "charge_on"),
+                name="Charge On",
+                value_getter=component_intent_value_getter(component_id, "charge_on"),
+                device_info=device,
+                icon="mdi:ev-plug-type2",
             )
         )
     return entities

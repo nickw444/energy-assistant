@@ -17,21 +17,15 @@ import yaml
 
 from energy_assistant.api.server import create_app
 from energy_assistant.config import load_app_config
-from energy_assistant.ems.fixtures.graphs import (
-    build_logical_component_graph,
-    build_topology_graph,
-    render_graph_svg,
-)
 from energy_assistant.ems.fixtures.harness import (
     EmsFixturePaths,
     compute_plan_hash,
-    compute_text_hash,
     render_fixture_json,
     resolve_ems_fixture_paths,
     serialize_plan,
 )
 from energy_assistant.ems.models import GridComponentPlan
-from energy_assistant.ems.planner import EmsMilpPlanner, EmsSolvedRun
+from energy_assistant.ems.planner import EmsMilpPlanner
 from energy_assistant.ems.system.factory import EmsSystemFactory
 from energy_assistant.inputs.fixtures import (
     load_fixture_input_provider,
@@ -411,9 +405,7 @@ def ems_record_scenario(
         raise click.ClickException("--fixture is required.")
     paths = resolve_ems_fixture_paths(output_dir, fixture_parsed, name)
     paths.scenario_dir.mkdir(parents=True, exist_ok=True)
-    config_write_path = (
-        paths.scenario_config_path if name is not None else paths.fixture_config_path
-    )
+    config_write_path = paths.config_path
 
     try:
         planner, input_provider, _hass_client = _build_live_planner(app_config)
@@ -461,11 +453,6 @@ def ems_record_scenario(
 
             paths.hash_path.write_text(plan_hash + "\n")
             click.echo(f"Wrote plan hash to {paths.hash_path}")
-            _write_fixture_graph_artifacts(
-                paths=paths,
-                run=run,
-                force=True,
-            )
     except Exception as exc:
         raise click.ClickException(traceback.format_exc()) from exc
 
@@ -497,12 +484,6 @@ def ems_record_scenario(
     show_default=True,
     help="Enable solver output (CBC).",
 )
-@click.option(
-    "--force-visuals/--no-force-visuals",
-    default=False,
-    show_default=True,
-    help="Regenerate the plot image and SVG graph artifacts even if unchanged.",
-)
 @click.pass_context
 def ems_refresh_baseline(
     ctx: click.Context,
@@ -510,7 +491,6 @@ def ems_refresh_baseline(
     name: str | None,
     scenario_dir: Path,
     solver_msg: bool,
-    force_visuals: bool,
 ) -> None:
     """Recompute the baseline output from a recorded fixture."""
     _configure_logging(str(ctx.obj.get("log_level", "INFO")))
@@ -523,11 +503,7 @@ def ems_refresh_baseline(
                 f"Expected {paths.fixture_path} and {paths.config_path}."
             )
         try:
-            _refresh_baseline_bundle(
-                paths,
-                solver_msg=solver_msg,
-                force_visuals=force_visuals,
-            )
+            _refresh_baseline_bundle(paths, solver_msg=solver_msg)
         except Exception as exc:
             raise click.ClickException(traceback.format_exc()) from exc
         return
@@ -541,11 +517,7 @@ def ems_refresh_baseline(
         paths = resolve_ems_fixture_paths(scenario_dir, fixture_name, scenario_name)
         click.echo(f"Refreshing EMS baseline for {paths.scenario_dir}")
         try:
-            _refresh_baseline_bundle(
-                paths,
-                solver_msg=solver_msg,
-                force_visuals=force_visuals,
-            )
+            _refresh_baseline_bundle(paths, solver_msg=solver_msg)
         except Exception as exc:
             failures.append(((fixture_name, scenario_name), _format_exception_message(exc)))
 
@@ -570,7 +542,6 @@ def _refresh_baseline_bundle(
     paths: EmsFixturePaths,
     *,
     solver_msg: bool,
-    force_visuals: bool,
 ) -> None:
     if not paths.fixture_path.exists() or not paths.config_path.exists():
         raise click.ClickException(
@@ -596,7 +567,7 @@ def _refresh_baseline_bundle(
 
     new_hash = compute_plan_hash(plan_payload)
     old_hash = paths.hash_path.read_text().strip() if paths.hash_path.exists() else None
-    if new_hash != old_hash or force_visuals:
+    if new_hash != old_hash:
         write_plan_image(plan, paths.plot_path)
         click.echo(f"Wrote plan image to {paths.plot_path}")
 
@@ -605,62 +576,12 @@ def _refresh_baseline_bundle(
     else:
         click.echo("Plan unchanged, skipping image regeneration.")
 
-    _write_fixture_graph_artifacts(
-        paths=paths,
-        run=run,
-        force=force_visuals,
-    )
-
 
 def _format_exception_message(exc: Exception) -> str:
     message = str(exc).strip()
     if message:
         return message.splitlines()[0]
     return type(exc).__name__
-
-
-def _write_fixture_graph_artifacts(
-    *,
-    paths: EmsFixturePaths,
-    run: EmsSolvedRun,
-    force: bool,
-) -> None:
-    logical_svg = render_graph_svg(build_logical_component_graph(run.system))
-    topology_svg = render_graph_svg(build_topology_graph(run.snapshot.graph))
-
-    _write_text_artifact(
-        path=paths.logical_graph_path,
-        hash_path=paths.logical_graph_hash_path,
-        payload=logical_svg,
-        label="logical graph",
-        force=force,
-    )
-    _write_text_artifact(
-        path=paths.topology_graph_path,
-        hash_path=paths.topology_graph_hash_path,
-        payload=topology_svg,
-        label="topology graph",
-        force=force,
-    )
-
-
-def _write_text_artifact(
-    *,
-    path: Path,
-    hash_path: Path,
-    payload: str,
-    label: str,
-    force: bool,
-) -> None:
-    new_hash = compute_text_hash(payload)
-    old_hash = hash_path.read_text().strip() if hash_path.exists() else None
-    if force or new_hash != old_hash or not path.exists():
-        path.write_text(payload)
-        hash_path.write_text(new_hash + "\n")
-        click.echo(f"Wrote {label} to {path}")
-        click.echo(f"Wrote {label} hash to {hash_path}")
-        return
-    click.echo(f"{label.capitalize()} unchanged, skipping regeneration.")
 
 
 def _discover_fixture_scenarios(

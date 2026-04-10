@@ -12,7 +12,7 @@ from energy_assistant.worker import Worker
 @dataclass(frozen=True, slots=True)
 class GlobalDependencies:
     config: AppConfig
-    worker: Worker | None
+    worker: Worker
 
 
 def _get_globals(request: Request) -> GlobalDependencies:
@@ -35,10 +35,4 @@ def get_config(dependencies: Annotated[GlobalDependencies, Depends(_get_globals)
 
 
 def get_worker(dependencies: Annotated[GlobalDependencies, Depends(_get_globals)]) -> Worker:
-    worker = dependencies.worker
-    if worker is None:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Worker not available",
-        )
-    return worker
+    return dependencies.worker

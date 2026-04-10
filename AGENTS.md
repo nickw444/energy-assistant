@@ -34,6 +34,8 @@ This file covers repo-wide conventions for coding agents. For domain-specific gu
 
 ## Repo hygiene
 - Default to built-in exceptions unless a distinct custom type is justified.
+- Avoid `TYPE_CHECKING` conditional imports for circular dependencies; restructure packages/modules instead.
+- For abstract/base classes, use a module named after the class (for example `node.py`, `connection_policy.py`) instead of `base.py`.
 - Track work items in GitHub Issues (avoid a checked-in TODO list).
 - GitHub uses squash merges; when cleaning up worktrees, rely on merged PR status or deleted remote branches rather than `git branch --merged`.
 - When updating PR descriptions via `gh`, prefer `gh pr edit --body-file <path>` to preserve markdown formatting.

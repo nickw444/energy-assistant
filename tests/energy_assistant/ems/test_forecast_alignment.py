@@ -4,12 +4,12 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from energy_assistant.ems.forecast_alignment import (
+from energy_assistant.ems.inputs.alignment import (
     PowerForecastAligner,
     PriceForecastAligner,
     forecast_coverage_slots,
 )
-from energy_assistant.ems.horizon import Horizon, HorizonSlot
+from energy_assistant.ems.planning.horizon import Horizon, HorizonSlot
 from energy_assistant.lib.source_resolver.models import PowerForecastInterval, PriceForecastInterval
 
 

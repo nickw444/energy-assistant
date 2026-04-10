@@ -28,11 +28,29 @@ def inverter_device_info(base_url: str, inverter_id: str) -> DeviceInfo:
     )
 
 
-def load_device_info(base_url: str, load_id: str) -> DeviceInfo:
+def pv_device_info(base_url: str, pv_id: str) -> DeviceInfo:
     root_id = root_device_identifier(base_url)
     return DeviceInfo(
-        identifiers={(DOMAIN, f"{root_id}:load:{load_id}")},
-        name=f"Load {load_id}",
+        identifiers={(DOMAIN, f"{root_id}:pv:{pv_id}")},
+        name=f"PV {pv_id}",
+        via_device=(DOMAIN, root_id),
+    )
+
+
+def battery_device_info(base_url: str, battery_id: str) -> DeviceInfo:
+    root_id = root_device_identifier(base_url)
+    return DeviceInfo(
+        identifiers={(DOMAIN, f"{root_id}:battery:{battery_id}")},
+        name=f"Battery {battery_id}",
+        via_device=(DOMAIN, root_id),
+    )
+
+
+def ev_device_info(base_url: str, ev_id: str) -> DeviceInfo:
+    root_id = root_device_identifier(base_url)
+    return DeviceInfo(
+        identifiers={(DOMAIN, f"{root_id}:ev:{ev_id}")},
+        name=f"EV {ev_id}",
         via_device=(DOMAIN, root_id),
     )
 

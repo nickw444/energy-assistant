@@ -3,17 +3,21 @@
 from __future__ import annotations
 
 import html
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime, tzinfo
+from datetime import UTC, datetime, timedelta, tzinfo
 from pathlib import Path
 from typing import Any
 
 from energy_assistant.ems.models import (
+    BatteryComponentPlan,
     EmsPlanOutput,
-    EvTimestepPlan,
-    InverterTimestepPlan,
-    TimestepPlan,
+    EmsSeriesPoint,
+    GridComponentPlan,
+    InverterComponentPlan,
+    LoadComponentPlan,
+    LoadControlledEvComponentPlan,
+    PvComponentPlan,
 )
 
 COLORS = {
@@ -71,35 +75,76 @@ def _build_plan_figure(
         raise ImportError("plotly is required for plotting: uv add plotly") from exc
 
     local_tz = datetime.now().astimezone().tzinfo or UTC
-    timesteps = plan.timesteps
-    if not timesteps:
-        raise ValueError("Plan has no timesteps to plot.")
+    grid = _single_component(plan, "grid", GridComponentPlan)
+    if grid is None:
+        raise ValueError("Plan is missing required 'grid' component.")
+    if not grid.net_kw:
+        raise ValueError("Plan has no interval series to plot.")
 
-    times = [_normalize_time(step.start, local_tz=local_tz) for step in timesteps]
-    times.append(_normalize_time(timesteps[-1].end, local_tz=local_tz))
+    interval_points = grid.net_kw
+    interval_end_times = _interval_end_times(plan, interval_points)
+    times = [_normalize_time(point.time, local_tz=local_tz) for point in interval_points]
+    times.append(_normalize_time(interval_end_times[-1], local_tz=local_tz))
     time_labels = times[:-1]
 
-    grid_net = [float(step.grid.net_kw) for step in timesteps]
-    load_kw = [float(step.loads.base_kw) for step in timesteps]
-
-    pv_inverters = _collect_inverter_series(timesteps, lambda inv: inv.pv_kw)
-    batt_charge = _collect_inverter_series(timesteps, lambda inv: inv.battery_charge_kw)
-    batt_discharge = _collect_inverter_series(timesteps, lambda inv: inv.battery_discharge_kw)
-    batt_soc_pct = _collect_inverter_series(timesteps, lambda inv: inv.battery_soc_pct)
-
-    ev_charge = _collect_ev_series(timesteps, lambda ev: ev.charge_kw)
-    ev_soc_pct = _collect_ev_series(timesteps, lambda ev: ev.soc_pct)
-
-    price_import = [float(step.economics.price_import) for step in timesteps]
-    price_export = [float(step.economics.price_export) for step in timesteps]
-    price_import_risk = [float(step.economics.price_import_effective) for step in timesteps]
-    price_export_risk = [float(step.economics.price_export_effective) for step in timesteps]
-
-    curtailment_by_inverter = _collect_inverter_series(
-        timesteps, lambda inv: inv.pv_curtail_kw
+    grid_net = _float_series(grid.net_kw)
+    load_component = _single_component(plan, "load", LoadComponentPlan, optional=True)
+    load_kw = _float_series(load_component.power_kw) if load_component is not None else [0.0] * len(
+        interval_points
     )
-    total_curtailment = _aggregate_series(curtailment_by_inverter)
-    curtailment_flags = [value > _CURTAILMENT_THRESHOLD_KW for value in total_curtailment]
+
+    pv_components = _components_of_type(plan, PvComponentPlan)
+    battery_components = _components_of_type(plan, BatteryComponentPlan)
+    ev_components = _components_of_type(plan, LoadControlledEvComponentPlan)
+
+    pv_series = {
+        name: _float_series(component.actual_kw)
+        for name, component in pv_components.items()
+    }
+    batt_charge = {
+        name: _float_series(component.charge_kw) for name, component in battery_components.items()
+    }
+    batt_discharge = {
+        name: _float_series(component.discharge_kw)
+        for name, component in battery_components.items()
+    }
+    batt_soc_pct = {
+        name: _float_series(component.soc_pct) for name, component in battery_components.items()
+    }
+    batt_soc_times = {
+        name: _normalize_times(component.soc_pct, local_tz=local_tz)
+        for name, component in battery_components.items()
+    }
+
+    ev_charge = {
+        name: _float_series(component.charge_kw)
+        for name, component in ev_components.items()
+    }
+    ev_soc_pct = {
+        name: _float_series(component.soc_pct)
+        for name, component in ev_components.items()
+    }
+    ev_soc_times = {
+        name: _normalize_times(component.soc_pct, local_tz=local_tz)
+        for name, component in ev_components.items()
+    }
+
+    price_import = _float_series(grid.price_import_raw)
+    price_export = _float_series(grid.price_export_raw)
+    price_import_risk = _float_series(grid.price_import_effective)
+    price_export_risk = _float_series(grid.price_export_effective)
+
+    curtailment_by_pv = {
+        name: _float_series(component.curtail_kw)
+        for name, component in pv_components.items()
+    }
+    total_curtailment = _aggregate_series(curtailment_by_pv)
+    curtailment_flags = _aggregate_bool_series(
+        {
+            name: _bool_series(component.curtailment)
+            for name, component in pv_components.items()
+        }
+    )
 
     has_soc = any(_has_any(series) for series in batt_soc_pct.values()) or any(
         _has_any(series) for series in ev_soc_pct.values()
@@ -117,7 +162,7 @@ def _build_plan_figure(
     legend_group_soc = "State of Charge"
     legend_group_price = "Price"
 
-    total_pv = _aggregate_series(pv_inverters)
+    total_pv = _aggregate_series(pv_series)
     total_batt_charge = _aggregate_series(batt_charge)
     total_batt_discharge = _aggregate_series(batt_discharge)
     total_ev_charge = _aggregate_series(ev_charge)
@@ -244,7 +289,7 @@ def _build_plan_figure(
                 label = f"Battery SoC ({name})" if len(batt_soc_pct) > 1 else "Battery SoC"
                 fig.add_trace(
                     go.Scatter(
-                        x=time_labels,
+                        x=batt_soc_times[name],
                         y=series,
                         name=label,
                         mode="lines",
@@ -264,7 +309,7 @@ def _build_plan_figure(
                 label = f"EV SoC ({name})" if len(ev_soc_pct) > 1 else "EV SoC"
                 fig.add_trace(
                     go.Scatter(
-                        x=time_labels,
+                        x=ev_soc_times[name],
                         y=series,
                         name=label,
                         mode="lines",
@@ -373,13 +418,9 @@ def _build_plan_figure(
                 ),
             )
 
-    total_cost = sum(float(step.economics.segment_cost) for step in timesteps)
-    total_import_kwh = sum(
-        float(step.grid.import_kw) * float(step.duration_s) / 3600.0 for step in timesteps
-    )
-    total_export_kwh = sum(
-        float(step.grid.export_kw) * float(step.duration_s) / 3600.0 for step in timesteps
-    )
+    total_cost = float(plan.objective_value or 0.0)
+    total_import_kwh = _interval_energy_kwh(grid.import_kw, interval_end_times)
+    total_export_kwh = _interval_energy_kwh(grid.export_kw, interval_end_times)
 
     price_max = max(
         max(abs(p) for p in price_import) if price_import else 0,
@@ -834,34 +875,124 @@ def _normalize_time(value: datetime, *, local_tz: tzinfo) -> datetime:
     return value.astimezone(local_tz)
 
 
-def _collect_inverter_series(
-    timesteps: list[TimestepPlan],
-    accessor: Callable[[InverterTimestepPlan], float | None],
-) -> dict[str, list[float]]:
-    names = sorted({inv.name for step in timesteps for inv in step.inverters.values()})
-    series: dict[str, list[float]] = {name: [] for name in names}
-    for step in timesteps:
-        inv_map = {inv.name: inv for inv in step.inverters.values()}
-        for name in names:
-            inv = inv_map.get(name)
-            raw = accessor(inv) if inv is not None else None
-            series[name].append(float(raw) if raw is not None else 0.0)
-    return series
+def _single_component[T](
+    plan: EmsPlanOutput,
+    component_type: str,
+    model: type[T],
+    *,
+    optional: bool = False,
+) -> T | None:
+    matches = [
+        component for component in plan.components.values() if component.type == component_type
+    ]
+    if not matches:
+        if optional:
+            return None
+        raise ValueError(f"Plan is missing required {component_type!r} component.")
+    if len(matches) != 1:
+        raise ValueError(f"Expected exactly one {component_type!r} component, got {len(matches)}.")
+    component = matches[0]
+    if not isinstance(component, model):
+        raise TypeError(f"Plan component {component_type!r} had unexpected model type.")
+    return component
 
 
-def _collect_ev_series(
-    timesteps: list[TimestepPlan],
-    accessor: Callable[[EvTimestepPlan], float | None],
-) -> dict[str, list[float]]:
-    names = sorted({ev.name for step in timesteps for ev in step.loads.evs.values()})
-    series: dict[str, list[float]] = {name: [] for name in names}
-    for step in timesteps:
-        ev_map = {ev.name: ev for ev in step.loads.evs.values()}
-        for name in names:
-            ev = ev_map.get(name)
-            raw = accessor(ev) if ev is not None else None
-            series[name].append(float(raw) if raw is not None else 0.0)
-    return series
+def _components_of_type[T](plan: EmsPlanOutput, model: type[T]) -> dict[str, T]:
+    return {
+        component_id: component
+        for component_id, component in sorted(plan.components.items())
+        if isinstance(component, model)
+    }
+
+
+def _float_series(points: list[EmsSeriesPoint]) -> list[float]:
+    return [float(point.value) for point in points]
+
+
+def _bool_series(points: list[EmsSeriesPoint]) -> list[bool]:
+    return [bool(point.value) for point in points]
+
+
+def _normalize_times(points: list[EmsSeriesPoint], *, local_tz: tzinfo) -> list[datetime]:
+    return [_normalize_time(point.time, local_tz=local_tz) for point in points]
+
+
+def _interval_end_times(
+    plan: EmsPlanOutput,
+    interval_points: list[EmsSeriesPoint],
+) -> list[datetime]:
+    if not interval_points:
+        return []
+    starts = [point.time for point in interval_points]
+    if len(starts) == 1:
+        inferred_end = _plan_end_time(plan) or (starts[0] + timedelta(minutes=5))
+        return [inferred_end]
+    end_times = starts[1:]
+    final_end = _plan_end_time(plan)
+    if final_end is None or final_end <= starts[-1]:
+        final_end = starts[-1] + (starts[-1] - starts[-2])
+    end_times.append(final_end)
+    return end_times
+
+
+def _plan_end_time(plan: EmsPlanOutput) -> datetime | None:
+    state_times = [
+        points[-1].time
+        for component in plan.components.values()
+        if isinstance(component, BatteryComponentPlan | LoadControlledEvComponentPlan)
+        for points in ([component.soc_pct] if component.soc_pct else [])
+    ]
+    if state_times:
+        return max(state_times)
+    interval_times = [
+        points[-1].time
+        for component in plan.components.values()
+        for points in _component_interval_series(component)
+        if points
+    ]
+    if interval_times:
+        return max(interval_times)
+    return None
+
+
+def _component_interval_series(component: object) -> list[list[EmsSeriesPoint]]:
+    if isinstance(component, GridComponentPlan):
+        return [
+            component.price_import_raw,
+            component.price_export_raw,
+            component.price_import_effective,
+            component.price_export_effective,
+            component.import_allowed,
+            component.import_kw,
+            component.export_kw,
+            component.net_kw,
+        ]
+    if isinstance(component, LoadComponentPlan):
+        return [component.power_kw]
+    if isinstance(component, InverterComponentPlan):
+        return [component.ac_net_kw]
+    if isinstance(component, PvComponentPlan):
+        return [
+            component.available_kw,
+            component.actual_kw,
+            component.curtail_kw,
+            component.curtailment,
+        ]
+    if isinstance(component, BatteryComponentPlan):
+        return [component.charge_kw, component.discharge_kw]
+    if isinstance(component, LoadControlledEvComponentPlan):
+        return [component.charge_kw, component.connected, component.charge_allowed]
+    return []
+
+
+def _interval_energy_kwh(points: list[EmsSeriesPoint], end_times: list[datetime]) -> float:
+    if len(points) != len(end_times):
+        raise ValueError("Interval energy inputs must have matching lengths.")
+    total = 0.0
+    for point, end_time in zip(points, end_times, strict=True):
+        duration_h = (end_time - point.time).total_seconds() / 3600.0
+        total += float(point.value) * duration_h
+    return total
 
 
 def _aggregate_series(series_dict: dict[str, list[float]]) -> list[float]:
@@ -873,6 +1004,17 @@ def _aggregate_series(series_dict: dict[str, list[float]]) -> list[float]:
     for series in series_dict.values():
         for i, v in enumerate(series):
             total[i] += v
+    return total
+
+
+def _aggregate_bool_series(series_dict: dict[str, list[bool]]) -> list[bool]:
+    if not series_dict:
+        return []
+    length = len(next(iter(series_dict.values())))
+    total = [False] * length
+    for series in series_dict.values():
+        for i, value in enumerate(series):
+            total[i] = total[i] or value
     return total
 
 
