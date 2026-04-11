@@ -115,9 +115,6 @@ class EvComponent(EmsComponent[EvSolveState, LoadControlledEvComponentPlan]):
         build_ctx: GraphBuildContext,
     ) -> tuple[list[GraphElement], EvSolveState]:
         _ = build_ctx
-        return self.graph_elements(horizon=horizon)
-
-    def graph_elements(self, *, horizon: Horizon) -> tuple[list[GraphElement], EvSolveState]:
         connected = self._connected.get()
         realtime_power_kw = self._realtime_power_kw.get()
         initial_soc_kwh = self._initial_soc_kwh.get()

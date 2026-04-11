@@ -69,13 +69,6 @@ class BaseLoadComponent(EmsComponent[BaseLoadSolveState, LoadComponentPlan]):
         build_ctx: GraphBuildContext,
     ) -> tuple[list[GraphElement], BaseLoadSolveState]:
         _ = build_ctx
-        return self.graph_elements(horizon=horizon)
-
-    def graph_elements(
-        self,
-        *,
-        horizon: Horizon,
-    ) -> tuple[list[GraphElement], BaseLoadSolveState]:
         base_load_kw = self._base_load_kw.get()
 
         node = Node(

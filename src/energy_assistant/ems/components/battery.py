@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import cast
 
 import pulp
 
@@ -126,27 +125,29 @@ class BatteryComponent(EmsComponent[BatterySolveState, BatteryComponentPlan]):
         ]
         grid_price_import_raw = [0.0] * int(horizon.num_intervals)
         if grid_ids:
-            grid_component = cast(GridComponent, build_ctx.components[grid_ids[0]])
+            grid_component_obj = build_ctx.components[grid_ids[0]]
+            if not isinstance(grid_component_obj, GridComponent):
+                raise TypeError(
+                    f"Expected grid component for {grid_ids[0]!r}; got "
+                    f"{type(grid_component_obj).__name__}"
+                )
+            grid_component = grid_component_obj
             grid_solve_state = build_ctx.solve_states.get(grid_component)
             grid_price_import_raw = list(grid_solve_state.price_import_raw)
-        return self.graph_elements(
+        return self._build_solve_artifacts(
             horizon=horizon,
-            grid_connection=grid_connections[0] if grid_connections else None,
             grid_connections=grid_connections,
             price_import_raw=grid_price_import_raw,
         )
 
-    def graph_elements(
+    def _build_solve_artifacts(
         self,
         *,
         horizon: Horizon,
-        grid_connection: Connection | None = None,
-        grid_connections: list[Connection] | None = None,
+        grid_connections: list[Connection],
         price_import_raw: list[float],
     ) -> tuple[list[GraphElement], BatterySolveState]:
         initial_soc_kwh = self._initial_soc_kwh.get()
-        if grid_connections is None:
-            grid_connections = [grid_connection] if grid_connection is not None else []
 
         charge_cost_per_kwh = [
             float(self._battery_cfg.charge_cost_per_kwh)

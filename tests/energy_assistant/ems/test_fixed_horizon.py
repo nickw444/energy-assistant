@@ -13,6 +13,8 @@ from energy_assistant.ems.inputs.models import AppliedForecastInput, AppliedInpu
 from energy_assistant.ems.planning.horizon import build_horizon_shape
 from energy_assistant.ems.planning.pricing import PriceSeriesBuilder
 from energy_assistant.ems.planning.time_windows import TimeWindowMatcher
+from energy_assistant.ems.system.state import SolveStateStore
+from energy_assistant.ems.system.topology import ComponentTopology, GraphBuildContext, PlantTopology
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.nodes import Node
 from energy_assistant.ems.topology.policies import LinearCost
@@ -220,6 +222,20 @@ def _grid_component_instance(config: AppConfig) -> GridComponent:
     )
 
 
+def _grid_build_ctx(component: GridComponent) -> GraphBuildContext:
+    topology = PlantTopology.from_descriptions(
+        [
+            ComponentTopology(component_id="switchboard", component_type="switchboard"),
+            component.describe_topology(),
+        ]
+    )
+    return GraphBuildContext(
+        topology=topology,
+        components={"switchboard": object(), component.id: component},
+        solve_states=SolveStateStore(),
+    )
+
+
 def test_input_provider_uses_fixed_horizon_for_coverage_validation() -> None:
     config = _minimal_grid_app_config(forecast_expansion=None)
     resolver = StubResolver()
@@ -286,7 +302,8 @@ def test_grid_rebinds_inputs_without_changing_topology_ids() -> None:
             }
         ),
     )
-    first_elements, first_run = component.graph_elements(horizon=horizon)
+    build_ctx = _grid_build_ctx(component)
+    first_elements, first_run = component.build_graph(horizon=horizon, build_ctx=build_ctx)
     first_node = next(element for element in first_elements if isinstance(element, Node))
     first_connection = next(
         element for element in first_elements if isinstance(element, Connection)
@@ -314,7 +331,10 @@ def test_grid_rebinds_inputs_without_changing_topology_ids() -> None:
             }
         ),
     )
-    second_elements, second_run = component.graph_elements(horizon=horizon)
+    second_elements, second_run = component.build_graph(
+        horizon=horizon,
+        build_ctx=build_ctx,
+    )
     second_node = next(element for element in second_elements if isinstance(element, Node))
     second_connection = next(
         element for element in second_elements if isinstance(element, Connection)

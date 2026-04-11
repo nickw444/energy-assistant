@@ -90,9 +90,6 @@ class PvComponent(EmsComponent[PvSolveState, PvComponentPlan]):
         build_ctx: GraphBuildContext,
     ) -> tuple[list[GraphElement], PvSolveState]:
         _ = build_ctx
-        return self.graph_elements(horizon=horizon)
-
-    def graph_elements(self, *, horizon: Horizon) -> tuple[list[GraphElement], PvSolveState]:
         available_kw = self._available_kw.get()
 
         node = Node(

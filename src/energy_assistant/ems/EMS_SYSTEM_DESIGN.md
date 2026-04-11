@@ -1,4 +1,4 @@
-# EMS MILP System Design (v7)
+# EMS MILP System Design
 
 This document describes the **current implementation** under `src/energy_assistant/ems/`.
 For workflow notes, see `src/energy_assistant/ems/AGENTS.md`.
@@ -7,28 +7,28 @@ For workflow notes, see `src/energy_assistant/ems/AGENTS.md`.
 
 The EMS architecture is split into:
 
-- **Layer 1 (logical components):** Grid, Inverter, PV, Battery, EV, Base Load, Switchboard.
-- **Layer 0 (hidden topology):** graph nodes, connections, connection policies, and graph fragments.
+- **Logical components:** Grid, Inverter, PV, Battery, EV, Base Load, Switchboard.
+- **Topology primitives:** graph nodes, connections, connection policies, and graph fragments.
 
-Key behavior in v7:
+Key behavior:
 
 - EMS uses a configured **fixed-shape rolling horizon** rather than sizing the horizon from forecast
   coverage.
 - EMS config is split into a typed `inputs` registry and a flat logical `plant` registry.
-- Layer 1 components are **persistent definitions** that implement the typed
+- Components are **persistent definitions** that implement the typed
   `EmsComponent[TSolveState, TPlanExport]` contract, own input parameter boxes, and consume a
   per-solve `AppliedInputRegistry`.
 - Input resolution happens outside the EMS component layer in `src/energy_assistant/inputs/provider.py`, which produces
   raw resolved inputs.
 - Forecast alignment, slot-0 realtime replacement, coverage validation, and price tail extension
   application happen inside EMS in `src/energy_assistant/ems/inputs/application.py`.
-- `EmsSystem` now stores a flat `components` registry plus a normalized `PlantTopology`. User
+- `EmsSystem` stores a flat `components` registry plus a normalized `PlantTopology`. User
   config keeps `connection: "<component_id>"` as a target component reference, while the side/port
   is inferred from the source and target component types.
 - At solve time, components **update their input boxes** from resolved inputs, then **emit
   solve-scoped topology elements** for the current horizon and return explicit typed solve-state
   artifacts used for plan extraction.
-- PuLP problems and topology objects remain solve-scoped in v7; persistent reuse is at the component and
+- PuLP problems and topology objects remain solve-scoped; persistent reuse is at the component and
   horizon-shape level.
 
 ## Runtime Flow
@@ -51,7 +51,7 @@ Key behavior in v7:
    `SolveStateStore`.
 9. Return a flat `components` map keyed by plant component id.
 
-## Layer 1 Component Contract
+## Component Contract
 
 Each component supports:
 
@@ -80,7 +80,7 @@ Input hydration is not performed by EMS components directly. The input provider 
 raw forecast point maps. EMS then applies those raw forecasts to the current horizon before
 components consume the aligned series.
 
-## Layer 0 Topology Model
+## Topology Model
 
 ### EnergyGraph
 

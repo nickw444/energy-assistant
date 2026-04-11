@@ -30,16 +30,13 @@ class SwitchboardComponent(EmsComponent[None, SwitchboardComponentPlan]):
         build_ctx: GraphBuildContext,
     ) -> tuple[list[GraphElement], None]:
         _ = build_ctx
-        return self.graph_elements(horizon=horizon), None
-
-    def graph_elements(self, *, horizon: Horizon) -> list[GraphElement]:
         bus = Node(
             horizon=horizon,
             id=self.bus_id,
             name="AC Switchboard",
             node_role="bus",
         )
-        return [bus]
+        return [bus], None
 
     def build_plan(
         self,

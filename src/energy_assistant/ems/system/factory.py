@@ -52,12 +52,18 @@ class EmsSystemFactory:
             high_res_timestep_minutes=app_config.ems.high_res_timestep_minutes,
             high_res_horizon_minutes=app_config.ems.high_res_horizon_minutes,
         )
+        time_window_matcher = TimeWindowMatcher()
+        price_series_builder = PriceSeriesBuilder()
         input_applicator = EmsInputApplicator(
             input_configs=app_config.inputs,
             power_aligner=PowerForecastAligner(),
             price_aligner=PriceForecastAligner(),
         )
-        system = _build_system(app_config)
+        system = _build_system(
+            app_config,
+            time_window_matcher=time_window_matcher,
+            price_series_builder=price_series_builder,
+        )
         return cls(
             horizon_shape=horizon_shape,
             input_applicator=input_applicator,
@@ -129,10 +135,12 @@ def _inverter_switchboard_id(
     ).connection
 
 
-def _build_system(app_config: AppConfig) -> EmsSystem:
-    time_window_matcher = TimeWindowMatcher()
-    price_series_builder = PriceSeriesBuilder()
-
+def _build_system(
+    app_config: AppConfig,
+    *,
+    time_window_matcher: TimeWindowMatcher,
+    price_series_builder: PriceSeriesBuilder,
+) -> EmsSystem:
     switchboards = {
         key: SwitchboardComponent(component_id=key)
         for key, _ in _components(app_config.plant, SwitchboardComponentConfig)

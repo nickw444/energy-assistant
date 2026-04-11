@@ -9,8 +9,15 @@ import yaml
 
 from energy_assistant.config import load_app_config
 from energy_assistant.ems.components.battery import BatteryComponent
-from energy_assistant.ems.components.inverter import aggregate_battery_for_intent
-from energy_assistant.ems.models import BatteryComponentPlan, InverterComponentPlan, PvComponentPlan
+from energy_assistant.ems.components.inverter import (
+    BatteryIntentSummary,
+    aggregate_battery_for_intent,
+)
+from energy_assistant.ems.models import (
+    BatteryComponentPlan,
+    InverterComponentPlan,
+    PvComponentPlan,
+)
 from energy_assistant.ems.planner import EmsMilpPlanner
 from energy_assistant.ems.system.factory import EmsSystemFactory
 from energy_assistant.inputs.fixtures import load_fixture_input_provider
@@ -24,7 +31,7 @@ from energy_assistant.models.plant import (
 FIXTURE_DIR = Path("tests/fixtures/ems/nwhass/short-horizon-low-pv")
 
 
-def _multi_attachment_app_config() -> AppConfig:
+def _multi_attachment_app_config(*, include_secondary_grid: bool = False) -> AppConfig:
     payload = yaml.safe_load((FIXTURE_DIR / "config.yaml").read_text())
     if not isinstance(payload, dict):
         raise AssertionError("Fixture config must be a mapping")
@@ -46,6 +53,8 @@ def _multi_attachment_app_config() -> AppConfig:
         "max_charge_kw": 4.0,
         "max_discharge_kw": 4.0,
     }
+    if include_secondary_grid:
+        plant["grid_secondary"] = dict(plant["grid"])
     return AppConfig.model_validate(payload_dict)
 
 
@@ -66,8 +75,41 @@ def test_factory_keeps_all_inverter_children() -> None:
     system = EmsSystemFactory.create(app_config).system
     inverter = system.inverters["primary"]
 
-    assert set(inverter.pvs) == {"pv_primary", "pv_secondary"}
-    assert set(inverter.batteries) == {"battery_primary", "battery_secondary"}
+    assert not hasattr(inverter, "pvs")
+    assert not hasattr(inverter, "batteries")
+    assert set(system.topology.children_of("primary")) == {
+        "pv_primary",
+        "pv_secondary",
+        "battery_primary",
+        "battery_secondary",
+    }
+
+
+def test_factory_supports_multiple_grids_on_one_switchboard() -> None:
+    app_config = _multi_attachment_app_config(include_secondary_grid=True)
+    system = EmsSystemFactory.create(app_config).system
+
+    assert set(system.topology.children_of("switchboard")) >= {
+        "grid",
+        "grid_secondary",
+        "base_load",
+        "primary",
+    }
+    assert set(system.topology.component_ids_of_type("grid")) == {
+        "grid",
+        "grid_secondary",
+    }
+
+    input_provider, captured_at = load_fixture_input_provider(path=FIXTURE_DIR / "input.json")
+    now = datetime.fromisoformat(captured_at) if captured_at else None
+    plan = EmsMilpPlanner(
+        input_provider=input_provider,
+        system_factory=EmsSystemFactory.create(app_config),
+    ).generate_ems_plan(now=now)
+
+    assert "grid_secondary" in plan.components
+    assert "primary" in plan.components
+    assert plan.components["grid_secondary"].type == "grid"
 
 
 def test_aggregate_battery_for_intent_uses_weighted_soc_and_actual_limits() -> None:
@@ -100,8 +142,8 @@ def test_aggregate_battery_for_intent_uses_weighted_soc_and_actual_limits() -> N
         realtime_power=InputReference(source="battery_b_power"),
     )
 
-    batteries = {
-        "battery_a": BatteryComponent(
+    batteries = [
+        BatteryComponent(
             component_id="battery_a",
             inverter_id="primary",
             dc_bus_id="primary_dc",
@@ -109,7 +151,7 @@ def test_aggregate_battery_for_intent_uses_weighted_soc_and_actual_limits() -> N
             battery=battery_a,
             grid_max_export_kw=13.0,
         ),
-        "battery_b": BatteryComponent(
+        BatteryComponent(
             component_id="battery_b",
             inverter_id="primary",
             dc_bus_id="primary_dc",
@@ -117,11 +159,21 @@ def test_aggregate_battery_for_intent_uses_weighted_soc_and_actual_limits() -> N
             battery=battery_b,
             grid_max_export_kw=13.0,
         ),
-    }
+    ]
 
     aggregate = aggregate_battery_for_intent(
-        {"battery_a": battery_a, "battery_b": battery_b},
-        batteries,
+        [
+            BatteryIntentSummary(
+                connection=battery.battery_config.connection,
+                name=battery.name,
+                capacity_kwh=float(battery.capacity_kwh),
+                reserve_kwh=float(battery.reserve_kwh),
+                max_charge_kw=float(battery.max_charge_kw),
+                max_discharge_kw=float(battery.max_discharge_kw),
+                max_soc_pct=float(battery.battery_config.max_soc_pct),
+            )
+            for battery in batteries
+        ]
     )
 
     assert aggregate is not None

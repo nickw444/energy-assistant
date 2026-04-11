@@ -106,9 +106,6 @@ class GridComponent(EmsComponent[GridSolveState, GridComponentPlan]):
         build_ctx: GraphBuildContext,
     ) -> tuple[list[GraphElement], GridSolveState]:
         _ = build_ctx
-        return self.graph_elements(horizon=horizon)
-
-    def graph_elements(self, *, horizon: Horizon) -> tuple[list[GraphElement], GridSolveState]:
         cfg = self._grid_cfg
         import_eff = self._price_import_effective.get()
         export_eff = self._price_export_effective.get()

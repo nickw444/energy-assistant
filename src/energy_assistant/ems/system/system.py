@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import Any
 
-from energy_assistant.ems.components.battery import BatteryComponent
 from energy_assistant.ems.components.inverter import InverterComponent
-from energy_assistant.ems.components.pv import PvComponent
 from energy_assistant.ems.inputs.models import AppliedInputRegistry
 from energy_assistant.ems.milp.context import ModelContext
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
@@ -14,7 +12,6 @@ from energy_assistant.ems.system.component import EmsComponent
 from energy_assistant.ems.system.state import EmsSystemSolveState, SolveStateStore
 from energy_assistant.ems.system.topology import GraphBuildContext, PlanContext, PlantTopology
 from energy_assistant.ems.topology.graph import EnergyGraph
-from energy_assistant.models.plant import BatteryComponentConfig
 
 
 class EmsSystem:
@@ -39,20 +36,17 @@ class EmsSystem:
                 f"missing={missing} extra={extra}"
             )
 
-        self._inverter_child_ids = self._wire_inverter_children()
-
     @property
     def inverters(self) -> dict[str, InverterComponent]:
-        return {
-            component_id: cast(InverterComponent, self.components[component_id])
-            for component_id in self.topology.component_ids_of_type("inverter")
-            if isinstance(self.components[component_id], InverterComponent)
-        }
+        inverters: dict[str, InverterComponent] = {}
+        for component_id in self.topology.component_ids_of_type("inverter"):
+            component = self.components[component_id]
+            if isinstance(component, InverterComponent):
+                inverters[component_id] = component
+        return inverters
 
     def update_inputs(self, *, horizon: Horizon, inputs: AppliedInputRegistry) -> None:
         for component_id in self.topology.component_order:
-            if component_id in self._inverter_child_ids:
-                continue
             self.components[component_id].update_inputs(horizon=horizon, inputs=inputs)
 
     def build_snapshot(self, *, horizon: Horizon) -> tuple[ModelSnapshot, SolveStateStore]:
@@ -92,40 +86,24 @@ class EmsSystem:
         component_plans: dict[str, ComponentPlan] = {}
         for component_id in self.topology.component_order:
             component = self.components[component_id]
-            component_plans[component_id] = cast(
-                ComponentPlan,
-                component.build_plan(
-                    snapshot,
-                    solve_state=solve_state.get(component),
-                    plan_ctx=plan_ctx,
-                ),
+            component_plans[component_id] = self._build_component_plan(
+                component,
+                snapshot=snapshot,
+                solve_state=solve_state.get(component),
+                plan_ctx=plan_ctx,
             )
         return component_plans
 
-    def _wire_inverter_children(self) -> set[str]:
-        child_ids: set[str] = set()
-        for inverter_id in self.topology.component_ids_of_type("inverter"):
-            inverter = self.components[inverter_id]
-            if not isinstance(inverter, InverterComponent):
-                continue
-
-            battery_cfgs: dict[str, BatteryComponentConfig] = {}
-            pvs: dict[str, PvComponent] = {}
-            batteries: dict[str, BatteryComponent] = {}
-            for child_id in self.topology.children_of(inverter_id):
-                child = self.components[child_id]
-                if isinstance(child, BatteryComponent):
-                    batteries[child_id] = child
-                    battery_cfgs[child_id] = child.battery_config
-                    child_ids.add(child_id)
-                elif isinstance(child, PvComponent):
-                    pvs[child_id] = child
-                    child_ids.add(child_id)
-
-            inverter.set_children(
-                battery_cfgs=battery_cfgs,
-                pvs=pvs,
-                batteries=batteries,
-            )
-
-        return child_ids
+    def _build_component_plan(
+        self,
+        component: EmsComponent[Any, Any],
+        *,
+        snapshot: ModelSnapshot,
+        solve_state: Any,
+        plan_ctx: PlanContext,
+    ) -> ComponentPlan:
+        return component.build_plan(
+            snapshot,
+            solve_state=solve_state,
+            plan_ctx=plan_ctx,
+        )

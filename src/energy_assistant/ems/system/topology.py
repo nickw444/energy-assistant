@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Mapping
 from dataclasses import dataclass
 from heapq import heappop, heappush
-from typing import Any, Literal
+from typing import Literal
 
 from energy_assistant.ems.system.state import SolveStateStore
 from energy_assistant.ems.topology.connection import Connection
@@ -181,7 +182,7 @@ class GraphBuildContext:
         self,
         *,
         topology: PlantTopology,
-        components: dict[str, Any],
+        components: Mapping[str, object],
         solve_states: SolveStateStore,
     ) -> None:
         self.topology = topology
@@ -216,7 +217,7 @@ class PlanContext:
         self,
         *,
         topology: PlantTopology,
-        components: dict[str, Any],
+        components: Mapping[str, object],
         solve_states: SolveStateStore,
     ) -> None:
         self.topology = topology
