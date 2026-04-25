@@ -7,16 +7,22 @@ from typing import Any, cast
 import pulp
 
 from energy_assistant.ems.components.grid import GridComponent
+from energy_assistant.ems.components.switchboard import SwitchboardComponent
 from energy_assistant.ems.inputs.alignment import PowerForecastAligner, PriceForecastAligner
 from energy_assistant.ems.inputs.application import EmsInputApplicator
 from energy_assistant.ems.inputs.models import AppliedForecastInput, AppliedInputRegistry
 from energy_assistant.ems.planner import EmsMilpPlanner
-from energy_assistant.ems.planning.horizon import build_horizon_shape
+from energy_assistant.ems.planning.horizon import HorizonFactory
 from energy_assistant.ems.planning.pricing import PriceSeriesBuilder
 from energy_assistant.ems.planning.time_windows import TimeWindowMatcher
-from energy_assistant.ems.system.factory import EmsSystemFactory
+from energy_assistant.ems.system.context import GraphBuildContext
+from energy_assistant.ems.system.state import SolveStateStore
 from energy_assistant.inputs.registry import ResolvedForecastInput, ResolvedInputRegistry
 from energy_assistant.inputs.window import InputWindow
+from energy_assistant.lib.source_resolver.models import (
+    PowerForecastInterval,
+    PriceForecastInterval,
+)
 from energy_assistant.models.inputs import ForecastInputConfig, InputValueKind
 from energy_assistant.models.plant import (
     GridComponentConfig,
@@ -114,15 +120,11 @@ class _FakeProblem:
 
 class _FakeSystem:
     def __init__(self, problem: _FakeProblem) -> None:
-        self.update_inputs_calls: list[tuple[object, object]] = []
-        self.build_snapshot_calls: list[object] = []
+        self.build_snapshot_calls: list[tuple[object, object]] = []
         self.problem = problem
 
-    def update_inputs(self, *, horizon: object, inputs: object) -> None:
-        self.update_inputs_calls.append((horizon, inputs))
-
-    def build_snapshot(self, *, horizon: object) -> tuple[object, object]:
-        self.build_snapshot_calls.append(horizon)
+    def build_snapshot(self, *, horizon: object, inputs: object) -> tuple[object, object]:
+        self.build_snapshot_calls.append((horizon, inputs))
         snapshot = SimpleNamespace(
             problem=self.problem,
             ctx=SimpleNamespace(horizon=horizon),
@@ -159,18 +161,24 @@ def _grid_config() -> GridComponentConfig:
 def test_grid_component_uses_injected_dependencies() -> None:
     matcher = _RecordingTimeWindowMatcher()
     builder = _RecordingPriceSeriesBuilder()
+    switchboard = SwitchboardComponent(component_id="switchboard")
     component = GridComponent(
-        bus_id="switchboard",
         component_id="grid",
+        switchboard=switchboard,
         grid=_grid_config(),
         time_window_matcher=cast(TimeWindowMatcher, matcher),
         price_series_builder=cast(PriceSeriesBuilder, builder),
     )
-    horizon = build_horizon_shape(timestep_minutes=60, horizon_minutes=120).build(
+    horizon = HorizonFactory(timestep_minutes=60, horizon_minutes=120).build(
         now=datetime(2025, 1, 1, 0, 0, tzinfo=UTC)
     )
 
-    component.update_inputs(
+    build_ctx = GraphBuildContext(
+        components={"switchboard": switchboard, component.id: component},
+        solve_states=SolveStateStore(),
+    )
+
+    component.create_graph_elements(
         horizon=horizon,
         inputs=AppliedInputRegistry(
             forecasts={
@@ -186,6 +194,7 @@ def test_grid_component_uses_injected_dependencies() -> None:
                 ),
             }
         ),
+        build_ctx=build_ctx,
     )
 
     assert len(builder.build_calls) == 1
@@ -195,7 +204,7 @@ def test_grid_component_uses_injected_dependencies() -> None:
 def test_input_applicator_uses_injected_aligners() -> None:
     power_aligner = _RecordingPowerAligner()
     price_aligner = _RecordingPriceAligner()
-    horizon = build_horizon_shape(timestep_minutes=60, horizon_minutes=120).build(
+    horizon = HorizonFactory(timestep_minutes=60, horizon_minutes=120).build(
         now=datetime(2025, 1, 1, 0, 0, tzinfo=UTC)
     )
     applicator = EmsInputApplicator(
@@ -254,31 +263,30 @@ def test_input_applicator_uses_injected_aligners() -> None:
     assert applied.forecast("power", kind=InputValueKind.POWER) == [3.0, 4.0]
     assert len(price_aligner.calls) == 1
     assert len(power_aligner.calls) == 1
+    price_intervals = cast(list[PriceForecastInterval], price_aligner.calls[0][1])
+    power_intervals = cast(list[PowerForecastInterval], power_aligner.calls[0][1])
+    assert isinstance(price_intervals[0], PriceForecastInterval)
+    assert isinstance(power_intervals[0], PowerForecastInterval)
 
 
-def test_planner_uses_injected_system_factory() -> None:
-    horizon_shape = build_horizon_shape(timestep_minutes=60, horizon_minutes=120)
+def test_planner_uses_injected_runtime_dependencies() -> None:
+    horizon_factory = HorizonFactory(timestep_minutes=60, horizon_minutes=120)
     resolved = ResolvedInputRegistry()
     input_provider = _FakeInputProvider(resolved)
     problem = _FakeProblem()
     system = _FakeSystem(problem)
-    system_factory = cast(
-        EmsSystemFactory,
-        SimpleNamespace(
-        horizon_shape=horizon_shape,
-        input_applicator=_FakeInputApplicator(),
-        system=system,
-        ),
-    )
     planner = EmsMilpPlanner(
         input_provider=input_provider,
-        system_factory=system_factory,
+        horizon_factory=horizon_factory,
+        input_applicator=cast(EmsInputApplicator, _FakeInputApplicator()),
+        system=cast(Any, system),
     )
 
-    plan = planner.generate_ems_plan(now=datetime(2025, 1, 1, 0, 0, tzinfo=UTC))
+    plan = planner.generate_ems_run(now=datetime(2025, 1, 1, 0, 0, tzinfo=UTC)).plan
 
     assert input_provider.window is not None
-    assert len(system.update_inputs_calls) == 1
+    assert len(system.build_snapshot_calls) == 1
+    assert isinstance(system.build_snapshot_calls[0][1], AppliedInputRegistry)
     assert len(problem.solve_calls) == 1
     solver = problem.solve_calls[0]
     assert isinstance(solver, pulp.PULP_CBC_CMD)

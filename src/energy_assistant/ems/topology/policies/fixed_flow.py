@@ -5,12 +5,12 @@ from collections.abc import Sequence
 from energy_assistant.ems.milp.context import ConstraintSpec
 from energy_assistant.ems.topology.policies.connection_policy import (
     ConnectionBinding,
-    ConnectionPolicy,
     FlowDirection,
 )
+from energy_assistant.ems.topology.policies.passthrough import Passthrough
 
 
-class FixedFlow(ConnectionPolicy):
+class FixedFlow(Passthrough):
     """Fix one directional flow to a per-slot series (kW)."""
 
     def __init__(
@@ -21,8 +21,8 @@ class FixedFlow(ConnectionPolicy):
         name: str,
     ) -> None:
         self.direction: FlowDirection = direction
-        self.values_kw = [float(v) for v in values_kw]
-        self.name = str(name)
+        self.values_kw = list(values_kw)
+        self.name = name
 
     def constraints(self, connection: ConnectionBinding) -> list[ConstraintSpec]:
         values = _series_for_connection(self.values_kw, connection, name=self.name)
@@ -33,7 +33,7 @@ class FixedFlow(ConnectionPolicy):
             constraints.append(
                 ConstraintSpec(
                     f"fixed_flow_{self.name}_{connection.segment_key}_{self.direction}_t{t}",
-                    flow[t] == float(values[t]),
+                    flow[t] == values[t],
                 )
             )
         return list(constraints)

@@ -7,6 +7,7 @@ import pulp
 
 from energy_assistant.ems.milp.context import ConstraintSpec
 from energy_assistant.ems.planning.horizon import Horizon
+from energy_assistant.ems.topology.ids import NodeId
 from energy_assistant.ems.topology.policies import ConnectionPolicy, Passthrough
 
 P = TypeVar("P", bound=ConnectionPolicy)
@@ -26,8 +27,8 @@ class _PolicyBinding:
         flow_in_ba: dict[int, pulp.LpVariable],
         flow_out_ba: dict[int, pulp.LpVariable],
     ) -> None:
-        self.id = str(id)
-        self.segment_key = str(segment_key)
+        self.id = id
+        self.segment_key = segment_key
         self.horizon = horizon
         self._flow_in_ab = flow_in_ab
         self._flow_out_ab = flow_out_ab
@@ -70,14 +71,14 @@ class Connection:
         *,
         horizon: Horizon,
         id: str,
-        a_node_id: str,
-        b_node_id: str,
+        a_node_id: NodeId,
+        b_node_id: NodeId,
         policies: Mapping[str, ConnectionPolicy] | None = None,
     ) -> None:
         self.horizon = horizon
-        self.id = str(id)
-        self.a_node_id = str(a_node_id)
-        self.b_node_id = str(b_node_id)
+        self.id = id
+        self.a_node_id = a_node_id
+        self.b_node_id = b_node_id
         self.policies: dict[str, ConnectionPolicy] = dict(policies or {})
 
         self.power_in_ab: dict[int, pulp.LpVariable] = pulp.LpVariable.dicts(
@@ -124,16 +125,16 @@ class Connection:
     def segment_key(self) -> str:
         return self.id
 
-    def flow_out_of_node(self, node_id: str) -> dict[int, pulp.LpVariable]:
-        nid = str(node_id)
+    def flow_out_of_node(self, node_id: NodeId) -> dict[int, pulp.LpVariable]:
+        nid = node_id
         if nid == self.a_node_id:
             return self.flow_in_ab
         if nid == self.b_node_id:
             return self.flow_in_ba
         raise ValueError(f"Node {node_id!r} is not connected to {self.id!r}")
 
-    def flow_into_node(self, node_id: str) -> dict[int, pulp.LpVariable]:
-        nid = str(node_id)
+    def flow_into_node(self, node_id: NodeId) -> dict[int, pulp.LpVariable]:
+        nid = node_id
         if nid == self.a_node_id:
             return self.flow_out_ba
         if nid == self.b_node_id:
@@ -186,7 +187,7 @@ class Connection:
         return bindings
 
     def policy(self, name: str, policy_type: type[P]) -> P:
-        policy = self.policies.get(str(name))
+        policy = self.policies.get(name)
         if policy is None:
             raise KeyError(f"Connection {self.id!r} has no policy named {name!r}")
         if not isinstance(policy, policy_type):
@@ -197,7 +198,7 @@ class Connection:
         return policy
 
     def find_policy(self, name: str, policy_type: type[P]) -> P | None:
-        policy = self.policies.get(str(name))
+        policy = self.policies.get(name)
         if policy is None:
             return None
         if not isinstance(policy, policy_type):

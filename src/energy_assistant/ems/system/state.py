@@ -29,12 +29,6 @@ class SolveStateStore:
         except KeyError as exc:  # pragma: no cover - defensive
             raise KeyError(f"Missing solve state for component {component.id!r}") from exc
 
-    def has(self, component_id: str) -> bool:
-        return component_id in self._states
-
-    def items(self) -> list[tuple[str, object]]:
-        return list(self._states.items())
-
 
 # Backwards-compatible name retained for existing imports.
 EmsSystemSolveState = SolveStateStore

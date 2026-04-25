@@ -1454,12 +1454,6 @@
         {"time": "2026-01-21T04:00:00+11:00", "value": 0.50202101},
         {"time": "2026-01-21T04:30:00+11:00", "value": 0.48549388}
       ],
-      "intent": {
-        "export_limit_kw": 13.0,
-        "force_charge_kw": 5.241,
-        "force_discharge_kw": 0.0,
-        "mode": "Self Use"
-      },
       "type": "inverter"
     },
     "pv_primary": {
@@ -2190,10 +2184,6 @@
         {"time": "2026-01-21T04:00:00+11:00", "value": true},
         {"time": "2026-01-21T04:30:00+11:00", "value": true}
       ],
-      "intent": {
-        "charge_kw": 0.0,
-        "charge_on": false
-      },
       "soc_kwh": [
         {"time": "2026-01-19T14:35:00+11:00", "value": 46.8},
         {"time": "2026-01-19T14:40:00+11:00", "value": 46.8},

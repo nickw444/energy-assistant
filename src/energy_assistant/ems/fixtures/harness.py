@@ -31,14 +31,11 @@ def resolve_ems_fixture_paths(
     fixture_dir = base_dir / fixture
     scenario_dir = fixture_dir if scenario is None else fixture_dir / scenario
     fixture_config_path = fixture_dir / "config.yaml"
-    legacy_fixture_config_path = fixture_dir / "ems_config.yaml"
     scenario_config_path = scenario_dir / "config.yaml"
     if scenario_config_path.exists():
         config_path = scenario_config_path
-    elif fixture_config_path.exists():
-        config_path = fixture_config_path
     else:
-        config_path = legacy_fixture_config_path
+        config_path = fixture_config_path
     return EmsFixturePaths(
         fixture_dir=fixture_dir,
         scenario_dir=scenario_dir,

@@ -5,7 +5,7 @@ from typing import Any, cast
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from energy_assistant.ems.system.topology import infer_attachment_kind
+from energy_assistant.ems.system.types import ComponentType
 from energy_assistant.lib.home_assistant import HomeAssistantConfig
 from energy_assistant.models.inputs import (
     ForecastInputConfig,
@@ -63,6 +63,13 @@ class ServerConfig(BaseModel):
 
 
 class AppConfig(BaseModel):
+    """Top-level app configuration.
+
+    EMS plant wiring: each component's ``connection`` string is validated to point at a
+    registry id that exists and has the expected type (for example, grid to switchboard,
+    battery to inverter) before any solve-time work runs.
+    """
+
     server: ServerConfig = Field(default_factory=ServerConfig)
     homeassistant: HomeAssistantConfig
     ems: EmsConfig = Field(default_factory=EmsConfig)
@@ -175,22 +182,44 @@ class AppConfig(BaseModel):
         self,
         component_key: str,
         target_key: str,
-        component_type: str,
+        component_type: ComponentType,
     ) -> None:
         if component_key == target_key:
             raise ValueError(f"component {component_key} cannot connect to itself")
         target = self.plant.get(target_key)
         if target is None:
             raise ValueError(
-                "component "
-                f"{component_key} references missing connection target {target_key}"
+                f"component {component_key} references missing connection target {target_key}"
             )
         try:
-            infer_attachment_kind(component_type, target.type)
+            self._validate_connection_target_type(component_type, target.type)
         except ValueError as exc:
             raise ValueError(
                 f"component {component_key} must connect to a compatible target; {exc}"
             ) from exc
+
+    @staticmethod
+    def _validate_connection_target_type(
+        component_type: ComponentType,
+        target_type: ComponentType,
+    ) -> None:
+        if component_type in {"grid", "load", "load_controlled_ev", "inverter"}:
+            if target_type != "switchboard":
+                raise ValueError(
+                    f"{component_type} components must connect to a switchboard; "
+                    f"got {target_type!r}"
+                )
+            return
+        if component_type in {"battery", "pv"}:
+            if target_type != "inverter":
+                raise ValueError(
+                    f"{component_type} components must connect to an inverter; "
+                    f"got {target_type!r}"
+                )
+            return
+        raise ValueError(
+            f"Unsupported component type for attachment validation: {component_type!r}"
+        )
 
     def _expect_input(
         self,
@@ -203,9 +232,7 @@ class AppConfig(BaseModel):
             raise ValueError(f"missing input reference: {reference.key}")
         if not isinstance(input_config, expected_input_type):
             expected_name = "scalar" if expected_input_type is ScalarInputConfig else "forecast"
-            raise ValueError(
-                f"input {reference.key} must be a {expected_name} input"
-            )
+            raise ValueError(f"input {reference.key} must be a {expected_name} input")
         actual_kind = input_value_kind(input_config)
         if actual_kind is not expected_value_kind:
             raise ValueError(

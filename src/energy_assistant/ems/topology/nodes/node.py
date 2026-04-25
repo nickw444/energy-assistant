@@ -7,6 +7,7 @@ import pulp
 from energy_assistant.ems.milp.context import ConstraintSpec
 from energy_assistant.ems.planning.horizon import Horizon
 from energy_assistant.ems.topology.connection import Connection
+from energy_assistant.ems.topology.ids import NodeId
 
 NodeRole = Literal["bus", "producer", "consumer", "prosumer"]
 
@@ -18,13 +19,13 @@ class Node:
         self,
         *,
         horizon: Horizon,
-        id: str,
+        id: NodeId,
         name: str,
         node_role: NodeRole,
     ) -> None:
         self._horizon = horizon
-        self.id = str(id)
-        self.name = str(name)
+        self.id = id
+        self.name = name
         self.node_role: NodeRole = node_role
         self._connections: list[Connection] = []
 

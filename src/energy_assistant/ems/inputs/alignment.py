@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import bisect
 import datetime
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -14,58 +13,6 @@ class ForecastInterval(Protocol):
     start: datetime.datetime
     end: datetime.datetime
     value: float
-
-
-def forecast_coverage_slots(
-    start: datetime.datetime,
-    interval_minutes: int,
-    intervals: Sequence[ForecastInterval],
-    *,
-    allow_first_slot_missing: bool = False,
-) -> int:
-    """Return the number of contiguous horizon slots covered by the forecast.
-
-    Walks forward from the provided horizon start in fixed-size slots and counts
-    how many slots overlap at least one forecast interval. When
-    ``allow_first_slot_missing`` is true, the initial slot is allowed to be
-    uncovered (to support realtime overrides) but later gaps stop coverage.
-    """
-    if not intervals:
-        return 0
-
-    ordered = sorted(intervals, key=lambda interval: interval.start)
-    first_start = ordered[0].start
-    last_end = ordered[-1].end
-    if first_start == last_end:
-        return 0
-    if (last_end - first_start).total_seconds() <= 0:
-        return 0
-
-    starts = [interval.start for interval in ordered]
-    slot_start = start
-    delta = datetime.timedelta(minutes=interval_minutes)
-    count = 0
-
-    while True:
-        slot_end = slot_start + delta
-        idx = bisect.bisect_right(starts, slot_start) - 1
-        covered = False
-        for candidate in (idx, idx + 1):
-            if 0 <= candidate < len(ordered):
-                interval = ordered[candidate]
-                if interval.start < slot_end and interval.end > slot_start:
-                    covered = True
-                    break
-        if not covered:
-            if allow_first_slot_missing and count == 0:
-                count += 1
-                slot_start = slot_end
-                continue
-            break
-        count += 1
-        slot_start = slot_end
-
-    return count
 
 
 def validate_forecast_coverage(
@@ -165,7 +112,7 @@ def _align_intervals[T: ForecastInterval](
             overlap = (overlap_end - overlap_start).total_seconds()
             if overlap > 0:
                 total_overlap += overlap
-                weighted_sum += float(interval.value) * overlap
+                weighted_sum += interval.value * overlap
             if interval.end <= slot_end:
                 scan += 1
             else:
@@ -183,7 +130,7 @@ def _align_intervals[T: ForecastInterval](
             raise ValueError("forecast series does not cover the full horizon")
         series.append(weighted_sum / total_overlap)
     if first_slot_override is not None:
-        series[0] = float(first_slot_override)
+        series[0] = first_slot_override
     if len(series) != horizon.num_intervals:
         raise ValueError("forecast series length mismatch")
     return series

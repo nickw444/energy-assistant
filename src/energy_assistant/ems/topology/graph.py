@@ -7,6 +7,7 @@ import pulp
 
 from energy_assistant.ems.milp.context import ConstraintSpec
 from energy_assistant.ems.topology.connection import Connection
+from energy_assistant.ems.topology.ids import NodeId
 from energy_assistant.ems.topology.nodes import Node
 
 
@@ -24,7 +25,7 @@ class EnergyGraph:
     """Topology definition for a single planning solve."""
 
     def __init__(self) -> None:
-        self._nodes: dict[str, Node] = {}
+        self._nodes: dict[NodeId, Node] = {}
         self._connections: dict[str, Connection] = {}
         self._extra_fragments: list[Fragment] = []
 

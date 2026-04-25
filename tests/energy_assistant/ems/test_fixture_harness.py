@@ -16,7 +16,7 @@ def test_resolve_ems_fixture_paths_fixture_only(tmp_path: Path) -> None:
     assert paths.fixture_dir == fixture_dir
     assert paths.scenario_dir == fixture_dir
     assert paths.fixture_path == fixture_dir / "input.json"
-    assert paths.config_path == fixture_dir / "ems_config.yaml"
+    assert paths.config_path == fixture_dir / "config.yaml"
     assert paths.plan_path == fixture_dir / "ems_plan.json"
     assert paths.plot_path == fixture_dir / "ems_plan.jpeg"
     assert paths.hash_path == fixture_dir / "ems_plan.hash"
@@ -33,7 +33,7 @@ def test_resolve_ems_fixture_paths_fixture_with_scenario(tmp_path: Path) -> None
     assert paths.fixture_dir == fixture_dir
     assert paths.scenario_dir == scenario_dir
     assert paths.fixture_path == scenario_dir / "input.json"
-    assert paths.config_path == fixture_dir / "ems_config.yaml"
+    assert paths.config_path == fixture_dir / "config.yaml"
     assert paths.plan_path == scenario_dir / "ems_plan.json"
     assert paths.plot_path == scenario_dir / "ems_plan.jpeg"
     assert paths.hash_path == scenario_dir / "ems_plan.hash"
@@ -51,7 +51,7 @@ def test_resolve_ems_fixture_paths_config_at_fixture_level(tmp_path: Path) -> No
     paths_b = resolve_ems_fixture_paths(base_dir, "shared-config", "b")
 
     assert paths_a.config_path == paths_b.config_path
-    assert paths_a.config_path == fixture_dir / "ems_config.yaml"
+    assert paths_a.config_path == fixture_dir / "config.yaml"
     assert paths_a.fixture_path == scenario_a / "input.json"
     assert paths_b.fixture_path == scenario_b / "input.json"
 
@@ -86,8 +86,6 @@ def test_render_fixture_json_inlines_scalar_objects_inside_arrays() -> None:
     rendered = render_fixture_json(payload)
 
     assert '"power_kw": [' in rendered
-    assert (
-        '    {"time": "2026-01-14T20:50:00+11:00", "value": 0.525},' in rendered
-    )
+    assert '    {"time": "2026-01-14T20:50:00+11:00", "value": 0.525},' in rendered
     assert '    {"time": "2026-01-14T20:55:00+11:00", "value": 0.646}' in rendered
     assert json.loads(rendered) == payload

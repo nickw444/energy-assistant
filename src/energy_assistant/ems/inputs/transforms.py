@@ -14,12 +14,11 @@ class ForecastMultiplier:
     multiplier: float
 
     def __init__(self, multiplier: float) -> None:
-        value = float(multiplier)
-        if not math.isfinite(value):
+        if not math.isfinite(multiplier):
             raise ValueError("multiplier must be finite")
-        if value < 0.0:
+        if multiplier < 0.0:
             raise ValueError("multiplier must be >= 0")
-        self.multiplier = value
+        self.multiplier = multiplier
 
     def apply(self, series: Sequence[float], *, skip_first_slot: bool = False) -> list[float]:
         if not series:
@@ -27,8 +26,8 @@ class ForecastMultiplier:
         if self.multiplier == 1.0:
             return list(series)
         if not skip_first_slot:
-            return [float(value) * self.multiplier for value in series]
+            return [value * self.multiplier for value in series]
 
-        first = float(series[0])
-        rest = [float(value) * self.multiplier for value in series[1:]]
+        first = series[0]
+        rest = [value * self.multiplier for value in series[1:]]
         return [first, *rest]

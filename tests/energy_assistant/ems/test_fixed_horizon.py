@@ -7,14 +7,15 @@ from typing import Any, cast
 import yaml
 
 from energy_assistant.ems.components.grid import GridComponent
+from energy_assistant.ems.components.switchboard import SwitchboardComponent
 from energy_assistant.ems.inputs.alignment import PowerForecastAligner, PriceForecastAligner
 from energy_assistant.ems.inputs.application import EmsInputApplicator
 from energy_assistant.ems.inputs.models import AppliedForecastInput, AppliedInputRegistry
-from energy_assistant.ems.planning.horizon import build_horizon_shape
+from energy_assistant.ems.planning.horizon import HorizonFactory
 from energy_assistant.ems.planning.pricing import PriceSeriesBuilder
 from energy_assistant.ems.planning.time_windows import TimeWindowMatcher
+from energy_assistant.ems.system.context import GraphBuildContext
 from energy_assistant.ems.system.state import SolveStateStore
-from energy_assistant.ems.system.topology import ComponentTopology, GraphBuildContext, PlantTopology
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.nodes import Node
 from energy_assistant.ems.topology.policies import LinearCost
@@ -213,9 +214,10 @@ def _input_applicator(config: AppConfig) -> EmsInputApplicator:
 
 
 def _grid_component_instance(config: AppConfig) -> GridComponent:
+    switchboard = SwitchboardComponent(component_id="switchboard")
     return GridComponent(
-        bus_id="switchboard",
         component_id="grid",
+        switchboard=switchboard,
         grid=_grid_component(config),
         time_window_matcher=TimeWindowMatcher(),
         price_series_builder=PriceSeriesBuilder(),
@@ -223,15 +225,8 @@ def _grid_component_instance(config: AppConfig) -> GridComponent:
 
 
 def _grid_build_ctx(component: GridComponent) -> GraphBuildContext:
-    topology = PlantTopology.from_descriptions(
-        [
-            ComponentTopology(component_id="switchboard", component_type="switchboard"),
-            component.describe_topology(),
-        ]
-    )
     return GraphBuildContext(
-        topology=topology,
-        components={"switchboard": object(), component.id: component},
+        components={"switchboard": component.switchboard, component.id: component},
         solve_states=SolveStateStore(),
     )
 
@@ -241,7 +236,7 @@ def test_input_provider_uses_fixed_horizon_for_coverage_validation() -> None:
     resolver = StubResolver()
     provider = ResolverBackedInputProvider(app_config=config, resolver=resolver)
     applicator = _input_applicator(config)
-    horizon = build_horizon_shape(timestep_minutes=60, horizon_minutes=180).build(
+    horizon = HorizonFactory(timestep_minutes=60, horizon_minutes=180).build(
         now=datetime(2025, 1, 1, 0, 0, tzinfo=UTC)
     )
     grid = _grid_component(config)
@@ -278,32 +273,33 @@ def test_input_provider_uses_fixed_horizon_for_coverage_validation() -> None:
         raise AssertionError("Expected fixed-horizon coverage validation to fail")
 
 
-def test_grid_rebinds_inputs_without_changing_topology_ids() -> None:
+def test_grid_rebinds_inputs_without_changing_component_ids() -> None:
     config = _load_fixture_config()
     component = _grid_component_instance(config)
-    horizon = build_horizon_shape(timestep_minutes=60, horizon_minutes=120).build(
+    horizon = HorizonFactory(timestep_minutes=60, horizon_minutes=120).build(
         now=datetime(2025, 1, 1, 0, 0, tzinfo=UTC)
     )
 
-    component.update_inputs(
-        horizon=horizon,
-        inputs=AppliedInputRegistry(
-            forecasts={
-                "grid_price_import": AppliedForecastInput(
-                    key="grid_price_import",
-                    kind=InputValueKind.PRICE,
-                    series=[0.20, 0.21],
-                ),
-                "grid_price_export": AppliedForecastInput(
-                    key="grid_price_export",
-                    kind=InputValueKind.PRICE,
-                    series=[0.05, 0.06],
-                ),
-            }
-        ),
+    first_inputs = AppliedInputRegistry(
+        forecasts={
+            "grid_price_import": AppliedForecastInput(
+                key="grid_price_import",
+                kind=InputValueKind.PRICE,
+                series=[0.20, 0.21],
+            ),
+            "grid_price_export": AppliedForecastInput(
+                key="grid_price_export",
+                kind=InputValueKind.PRICE,
+                series=[0.05, 0.06],
+            ),
+        }
     )
     build_ctx = _grid_build_ctx(component)
-    first_elements, first_run = component.build_graph(horizon=horizon, build_ctx=build_ctx)
+    first_elements, first_run = component.create_graph_elements(
+        horizon=horizon,
+        inputs=first_inputs,
+        build_ctx=build_ctx,
+    )
     first_node = next(element for element in first_elements if isinstance(element, Node))
     first_connection = next(
         element for element in first_elements if isinstance(element, Connection)
@@ -314,25 +310,23 @@ def test_grid_rebinds_inputs_without_changing_topology_ids() -> None:
     ).cost_b_to_a_per_kwh
     first_effective = first_run.price_import_effective
 
-    component.update_inputs(
-        horizon=horizon,
-        inputs=AppliedInputRegistry(
-            forecasts={
-                "grid_price_import": AppliedForecastInput(
-                    key="grid_price_import",
-                    kind=InputValueKind.PRICE,
-                    series=[0.30, 0.31],
-                ),
-                "grid_price_export": AppliedForecastInput(
-                    key="grid_price_export",
-                    kind=InputValueKind.PRICE,
-                    series=[0.08, 0.09],
-                ),
-            }
-        ),
+    second_inputs = AppliedInputRegistry(
+        forecasts={
+            "grid_price_import": AppliedForecastInput(
+                key="grid_price_import",
+                kind=InputValueKind.PRICE,
+                series=[0.30, 0.31],
+            ),
+            "grid_price_export": AppliedForecastInput(
+                key="grid_price_export",
+                kind=InputValueKind.PRICE,
+                series=[0.08, 0.09],
+            ),
+        }
     )
-    second_elements, second_run = component.build_graph(
+    second_elements, second_run = component.create_graph_elements(
         horizon=horizon,
+        inputs=second_inputs,
         build_ctx=build_ctx,
     )
     second_node = next(element for element in second_elements if isinstance(element, Node))
@@ -346,7 +340,7 @@ def test_grid_rebinds_inputs_without_changing_topology_ids() -> None:
     second_effective = second_run.price_import_effective
 
     assert first_node.id == second_node.id == component.node_id
-    assert first_connection.id == second_connection.id == component.connection_id
+    assert first_connection.id == second_connection.id == f"{component.id}_link"
     assert first_costs != second_costs
     assert first_costs == first_effective
     assert second_costs == second_effective
@@ -361,7 +355,7 @@ def test_input_provider_can_extend_short_price_forecast_from_history() -> None:
     resolver = StubResolver()
     provider = ResolverBackedInputProvider(app_config=config, resolver=resolver)
     applicator = _input_applicator(config)
-    horizon = build_horizon_shape(timestep_minutes=60, horizon_minutes=180).build(now=now)
+    horizon = HorizonFactory(timestep_minutes=60, horizon_minutes=180).build(now=now)
 
     grid = _grid_component(config)
     import_input = _forecast_input(config, grid.price_import.source.key)
@@ -451,7 +445,7 @@ def test_price_extension_covers_unaligned_multi_resolution_horizon() -> None:
     resolver = StubResolver()
     provider = ResolverBackedInputProvider(app_config=config, resolver=resolver)
     applicator = _input_applicator(config)
-    horizon = build_horizon_shape(
+    horizon = HorizonFactory(
         timestep_minutes=30,
         horizon_minutes=2880,
         high_res_timestep_minutes=5,

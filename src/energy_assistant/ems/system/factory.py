@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
+from collections import deque
+from typing import Any, TypeVar
 
 from energy_assistant.ems.components.base_load import BaseLoadComponent
 from energy_assistant.ems.components.battery import BatteryComponent
@@ -9,18 +10,13 @@ from energy_assistant.ems.components.grid import GridComponent
 from energy_assistant.ems.components.inverter import InverterComponent
 from energy_assistant.ems.components.pv import PvComponent
 from energy_assistant.ems.components.switchboard import SwitchboardComponent
-from energy_assistant.ems.inputs.alignment import PowerForecastAligner, PriceForecastAligner
-from energy_assistant.ems.inputs.application import EmsInputApplicator
-from energy_assistant.ems.planning.horizon import HorizonShape, build_horizon_shape
 from energy_assistant.ems.planning.pricing import PriceSeriesBuilder
 from energy_assistant.ems.planning.time_windows import TimeWindowMatcher
 from energy_assistant.ems.system.component import EmsComponent
 from energy_assistant.ems.system.system import EmsSystem
-from energy_assistant.ems.system.topology import PlantTopology
 from energy_assistant.models.config import AppConfig
 from energy_assistant.models.plant import (
     BatteryComponentConfig,
-    ControlledEvComponentConfig,
     GridComponentConfig,
     InverterComponentConfig,
     LoadComponentConfig,
@@ -31,258 +27,230 @@ from energy_assistant.models.plant import (
 
 
 class EmsSystemFactory:
-    """Builds persistent EMS component definitions."""
+    """Builds persistent EMS component definitions from plant config."""
 
     def __init__(
         self,
         *,
-        horizon_shape: HorizonShape,
-        input_applicator: EmsInputApplicator,
-        system: EmsSystem,
+        time_window_matcher: TimeWindowMatcher,
+        price_series_builder: PriceSeriesBuilder,
     ) -> None:
-        self._horizon_shape = horizon_shape
-        self._input_applicator = input_applicator
-        self._system = system
+        self._time_window_matcher = time_window_matcher
+        self._price_series_builder = price_series_builder
 
     @classmethod
-    def create(cls, app_config: AppConfig) -> EmsSystemFactory:
-        horizon_shape = build_horizon_shape(
-            timestep_minutes=app_config.ems.timestep_minutes,
-            horizon_minutes=app_config.ems.horizon_minutes,
-            high_res_timestep_minutes=app_config.ems.high_res_timestep_minutes,
-            high_res_horizon_minutes=app_config.ems.high_res_horizon_minutes,
-        )
-        time_window_matcher = TimeWindowMatcher()
-        price_series_builder = PriceSeriesBuilder()
-        input_applicator = EmsInputApplicator(
-            input_configs=app_config.inputs,
-            power_aligner=PowerForecastAligner(),
-            price_aligner=PriceForecastAligner(),
-        )
-        system = _build_system(
-            app_config,
-            time_window_matcher=time_window_matcher,
-            price_series_builder=price_series_builder,
-        )
+    def create(cls) -> EmsSystemFactory:
         return cls(
-            horizon_shape=horizon_shape,
-            input_applicator=input_applicator,
-            system=system,
+            time_window_matcher=TimeWindowMatcher(),
+            price_series_builder=PriceSeriesBuilder(),
         )
 
-    @property
-    def horizon_shape(self) -> HorizonShape:
-        return self._horizon_shape
+    def build(self, app_config: AppConfig) -> EmsSystem:
+        connection_by_component: dict[str, str | None] = {}
+        dependents_by_connection: dict[str, list[str]] = {}
+        remaining_connection_count: dict[str, int] = {}
+        grid_cfgs: dict[str, GridComponentConfig] = {}
 
-    @property
-    def system(self) -> EmsSystem:
-        return self._system
+        for component_id, component in app_config.plant.items():
+            connection_target_id = self.connection_target_id(component)
+            connection_by_component[component_id] = connection_target_id
+            remaining_connection_count[component_id] = 0 if connection_target_id is None else 1
+            if connection_target_id is not None:
+                dependents_by_connection.setdefault(connection_target_id, []).append(component_id)
+            if isinstance(component, GridComponentConfig):
+                grid_cfgs[component_id] = component
 
-    @property
-    def input_applicator(self) -> EmsInputApplicator:
-        return self._input_applicator
-
-
-def _components[TPlant: PlantComponentConfig](
-    registry: dict[str, PlantComponentConfig],
-    expected_type: type[TPlant],
-) -> list[tuple[str, TPlant]]:
-    return [
-        (key, component)
-        for key, component in registry.items()
-        if isinstance(component, expected_type)
-    ]
-
-
-def _switchboard_bus(
-    switchboards: dict[str, SwitchboardComponent],
-    *,
-    component_key: str,
-    target_key: str,
-) -> str:
-    try:
-        return switchboards[target_key].bus_id
-    except KeyError as exc:  # pragma: no cover - defensive
-        raise ValueError(
-            f"component {component_key} references missing switchboard {target_key!r}"
-        ) from exc
-
-
-def _inverter_config(
-    inverters: dict[str, InverterComponentConfig],
-    *,
-    component_key: str,
-    target_key: str,
-) -> InverterComponentConfig:
-    try:
-        return inverters[target_key]
-    except KeyError as exc:  # pragma: no cover - defensive
-        raise ValueError(
-            f"component {component_key} references missing inverter {target_key!r}"
-        ) from exc
-
-
-def _inverter_switchboard_id(
-    inverters: dict[str, InverterComponentConfig],
-    *,
-    component_key: str,
-    target_key: str,
-) -> str:
-    return _inverter_config(
-        inverters,
-        component_key=component_key,
-        target_key=target_key,
-    ).connection
-
-
-def _build_system(
-    app_config: AppConfig,
-    *,
-    time_window_matcher: TimeWindowMatcher,
-    price_series_builder: PriceSeriesBuilder,
-) -> EmsSystem:
-    switchboards = {
-        key: SwitchboardComponent(component_id=key)
-        for key, _ in _components(app_config.plant, SwitchboardComponentConfig)
-    }
-    inverter_cfgs = {
-        key: component
-        for key, component in _components(app_config.plant, InverterComponentConfig)
-    }
-
-    grids = {
-        key: GridComponent(
-            bus_id=_switchboard_bus(
-                switchboards,
-                component_key=key,
-                target_key=component.connection,
-            ),
-            component_id=key,
-            grid=component,
-            time_window_matcher=time_window_matcher,
-            price_series_builder=price_series_builder,
+        grid_configs_by_switchboard = self.group_grid_configs_by_switchboard(grid_cfgs)
+        ready = deque(
+            component_id
+            for component_id in app_config.plant
+            if remaining_connection_count[component_id] == 0
         )
-        for key, component in _components(app_config.plant, GridComponentConfig)
-    }
-    grids_by_switchboard = _group_grids_by_switchboard(grids)
+        components: dict[str, EmsComponent[Any, Any]] = {}
 
-    loads = {
-        key: BaseLoadComponent(
-            bus_id=_switchboard_bus(
-                switchboards,
-                component_key=key,
-                target_key=component.connection,
-            ),
-            component_id=key,
-            load=component,
-        )
-        for key, component in _components(app_config.plant, LoadComponentConfig)
-    }
+        while ready:
+            component_id = ready.popleft()
+            component_cfg = app_config.plant[component_id]
+            component = self._construct_component(
+                component_id=component_id,
+                component_cfg=component_cfg,
+                components=components,
+                connection_by_component=connection_by_component,
+                grid_configs_by_switchboard=grid_configs_by_switchboard,
+                price_series_builder=self._price_series_builder,
+                time_window_matcher=self._time_window_matcher,
+            )
+            components[component_id] = component
+            for dependent_id in dependents_by_connection.get(component_id, []):
+                remaining_connection_count[dependent_id] -= 1
+                if remaining_connection_count[dependent_id] == 0:
+                    ready.append(dependent_id)
 
-    inverters = {
-        key: InverterComponent(
-            component_id=key,
-            switchboard_bus_id=_switchboard_bus(
-                switchboards,
-                component_key=key,
-                target_key=component.connection,
-            ),
-            inverter=component,
-        )
-        for key, component in inverter_cfgs.items()
-    }
+        if len(components) != len(app_config.plant):
+            unresolved = [key for key in app_config.plant if key not in components]
+            raise ValueError(f"unresolved component connections: {unresolved}")
 
-    pvs = {
-        key: PvComponent(
-            component_id=key,
-            inverter_id=component.connection,
-            inverter=_inverter_config(
-                inverter_cfgs,
-                component_key=key,
-                target_key=component.connection,
-            ),
-            pv=component,
-            dc_bus_id=f"{component.connection}_dc",
-        )
-        for key, component in _components(app_config.plant, PvComponentConfig)
-    }
+        ordered_components = tuple(components[key] for key in app_config.plant if key in components)
+        return EmsSystem(components=components, ordered_components=ordered_components)
 
-    batteries = {
-        key: BatteryComponent(
-            component_id=key,
-            inverter_id=component.connection,
-            dc_bus_id=f"{component.connection}_dc",
-            inverter_peak_kw=float(
-                _inverter_config(
-                    inverter_cfgs,
-                    component_key=key,
-                    target_key=component.connection,
-                ).peak_power_kw
-            ),
-            battery=component,
-            grid_max_export_kw=_grid_max_export_kw(
-                grids_by_switchboard.get(
-                    _inverter_switchboard_id(
-                        inverter_cfgs,
-                        component_key=key,
-                        target_key=component.connection,
-                    ),
-                    {},
+    @staticmethod
+    def connection_target_id(component: PlantComponentConfig) -> str | None:
+        if isinstance(component, SwitchboardComponentConfig):
+            return None
+        return component.connection
+
+    @classmethod
+    def _construct_component(
+        cls,
+        *,
+        component_id: str,
+        component_cfg: PlantComponentConfig,
+        components: dict[str, EmsComponent[Any, Any]],
+        connection_by_component: dict[str, str | None],
+        grid_configs_by_switchboard: dict[str, list[GridComponentConfig]],
+        price_series_builder: PriceSeriesBuilder,
+        time_window_matcher: TimeWindowMatcher,
+    ) -> EmsComponent[Any, Any]:
+        if isinstance(component_cfg, SwitchboardComponentConfig):
+            return SwitchboardComponent(component_id=component_id)
+        if isinstance(component_cfg, GridComponentConfig):
+            return GridComponent(
+                component_id=component_id,
+                switchboard=_resolve_component(
+                    components,
+                    expected_type=SwitchboardComponent,
+                    expected_label="switchboard",
+                    component_key=component_id,
+                    target_key=component_cfg.connection,
+                ),
+                grid=component_cfg,
+                time_window_matcher=time_window_matcher,
+                price_series_builder=price_series_builder,
+            )
+        if isinstance(component_cfg, LoadComponentConfig):
+            return BaseLoadComponent(
+                component_id=component_id,
+                switchboard=_resolve_component(
+                    components,
+                    expected_type=SwitchboardComponent,
+                    expected_label="switchboard",
+                    component_key=component_id,
+                    target_key=component_cfg.connection,
+                ),
+                load=component_cfg,
+            )
+        if isinstance(component_cfg, InverterComponentConfig):
+            return InverterComponent(
+                component_id=component_id,
+                switchboard=_resolve_component(
+                    components,
+                    expected_type=SwitchboardComponent,
+                    expected_label="switchboard",
+                    component_key=component_id,
+                    target_key=component_cfg.connection,
+                ),
+                inverter=component_cfg,
+            )
+        if isinstance(component_cfg, PvComponentConfig):
+            return PvComponent(
+                component_id=component_id,
+                inverter=_resolve_component(
+                    components,
+                    expected_type=InverterComponent,
+                    expected_label="inverter",
+                    component_key=component_id,
+                    target_key=component_cfg.connection,
+                ),
+                pv=component_cfg,
+            )
+        if isinstance(component_cfg, BatteryComponentConfig):
+            inverter = _resolve_component(
+                components,
+                expected_type=InverterComponent,
+                expected_label="inverter",
+                component_key=component_id,
+                target_key=component_cfg.connection,
+            )
+            inverter_connection_target_id = connection_by_component[component_cfg.connection]
+            if inverter_connection_target_id is None:  # pragma: no cover - defensive
+                raise ValueError(
+                    f"component {component_id} references inverter {component_cfg.connection!r} with no switchboard parent"
                 )
+            return BatteryComponent(
+                component_id=component_id,
+                inverter=inverter,
+                battery=component_cfg,
+                grid_max_export_kw=cls.grid_max_export_kw_from_configs(
+                    grid_configs_by_switchboard.get(inverter_connection_target_id, [])
+                ),
+            )
+        return EvComponent(
+            component_id=component_id,
+            switchboard=_resolve_component(
+                components,
+                expected_type=SwitchboardComponent,
+                expected_label="switchboard",
+                component_key=component_id,
+                target_key=component_cfg.connection,
             ),
-        )
-        for key, component in _components(app_config.plant, BatteryComponentConfig)
-    }
-
-    evs = {
-        key: EvComponent(
-            component_id=key,
-            switchboard_bus_id=_switchboard_bus(
-                switchboards,
-                component_key=key,
-                target_key=component.connection,
-            ),
-            load=component,
-            grid_export_bias_pct=_grid_export_bias_pct(
-                grids_by_switchboard.get(component.connection, {})
+            load=component_cfg,
+            grid_export_bias_pct=cls.grid_export_bias_pct_from_configs(
+                grid_configs_by_switchboard.get(component_cfg.connection, []),
+                price_series_builder=price_series_builder,
             ),
             time_window_matcher=time_window_matcher,
         )
-        for key, component in _components(app_config.plant, ControlledEvComponentConfig)
-    }
-
-    components: dict[str, EmsComponent[Any, Any]] = {}
-    components.update(switchboards)
-    components.update(grids)
-    components.update(loads)
-    components.update(inverters)
-    components.update(pvs)
-    components.update(batteries)
-    components.update(evs)
-
-    topology = PlantTopology.from_descriptions(
-        [component.describe_topology() for component in components.values()]
-    )
-    return EmsSystem(components=components, topology=topology)
 
 
-def _grid_max_export_kw(grids: dict[str, GridComponent]) -> float:
-    if not grids:
-        return 0.0
-    return max(grid.max_export_kw for grid in grids.values())
+    @staticmethod
+    def grid_max_export_kw_from_configs(grids: list[GridComponentConfig]) -> float:
+        if not grids:
+            return 0.0
+        return max(grid.constraints.max_export_kw for grid in grids)
+
+    @staticmethod
+    def grid_export_bias_pct_from_configs(
+        grids: list[GridComponentConfig],
+        *,
+        price_series_builder: PriceSeriesBuilder,
+    ) -> float:
+        if not grids:
+            return 0.0
+        first_grid = grids[0]
+        return price_series_builder.binding_bias_pct(
+            binding=first_grid.price_export,
+            direction="export",
+        )
+
+    @staticmethod
+    def group_grid_configs_by_switchboard(
+        grid_cfgs: dict[str, GridComponentConfig],
+    ) -> dict[str, list[GridComponentConfig]]:
+        grouped: dict[str, list[GridComponentConfig]] = {}
+        for grid in grid_cfgs.values():
+            grouped.setdefault(grid.connection, []).append(grid)
+        return grouped
 
 
-def _grid_export_bias_pct(grids: dict[str, GridComponent]) -> float:
-    if not grids:
-        return 0.0
-    first_grid_id = next(iter(grids))
-    return grids[first_grid_id].price_export_bias_pct()
+TResolvedComponent = TypeVar("TResolvedComponent", bound=EmsComponent[Any, Any])
 
 
-def _group_grids_by_switchboard(
-    grids: dict[str, GridComponent],
-) -> dict[str, dict[str, GridComponent]]:
-    grouped: dict[str, dict[str, GridComponent]] = {}
-    for grid_id, grid in grids.items():
-        grouped.setdefault(grid.bus_id, {})[grid_id] = grid
-    return grouped
+def _resolve_component(
+    components: dict[str, EmsComponent[Any, Any]],
+    *,
+    expected_type: type[TResolvedComponent],
+    expected_label: str,
+    component_key: str,
+    target_key: str,
+) -> TResolvedComponent:
+    try:
+        target = components[target_key]
+    except KeyError as exc:  # pragma: no cover - defensive
+        raise ValueError(
+            f"component {component_key} references missing {expected_label} {target_key!r}"
+        ) from exc
+    if not isinstance(target, expected_type):  # pragma: no cover - defensive
+        raise ValueError(
+            f"component {component_key} expected {expected_label} {target_key!r} but found {type(target).__name__}"
+        )
+    return target

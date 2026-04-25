@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import StrEnum
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -52,30 +51,6 @@ class EmsPlanTimings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class PlanIntentMode(StrEnum):
-    BACKUP = "Back-up"
-    FORCE_CHARGE = "Force Charge"
-    FORCE_DISCHARGE = "Force Discharge"
-    EXPORT_PRIORITY = "Export Priority"
-    SELF_USE = "Self Use"
-
-
-class InverterIntent(BaseModel):
-    mode: PlanIntentMode
-    export_limit_kw: float
-    force_charge_kw: float
-    force_discharge_kw: float
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class LoadControlledEvIntent(BaseModel):
-    charge_kw: float
-    charge_on: bool
-
-    model_config = ConfigDict(extra="forbid")
-
-
 class SwitchboardComponentPlan(BaseModel):
     type: Literal["switchboard"] = "switchboard"
 
@@ -106,7 +81,6 @@ class LoadComponentPlan(BaseModel):
 class InverterComponentPlan(BaseModel):
     type: Literal["inverter"] = "inverter"
     ac_net_kw: list[EmsSeriesPoint]
-    intent: InverterIntent
 
     model_config = ConfigDict(extra="forbid")
 
@@ -138,7 +112,6 @@ class LoadControlledEvComponentPlan(BaseModel):
     soc_pct: list[EmsSeriesPoint]
     connected: list[EmsSeriesPoint]
     charge_allowed: list[EmsSeriesPoint]
-    intent: LoadControlledEvIntent
 
     model_config = ConfigDict(extra="forbid")
 

@@ -7,7 +7,6 @@ import pytest
 from energy_assistant.ems.inputs.alignment import (
     PowerForecastAligner,
     PriceForecastAligner,
-    forecast_coverage_slots,
 )
 from energy_assistant.ems.planning.horizon import Horizon, HorizonSlot
 from energy_assistant.lib.source_resolver.models import PowerForecastInterval, PriceForecastInterval
@@ -96,74 +95,6 @@ def test_price_aligner_raises_missing_first_slot_without_override() -> None:
         PriceForecastAligner().align(horizon, intervals)
 
 
-def test_forecast_coverage_allows_missing_first_slot() -> None:
-    start = datetime(2025, 12, 27, 0, 0, tzinfo=UTC)
-    interval_minutes = 5
-    intervals = [
-        PowerForecastInterval(
-            start=start + timedelta(minutes=5),
-            end=start + timedelta(minutes=10),
-            value=1.0,
-        ),
-        PowerForecastInterval(
-            start=start + timedelta(minutes=10),
-            end=start + timedelta(minutes=15),
-            value=1.0,
-        ),
-    ]
-
-    coverage = forecast_coverage_slots(
-        start,
-        interval_minutes,
-        intervals,
-        allow_first_slot_missing=True,
-    )
-
-    assert coverage == 3
-
-
-def test_forecast_coverage_missing_first_slot_without_override() -> None:
-    start = datetime(2025, 12, 27, 0, 0, tzinfo=UTC)
-    interval_minutes = 5
-    intervals = [
-        PowerForecastInterval(
-            start=start + timedelta(minutes=5),
-            end=start + timedelta(minutes=10),
-            value=1.0,
-        ),
-    ]
-
-    coverage = forecast_coverage_slots(
-        start,
-        interval_minutes,
-        intervals,
-        allow_first_slot_missing=False,
-    )
-
-    assert coverage == 0
-
-
-def test_forecast_coverage_stops_after_gap() -> None:
-    start = datetime(2025, 12, 27, 0, 0, tzinfo=UTC)
-    interval_minutes = 5
-    intervals = [
-        PowerForecastInterval(
-            start=start + timedelta(minutes=10),
-            end=start + timedelta(minutes=15),
-            value=1.0,
-        ),
-    ]
-
-    coverage = forecast_coverage_slots(
-        start,
-        interval_minutes,
-        intervals,
-        allow_first_slot_missing=True,
-    )
-
-    assert coverage == 1
-
-
 def test_power_aligner_averages_over_longer_slot() -> None:
     start = datetime(2025, 12, 27, 0, 0, tzinfo=UTC)
     horizon = _make_horizon(start, interval_minutes=30, num_intervals=1)
@@ -228,7 +159,7 @@ def test_power_aligner_handles_variable_slot_sizes() -> None:
         PowerForecastInterval(
             start=start + timedelta(minutes=5 * idx),
             end=start + timedelta(minutes=5 * (idx + 1)),
-            value=float(idx + 1),
+            value=idx + 1,
         )
         for idx in range(7)
     ]

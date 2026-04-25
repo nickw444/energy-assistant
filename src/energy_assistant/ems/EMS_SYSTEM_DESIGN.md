@@ -16,64 +16,78 @@ Key behavior:
   coverage.
 - EMS config is split into a typed `inputs` registry and a flat logical `plant` registry.
 - Components are **persistent definitions** that implement the typed
-  `EmsComponent[TSolveState, TPlanExport]` contract, own input parameter boxes, and consume a
-  per-solve `AppliedInputRegistry`.
+  `EmsComponent[TSolveState, TPlanExport]` contract and consume a per-solve
+  `AppliedInputRegistry` directly inside `create_graph_elements(...)`.
 - Input resolution happens outside the EMS component layer in `src/energy_assistant/inputs/provider.py`, which produces
   raw resolved inputs.
 - Forecast alignment, slot-0 realtime replacement, coverage validation, and price tail extension
   application happen inside EMS in `src/energy_assistant/ems/inputs/application.py`.
-- `EmsSystem` stores a flat `components` registry plus a normalized `PlantTopology`. User
-  config keeps `connection: "<component_id>"` as a target component reference, while the side/port
-  is inferred from the source and target component types.
-- At solve time, components **update their input boxes** from resolved inputs, then **emit
-  solve-scoped topology elements** for the current horizon and return explicit typed solve-state
-  artifacts used for plan extraction.
-- PuLP problems and topology objects remain solve-scoped; persistent reuse is at the component and
-  horizon-shape level.
+- `EmsSystem` stores a flat `components` registry plus an `ordered_components` tuple. User config
+  keeps `connection: "<component_id>"` as a typed logical connection. `EmsSystemFactory` eagerly
+  resolves those strings into direct component references. Those logical component objects stay
+  separate from physical node ids such as AC/DC bus ids. The attachment side/port is inferred from
+  the two component types.
+- At solve time, components **read the current applied inputs** inside `create_graph_elements(...)`,
+  then **emit solve-scoped physical graph elements** for the current horizon, return explicit typed
+  solve-state artifacts used for plan extraction, and optionally emit follow-up fragments in
+  `create_graph_fragments(...)` after all local elements have been built.
+- PuLP problems and topology objects remain solve-scoped; persistent reuse is at the component,
+  horizon-factory, and input-applicator level.
 
 ## Runtime Flow
 
-`EmsMilpPlanner.generate_ems_plan(...)`:
+`EmsMilpPlanner.generate_ems_run(...)`:
 
-1. Build the current solve window from the configured rolling `HorizonShape`.
-2. Get persistent component definitions from `EmsSystemFactory`.
+1. Build the current solve window from the configured rolling `HorizonFactory`.
+2. Use the caller-owned persistent `EmsSystem` built by `EmsSystemFactory`.
 3. Resolve the configured `inputs` registry into a per-solve raw `ResolvedInputRegistry`.
 4. Apply raw inputs to the current horizon to produce `AppliedInputRegistry`.
-5. Call `EmsSystem.update_inputs(horizon, inputs)`.
-6. Call `EmsSystem.build_snapshot(horizon)`:
+5. Call `EmsSystem.build_snapshot(horizon, inputs)`:
    - create a fresh `EnergyGraph`,
-   - call each component's `build_graph(...)` method in normalized topology order,
+   - call each component's `create_graph_elements(...)` method in `ordered_components` order,
    - add all returned elements through `EnergyGraph.add_elements(...)`,
    - collect typed solve-state artifacts in `SolveStateStore`,
+   - call each component's `create_graph_fragments(...)` after the local elements are built,
    - collect fragment constraints/objective into `ModelSnapshot`.
-7. Solve PuLP model.
-8. Ask each component to export its typed component plan from the solved snapshot and the typed
-   `SolveStateStore`.
-9. Return a flat `components` map keyed by plant component id.
+6. Solve PuLP model.
+7. Ask `EmsSystem` to resolve each component's typed solve state from the typed
+   `SolveStateStore`, call `extract_plan(...)`, and normalize the result to `ComponentPlan`.
+8. Return a flat `components` map keyed by plant component id.
 
 ## Component Contract
 
-Each component supports:
+Each component exposes stable topology metadata:
 
-- `update_inputs(horizon, inputs)` to populate persistent scalar/series parameters
-- `describe_topology()` to declare its normalized parent attachment
-- `build_graph(horizon, build_ctx) -> (elements, solve_state)` to create solve-scoped topology
-  primitives
-- `build_plan(snapshot, solve_state, plan_ctx)` for result extraction
+- `id`
+- `component_type`
+- direct component references for logical wiring, such as `switchboard` or `inverter`
+
+Each component also supports:
+
+- `create_graph_elements(horizon, inputs, build_ctx) -> (elements, solve_state)` to create
+  solve-scoped topology primitives from the current applied inputs
+- `create_graph_fragments(graph, build_ctx, solve_states) -> list[GraphElement]` for follow-up
+  cross-component fragments after all local elements are present
+- `extract_plan(snapshot, solve_state, plan_ctx)` for result extraction
+
+`EmsSystem` owns the solve-state lookup and `ComponentPlan` normalization for export. Components
+only know how to read their typed solve state once it has been retrieved from the store.
 
 Components keep configuration and helper objects persistently, while solve-scoped MILP objects
-(nodes/connections/connection fragments) are rebuilt per solve. For plan extraction they keep
-explicit typed solve-state objects in a `SolveStateStore`, alongside the resolved input parameters.
+(nodes/connections/connection fragments) are rebuilt per solve. Per-solve input preprocessing should
+live in small private helper methods inside the component rather than in a separate resolution
+object. For plan extraction they keep explicit typed solve-state objects in a `SolveStateStore`,
+alongside the values needed later from the current applied inputs.
 
 The primary machine-readable EMS export is a flat `components` map on `EmsPlanOutput`. The keys match
 the flat logical `plant` registry directly. Each value is a typed component-plan union carrying
-component-specific `series` and, where applicable, immediate component-local `intent`. Time series
-remain exported as `{time, value}` points, with no ownership tree or merged hierarchy introduced on
-top of the plant model.
+component-specific `series` only. Time series remain exported as `{time, value}` points, with no
+ownership tree, merged hierarchy, or component-local intent layer introduced on top of the plant
+model for now.
 
 An inverter remains one logical component with one AC/DC link, but several `pv` and `battery`
-entries may attach to the same inverter `connection`. In that case the inverter expands all of
-those children onto its shared DC bus and still exports one flat component plan per logical child.
+entries may attach to the same inverter `connection`. In that case those components share the
+inverter DC bus and still export one flat component plan per logical component.
 
 Input hydration is not performed by EMS components directly. The input provider walks the typed
 `inputs` config, uses the source resolver when running live, and returns resolved scalar values plus
@@ -156,7 +170,7 @@ Cross-cutting constraints are graph fragments, e.g.:
 
 These are now driven by normalized topology context rather than a special-purpose capability layer.
 For example, batteries bind reserve constraints to the grid connections that belong to the same
-switchboard island as their inverter parent.
+switchboard island as the inverter they connect to.
 
 ## Testing
 

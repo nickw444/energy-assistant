@@ -1,9 +1,7 @@
 from energy_assistant.ems.planning.horizon import (
     Horizon,
-    HorizonShape,
+    HorizonFactory,
     HorizonSlot,
-    build_horizon,
-    build_horizon_shape,
     ceil_to_interval_boundary,
     floor_to_interval_boundary,
 )
@@ -12,13 +10,11 @@ from energy_assistant.ems.planning.time_windows import TimeWindowMatcher
 
 __all__ = [
     "Horizon",
-    "HorizonShape",
+    "HorizonFactory",
     "HorizonSlot",
     "PriceSeries",
     "PriceSeriesBuilder",
     "TimeWindowMatcher",
-    "build_horizon",
-    "build_horizon_shape",
     "ceil_to_interval_boundary",
     "floor_to_interval_boundary",
 ]

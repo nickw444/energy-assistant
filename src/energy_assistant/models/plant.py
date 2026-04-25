@@ -130,7 +130,7 @@ class TerminalSocConfig(BaseModel):
     ) -> float | Literal["mean", "median"] | None:
         if value is None or value in {"mean", "median"}:
             return value
-        if float(value) < 0:
+        if isinstance(value, float) and value < 0:
             raise ValueError("penalty_per_kwh must be >= 0")
         return value
 

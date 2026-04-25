@@ -6,11 +6,11 @@ import pulp
 
 from energy_assistant.ems.topology.policies.connection_policy import (
     ConnectionBinding,
-    ConnectionPolicy,
 )
+from energy_assistant.ems.topology.policies.passthrough import Passthrough
 
 
-class LinearCost(ConnectionPolicy):
+class LinearCost(Passthrough):
     """Linear objective cost for directional flows ($/kWh), with per-slot coefficients."""
 
     def __init__(
@@ -20,9 +20,9 @@ class LinearCost(ConnectionPolicy):
         cost_b_to_a_per_kwh: Sequence[float],
         name: str,
     ) -> None:
-        self.cost_a_to_b_per_kwh = [float(v) for v in cost_a_to_b_per_kwh]
-        self.cost_b_to_a_per_kwh = [float(v) for v in cost_b_to_a_per_kwh]
-        self.name = str(name)
+        self.cost_a_to_b_per_kwh = list(cost_a_to_b_per_kwh)
+        self.cost_b_to_a_per_kwh = list(cost_b_to_a_per_kwh)
+        self.name = name
 
     def objective(self, connection: ConnectionBinding) -> pulp.LpAffineExpression:
         cost_ab = _series_for_connection(self.cost_a_to_b_per_kwh, connection, name=self.name)
@@ -31,8 +31,7 @@ class LinearCost(ConnectionPolicy):
         flow_ba = connection.flow_out_ba
 
         expr = pulp.lpSum(
-            (flow_ab[t] * float(cost_ab[t]) + flow_ba[t] * float(cost_ba[t]))
-            * float(connection.horizon.dt_hours(t))
+            (flow_ab[t] * cost_ab[t] + flow_ba[t] * cost_ba[t]) * connection.horizon.dt_hours(t)
             for t in connection.horizon.T
         )
         return expr

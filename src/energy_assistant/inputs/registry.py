@@ -7,7 +7,7 @@ from energy_assistant.models.inputs import InputValueKind
 
 class ResolvedScalarInput:
     def __init__(self, *, key: str, kind: InputValueKind, value: float | bool) -> None:
-        self.key = str(key)
+        self.key = key
         self.kind = kind
         self.value = value
 
@@ -31,15 +31,15 @@ class ResolvedForecastInput:
         extension_points: dict[str, float] | None = None,
         extension_interval_minutes: int | None = None,
     ) -> None:
-        self.key = str(key)
+        self.key = key
         self.kind = kind
-        self.points = {str(ts): float(value) for ts, value in sorted(points.items())}
+        self.points = {ts: value for ts, value in sorted(points.items())}
         self.interval_minutes = int(interval_minutes)
-        self.realtime_value = None if realtime_value is None else float(realtime_value)
+        self.realtime_value = realtime_value
         self.extension_points = (
             None
             if extension_points is None
-            else {str(ts): float(value) for ts, value in sorted(extension_points.items())}
+            else {ts: value for ts, value in sorted(extension_points.items())}
         )
         self.extension_interval_minutes = (
             None if extension_interval_minutes is None else int(extension_interval_minutes)
@@ -174,7 +174,7 @@ def _resolved_forecast_from_payload(
         if not isinstance(raw_extension_points, dict):
             raise ValueError("Resolved forecast extension_points must be an object")
         extension_points = {
-            str(ts): float(cast(int | float, item))
+            ts: float(cast(int | float, item))
             for ts, item in cast(dict[str, object], raw_extension_points).items()
         }
     raw_extension_interval = payload.get("extension_interval_minutes")
@@ -186,7 +186,7 @@ def _resolved_forecast_from_payload(
         key=key,
         kind=kind,
         points={
-            str(ts): float(cast(int | float, item))
+            ts: float(cast(int | float, item))
             for ts, item in cast(dict[str, object], raw_points).items()
         },
         interval_minutes=raw_interval_minutes,

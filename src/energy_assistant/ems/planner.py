@@ -8,13 +8,14 @@ from typing import get_args
 
 import pulp
 
+from energy_assistant.ems.inputs.application import EmsInputApplicator
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
 from energy_assistant.ems.models import (
     EmsPlanOutput,
     EmsPlanStatus,
     EmsPlanTimings,
 )
-from energy_assistant.ems.system.factory import EmsSystemFactory
+from energy_assistant.ems.planning.horizon import HorizonFactory
 from energy_assistant.ems.system.state import EmsSystemSolveState
 from energy_assistant.ems.system.system import EmsSystem
 from energy_assistant.inputs.provider import EmsInputProvider
@@ -45,24 +46,20 @@ class EmsMilpPlanner:
         self,
         *,
         input_provider: EmsInputProvider,
-        system_factory: EmsSystemFactory,
+        horizon_factory: HorizonFactory,
+        input_applicator: EmsInputApplicator,
+        system: EmsSystem,
     ) -> None:
         self._input_provider = input_provider
-        self._system_factory = system_factory
+        self._horizon_factory = horizon_factory
+        self._input_applicator = input_applicator
+        self._system = system
 
     def mark_for_hydration(self) -> None:
         self._input_provider.mark_for_hydration()
 
     def hydrate_all(self) -> None:
         self._input_provider.hydrate_all()
-
-    def generate_ems_plan(
-        self,
-        *,
-        now: datetime | None = None,
-        solver_msg: bool = False,
-    ) -> EmsPlanOutput:
-        return self.generate_ems_run(now=now, solver_msg=solver_msg).plan
 
     def generate_ems_run(
         self,
@@ -114,12 +111,12 @@ class EmsMilpPlanner:
         if solve_time.tzinfo is None:
             solve_time = solve_time.astimezone()
 
-        horizon_shape = self._system_factory.horizon_shape
-        horizon = horizon_shape.build(now=solve_time)
+        horizon_factory = self._horizon_factory
+        horizon = horizon_factory.build(now=solve_time)
         schedule_info = _format_schedule(
-            horizon_shape.high_res_timestep_minutes,
-            horizon_shape.high_res_horizon_minutes,
-            horizon_shape.timestep_minutes,
+            horizon_factory.high_res_timestep_minutes,
+            horizon_factory.high_res_horizon_minutes,
+            horizon_factory.timestep_minutes,
         )
         logger.info(
             (
@@ -128,7 +125,7 @@ class EmsMilpPlanner:
             ),
             horizon.num_intervals,
             horizon.interval_minutes,
-            horizon_shape.horizon_minutes,
+            horizon_factory.horizon_minutes,
             horizon.start.isoformat(),
             schedule_info,
         )
@@ -137,13 +134,15 @@ class EmsMilpPlanner:
         resolved_inputs = self._input_provider.resolve_for_window(
             window=InputWindow(now=horizon.now, end=horizon.slots[-1].end)
         )
-        applied_inputs = self._system_factory.input_applicator.apply_to_horizon(
+        applied_inputs = self._input_applicator.apply_to_horizon(
             horizon=horizon,
             inputs=resolved_inputs,
         )
-        system = self._system_factory.system
-        system.update_inputs(horizon=horizon, inputs=applied_inputs)
-        snapshot, solve_state = system.build_snapshot(horizon=horizon)
+        system = self._system
+        snapshot, solve_state = system.build_snapshot(
+            horizon=horizon,
+            inputs=applied_inputs,
+        )
         build_seconds = time.perf_counter() - build_start
         return EmsBuiltSnapshot(
             solve_time=solve_time,

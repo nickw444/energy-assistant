@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from datetime import datetime, timedelta
-from typing import Any, Protocol, cast
+from typing import Protocol
 
 from energy_assistant.inputs.registry import (
     ResolvedForecastInput,
@@ -12,6 +12,7 @@ from energy_assistant.inputs.registry import (
 from energy_assistant.inputs.window import InputWindow
 from energy_assistant.lib.source_resolver.hass_source import (
     HomeAssistantAmberElectricForecastSource,
+    HomeAssistantAmberExpressForecastSource,
     HomeAssistantBinarySensorEntitySource,
     HomeAssistantCurrencyEntitySource,
     HomeAssistantEntitySource,
@@ -32,6 +33,7 @@ from energy_assistant.models.inputs import (
     ForecastSource,
     InputValueKind,
     ScalarInputConfig,
+    ScalarSource,
     input_value_kind,
 )
 from energy_assistant.models.plant import GridComponentConfig
@@ -98,7 +100,10 @@ class ResolverBackedInputProvider:
                     value=self._resolve_scalar(input_config),
                 )
                 continue
-            forecast_intervals = self._resolve_forecast_intervals(input_config.forecast)
+            forecast_intervals = self._resolve_forecast_intervals(
+                input_config.forecast,
+                kind=kind,
+            )
             forecasts[key] = ResolvedForecastInput(
                 key=key,
                 kind=kind,
@@ -155,16 +160,25 @@ class ResolverBackedInputProvider:
     def _resolve_forecast_intervals(
         self,
         forecast: ForecastSource,
+        *,
+        kind: InputValueKind,
     ) -> list[PowerForecastInterval] | list[PriceForecastInterval]:
-        return cast(
-            list[PowerForecastInterval] | list[PriceForecastInterval],
-            cast(Any, self._resolver).resolve(forecast),
-        )
+        if kind is InputValueKind.PRICE:
+            if isinstance(forecast, HomeAssistantAmberElectricForecastSource):
+                return self._resolver.resolve(forecast)
+            if isinstance(forecast, HomeAssistantAmberExpressForecastSource):
+                return self._resolver.resolve(forecast)
+            raise ValueError("Price forecast kind did not resolve to a price forecast source")
+        if isinstance(forecast, HomeAssistantHistoricalAverageForecastSource):
+            return self._resolver.resolve(forecast)
+        if isinstance(forecast, HomeAssistantSolcastForecastSource):
+            return self._resolver.resolve(forecast)
+        raise ValueError("Power forecast kind did not resolve to a power forecast source")
 
     def _resolve_optional_realtime_value(
         self,
         *,
-        realtime: HomeAssistantCurrencyEntitySource | object | None,
+        realtime: ScalarSource | None,
         kind: InputValueKind,
     ) -> float | None:
         if realtime is None:
@@ -172,7 +186,7 @@ class ResolverBackedInputProvider:
         try:
             value = self._resolver.resolve(
                 self._scalar_entity_source(
-                    entity=cast(HomeAssistantCurrencyEntitySource, realtime).entity,
+                    entity=realtime.entity,
                     value_kind=kind,
                 )
             )
@@ -247,10 +261,7 @@ class ResolverBackedInputProvider:
     ) -> dict[str, float]:
         ordered = sorted(intervals, key=lambda interval: interval.start)
         _validate_point_reconstruction(ordered)
-        return {
-            interval.start.isoformat(): float(interval.value)
-            for interval in ordered
-        }
+        return {interval.start.isoformat(): float(interval.value) for interval in ordered}
 
     def _forecast_fallback_interval_minutes(
         self,

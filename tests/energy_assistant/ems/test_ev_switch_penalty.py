@@ -8,16 +8,17 @@ import pytest
 from energy_assistant.ems.components.ev import EvChargeControl
 from energy_assistant.ems.milp.context import ModelContext, value_of
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
-from energy_assistant.ems.planning.horizon import build_horizon
+from energy_assistant.ems.planning.horizon import HorizonFactory
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import EnergyGraph
+from energy_assistant.ems.topology.ids import NodeId
 from energy_assistant.ems.topology.nodes import Node
 from energy_assistant.ems.topology.policies import DirectionalLimit, LinearCost
 
 
 def test_ev_switch_penalty_t0_seeded_from_realtime_state() -> None:
     now = datetime(2026, 1, 1, tzinfo=UTC)
-    horizon = build_horizon(now=now, timestep_minutes=60, num_intervals=1)
+    horizon = HorizonFactory(timestep_minutes=60, horizon_minutes=60).build(now=now)
 
     gate = [1.0]
     connected = True
@@ -38,13 +39,13 @@ def test_ev_switch_penalty_t0_seeded_from_realtime_state() -> None:
     )
 
     graph = EnergyGraph()
-    graph.add_element(Node(horizon=horizon, id="a", name="A", node_role="prosumer"))
-    graph.add_element(Node(horizon=horizon, id="b", name="B", node_role="prosumer"))
+    graph.add_element(Node(horizon=horizon, id=NodeId("a"), name="A", node_role="prosumer"))
+    graph.add_element(Node(horizon=horizon, id=NodeId("b"), name="B", node_role="prosumer"))
     conn = Connection(
         horizon=horizon,
         id="c",
-        a_node_id="a",
-        b_node_id="b",
+        a_node_id=NodeId("a"),
+        b_node_id=NodeId("b"),
         policies={
             "directional_limit": DirectionalLimit(max_a_to_b_kw=7.0, max_b_to_a_kw=0.0),
             "charge_control": control,
@@ -62,6 +63,5 @@ def test_ev_switch_penalty_t0_seeded_from_realtime_state() -> None:
     assert pulp.LpStatus.get(snapshot.problem.status) == "Optimal"
 
     # Since the EV is already "on" (connected + realtime_power above threshold),
-    # switching at t0 is free.
-    assert value_of(control.charge_on(conn)[0]) == pytest.approx(1.0)
-    assert value_of(control.switch(conn)[0]) == pytest.approx(0.0)
+    # charging is selected at t0 and unconstrained by a switch penalty spike.
+    assert value_of(conn.power_out_ab[0]) == pytest.approx(7.0)

@@ -4,6 +4,8 @@ from datetime import datetime
 from pathlib import Path
 
 from energy_assistant.config import load_app_config
+from energy_assistant.ems.inputs.alignment import PowerForecastAligner, PriceForecastAligner
+from energy_assistant.ems.inputs.application import EmsInputApplicator
 from energy_assistant.ems.models import (
     BatteryComponentPlan,
     GridComponentPlan,
@@ -12,6 +14,7 @@ from energy_assistant.ems.models import (
     PvComponentPlan,
 )
 from energy_assistant.ems.planner import EmsMilpPlanner
+from energy_assistant.ems.planning.horizon import HorizonFactory
 from energy_assistant.ems.system.factory import EmsSystemFactory
 from energy_assistant.inputs.fixtures import load_fixture_input_provider
 
@@ -27,8 +30,19 @@ def test_plan_exports_flat_component_series_from_fixture() -> None:
 
     plan = EmsMilpPlanner(
         input_provider=input_provider,
-        system_factory=EmsSystemFactory.create(app_config),
-    ).generate_ems_plan(now=now)
+        horizon_factory=HorizonFactory(
+            timestep_minutes=app_config.ems.timestep_minutes,
+            horizon_minutes=app_config.ems.horizon_minutes,
+            high_res_timestep_minutes=app_config.ems.high_res_timestep_minutes,
+            high_res_horizon_minutes=app_config.ems.high_res_horizon_minutes,
+        ),
+        input_applicator=EmsInputApplicator(
+            input_configs=app_config.inputs,
+            power_aligner=PowerForecastAligner(),
+            price_aligner=PriceForecastAligner(),
+        ),
+        system=EmsSystemFactory.create().build(app_config),
+    ).generate_ems_run(now=now).plan
 
     assert set(plan.components) == {
         "switchboard",
@@ -46,7 +60,7 @@ def test_plan_exports_flat_component_series_from_fixture() -> None:
     inverter_plan = plan.components["primary"]
     assert isinstance(inverter_plan, InverterComponentPlan)
     assert inverter_plan.type == "inverter"
-    assert inverter_plan.intent.mode is not None
+    assert "intent" not in inverter_plan.model_dump()
 
     grid_plan = plan.components["grid"]
     assert isinstance(grid_plan, GridComponentPlan)
@@ -77,5 +91,5 @@ def test_plan_exports_flat_component_series_from_fixture() -> None:
     ev_plan = plan.components["tessie"]
     assert isinstance(ev_plan, LoadControlledEvComponentPlan)
     assert ev_plan.type == "load_controlled_ev"
-    assert ev_plan.intent.charge_kw >= 0
+    assert "intent" not in ev_plan.model_dump()
     assert len(ev_plan.soc_pct) == timestep_count + 1

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import cast
 
 from energy_assistant.ems.inputs.alignment import (
     PowerForecastAligner,
@@ -18,7 +17,10 @@ from energy_assistant.inputs.registry import (
     ResolvedInputRegistry,
     ResolvedScalarInput,
 )
-from energy_assistant.lib.source_resolver.models import PowerForecastInterval, PriceForecastInterval
+from energy_assistant.lib.source_resolver.models import (
+    PowerForecastInterval,
+    PriceForecastInterval,
+)
 from energy_assistant.models.inputs import InputConfig, InputValueKind, input_value_kind
 
 
@@ -72,26 +74,66 @@ class EmsInputApplicator:
         raw_forecast: ResolvedForecastInput,
         kind: InputValueKind,
     ) -> list[float]:
-        intervals = _forecast_intervals_from_points(
+        if kind is InputValueKind.PRICE:
+            return self._apply_price_forecast(
+                label=label,
+                horizon=horizon,
+                raw_forecast=raw_forecast,
+            )
+        return self._apply_power_forecast(
+            label=label,
+            horizon=horizon,
+            raw_forecast=raw_forecast,
+        )
+
+    def _apply_power_forecast(
+        self,
+        *,
+        label: str,
+        horizon: Horizon,
+        raw_forecast: ResolvedForecastInput,
+    ) -> list[float]:
+        intervals = _power_forecast_intervals_from_points(
             points=raw_forecast.points,
             fallback_interval_minutes=raw_forecast.interval_minutes,
-            kind=kind,
         )
-        if kind is InputValueKind.PRICE and raw_forecast.extension_points is not None:
-            extension_intervals = cast(
-                list[PriceForecastInterval],
-                _forecast_intervals_from_points(
-                    points=raw_forecast.extension_points,
-                    fallback_interval_minutes=(
-                        raw_forecast.extension_interval_minutes
-                        if raw_forecast.extension_interval_minutes is not None
-                        else raw_forecast.interval_minutes
-                    ),
-                    kind=kind,
+        validate_forecast_coverage(
+            label=label,
+            horizon=horizon,
+            intervals=intervals,
+            allow_first_slot_missing=raw_forecast.realtime_value is not None,
+        )
+        return [
+            value
+            for value in self._power_aligner.align(
+                horizon,
+                intervals,
+                first_slot_override=raw_forecast.realtime_value,
+            )
+        ]
+
+    def _apply_price_forecast(
+        self,
+        *,
+        label: str,
+        horizon: Horizon,
+        raw_forecast: ResolvedForecastInput,
+    ) -> list[float]:
+        intervals = _price_forecast_intervals_from_points(
+            points=raw_forecast.points,
+            fallback_interval_minutes=raw_forecast.interval_minutes,
+        )
+        if raw_forecast.extension_points is not None:
+            extension_intervals = _price_forecast_intervals_from_points(
+                points=raw_forecast.extension_points,
+                fallback_interval_minutes=(
+                    raw_forecast.extension_interval_minutes
+                    if raw_forecast.extension_interval_minutes is not None
+                    else raw_forecast.interval_minutes
                 ),
             )
             intervals = _merge_price_intervals(
-                base_intervals=cast(list[PriceForecastInterval], intervals),
+                base_intervals=intervals,
                 extension_intervals=extension_intervals,
             )
 
@@ -101,32 +143,20 @@ class EmsInputApplicator:
             intervals=intervals,
             allow_first_slot_missing=raw_forecast.realtime_value is not None,
         )
-
-        if kind is InputValueKind.PRICE:
-            return [
-                float(value)
-                for value in self._price_aligner.align(
-                    horizon,
-                    cast(list[PriceForecastInterval], intervals),
-                    first_slot_override=raw_forecast.realtime_value,
-                )
-            ]
         return [
-            float(value)
-            for value in self._power_aligner.align(
+            value
+            for value in self._price_aligner.align(
                 horizon,
-                cast(list[PowerForecastInterval], intervals),
+                intervals,
                 first_slot_override=raw_forecast.realtime_value,
             )
         ]
 
-
-def _forecast_intervals_from_points(
+def _price_forecast_intervals_from_points(
     *,
     points: dict[str, float],
     fallback_interval_minutes: int,
-    kind: InputValueKind,
-) -> list[PowerForecastInterval] | list[PriceForecastInterval]:
+) -> list[PriceForecastInterval]:
     if fallback_interval_minutes <= 0:
         raise ValueError("forecast interval_minutes must be positive")
     ordered = _sorted_points(points)
@@ -134,33 +164,43 @@ def _forecast_intervals_from_points(
         return []
 
     fallback = timedelta(minutes=fallback_interval_minutes)
-    if kind is InputValueKind.PRICE:
-        price_intervals: list[PriceForecastInterval] = []
-        for idx, (start, value) in enumerate(ordered):
-            end = ordered[idx + 1][0] if idx + 1 < len(ordered) else start + fallback
-            if end <= start:
-                raise ValueError("forecast points must be strictly increasing")
-            price_intervals.append(
-                PriceForecastInterval(start=start, end=end, value=float(value))
-            )
-        return price_intervals
+    price_intervals: list[PriceForecastInterval] = []
+    for idx, (start, value) in enumerate(ordered):
+        end = ordered[idx + 1][0] if idx + 1 < len(ordered) else start + fallback
+        if end <= start:
+            raise ValueError("forecast points must be strictly increasing")
+        price_intervals.append(PriceForecastInterval(start=start, end=end, value=value))
+    return price_intervals
 
+
+def _power_forecast_intervals_from_points(
+    *,
+    points: dict[str, float],
+    fallback_interval_minutes: int,
+) -> list[PowerForecastInterval]:
+    if fallback_interval_minutes <= 0:
+        raise ValueError("forecast interval_minutes must be positive")
+    ordered = _sorted_points(points)
+    if not ordered:
+        return []
+
+    fallback = timedelta(minutes=fallback_interval_minutes)
     power_intervals: list[PowerForecastInterval] = []
     for idx, (start, value) in enumerate(ordered):
         end = ordered[idx + 1][0] if idx + 1 < len(ordered) else start + fallback
         if end <= start:
             raise ValueError("forecast points must be strictly increasing")
-        power_intervals.append(PowerForecastInterval(start=start, end=end, value=float(value)))
+        power_intervals.append(PowerForecastInterval(start=start, end=end, value=value))
     return power_intervals
 
 
 def _sorted_points(points: dict[str, float]) -> list[tuple[datetime, float]]:
     ordered: list[tuple[datetime, float]] = []
     for raw_start, raw_value in points.items():
-        start = datetime.fromisoformat(str(raw_start))
+        start = datetime.fromisoformat(raw_start)
         if start.tzinfo is None:
             raise ValueError("forecast points must be timezone-aware ISO datetimes")
-        ordered.append((start, float(raw_value)))
+        ordered.append((start, raw_value))
     ordered.sort(key=lambda item: item[0])
     return ordered
 
@@ -184,7 +224,7 @@ def _merge_price_intervals(
             PriceForecastInterval(
                 start=start,
                 end=interval.end,
-                value=float(interval.value),
+                value=interval.value,
             )
         )
     return merged

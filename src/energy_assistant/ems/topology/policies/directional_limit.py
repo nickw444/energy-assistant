@@ -5,11 +5,11 @@ import pulp
 from energy_assistant.ems.milp.context import ConstraintSpec
 from energy_assistant.ems.topology.policies.connection_policy import (
     ConnectionBinding,
-    ConnectionPolicy,
 )
+from energy_assistant.ems.topology.policies.passthrough import Passthrough
 
 
-class DirectionalLimit(ConnectionPolicy):
+class DirectionalLimit(Passthrough):
     """Hard directional limit on connection flows (kW), optionally enforcing exclusivity."""
 
     def __init__(
@@ -54,14 +54,14 @@ class DirectionalLimit(ConnectionPolicy):
                 constraints.append(
                     ConstraintSpec(
                         f"limit_{connection.segment_key}_a_to_b_t{t}",
-                        flow_ab[t] <= float(self.max_a_to_b_kw),
+                        flow_ab[t] <= self.max_a_to_b_kw,
                     )
                 )
             if self.max_b_to_a_kw is not None:
                 constraints.append(
                     ConstraintSpec(
                         f"limit_{connection.segment_key}_b_to_a_t{t}",
-                        flow_ba[t] <= float(self.max_b_to_a_kw),
+                        flow_ba[t] <= self.max_b_to_a_kw,
                     )
                 )
 
@@ -71,8 +71,8 @@ class DirectionalLimit(ConnectionPolicy):
                     "exclusive=True requires finite bounds for both directions; "
                     "use numeric max_a_to_b_kw and max_b_to_a_kw"
                 )
-            max_a_to_b_kw = float(self.max_a_to_b_kw)
-            max_b_to_a_kw = float(self.max_b_to_a_kw)
+            max_a_to_b_kw = self.max_a_to_b_kw
+            max_b_to_a_kw = self.max_b_to_a_kw
             for t in connection.horizon.T:
                 constraints.append(
                     ConstraintSpec(
@@ -93,7 +93,6 @@ class DirectionalLimit(ConnectionPolicy):
 def _validate_limit(name: str, value: float | None) -> float | None:
     if value is None:
         return None
-    v = float(value)
-    if v < 0:
-        raise ValueError(f"{name} must be >= 0 or None; got {v}")
-    return v
+    if value < 0:
+        raise ValueError(f"{name} must be >= 0 or None; got {value}")
+    return value

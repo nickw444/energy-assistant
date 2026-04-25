@@ -55,7 +55,7 @@ class PriceSeriesBuilder:
         binding: PriceBindingConfig,
         direction: Literal["import", "export"],
     ) -> list[float]:
-        effective = [float(value) for value in prices]
+        effective = list(prices)
         for filter_config in binding.filters:
             effective = self._apply_filter(
                 horizon=horizon,
@@ -113,19 +113,19 @@ class PriceSeriesBuilder:
     ) -> list[float]:
         effective: list[float] = []
         for t, slot in enumerate(horizon.slots):
-            price = float(prices[t])
+            price = prices[t]
             if t != 0:
                 if direction == "import" and filter_config.import_price_floor is not None:
-                    price = max(price, float(filter_config.import_price_floor))
+                    price = max(price, filter_config.import_price_floor)
                 if direction == "export" and filter_config.export_price_ceiling is not None:
-                    price = min(price, float(filter_config.export_price_ceiling))
+                    price = min(price, filter_config.export_price_ceiling)
             midpoint = slot.start + (slot.end - slot.start) / 2
             minutes_from_now = max(0.0, (midpoint - horizon.now).total_seconds() / 60.0)
             risk_factor = self._risk_factor_minutes(
                 minutes_from_now=minutes_from_now,
                 filter_config=filter_config,
             )
-            bias_pct = float(filter_config.bias_pct) * risk_factor
+            bias_pct = filter_config.bias_pct * risk_factor
             effective.append(self._apply_bias(price, bias_pct, direction=direction))
         return effective
 
@@ -137,8 +137,8 @@ class PriceSeriesBuilder:
     ) -> float:
         if filter_config.bias_pct <= 0:
             return 0.0
-        start = float(filter_config.ramp_start_after_minutes)
-        duration = float(filter_config.ramp_duration_minutes)
+        start = filter_config.ramp_start_after_minutes
+        duration = filter_config.ramp_duration_minutes
         if duration <= 0:
             return 1.0 if minutes_from_now >= start else 0.0
         if minutes_from_now <= start:
@@ -156,7 +156,7 @@ class PriceSeriesBuilder:
         direction: Literal["import", "export"],
     ) -> float:
         if bias_pct == 0:
-            return float(price)
+            return price
         bias = bias_pct / 100.0
         if direction == "import":
             if price >= 0:

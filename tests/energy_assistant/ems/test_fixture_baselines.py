@@ -16,7 +16,10 @@ from energy_assistant.ems.fixtures.harness import (
     resolve_ems_fixture_paths,
     serialize_plan,
 )
+from energy_assistant.ems.inputs.alignment import PowerForecastAligner, PriceForecastAligner
+from energy_assistant.ems.inputs.application import EmsInputApplicator
 from energy_assistant.ems.planner import EmsMilpPlanner
+from energy_assistant.ems.planning.horizon import HorizonFactory
 from energy_assistant.ems.system.factory import EmsSystemFactory
 from energy_assistant.inputs.fixtures import load_fixture_input_provider
 
@@ -82,8 +85,19 @@ def test_fixture_baseline_up_to_date(fixture: str, scenario: str) -> None:
 
     plan = EmsMilpPlanner(
         input_provider=input_provider,
-        system_factory=EmsSystemFactory.create(app_config),
-    ).generate_ems_plan(now=now)
+        horizon_factory=HorizonFactory(
+            timestep_minutes=app_config.ems.timestep_minutes,
+            horizon_minutes=app_config.ems.horizon_minutes,
+            high_res_timestep_minutes=app_config.ems.high_res_timestep_minutes,
+            high_res_horizon_minutes=app_config.ems.high_res_horizon_minutes,
+        ),
+        input_applicator=EmsInputApplicator(
+            input_configs=app_config.inputs,
+            power_aligner=PowerForecastAligner(),
+            price_aligner=PriceForecastAligner(),
+        ),
+        system=EmsSystemFactory.create().build(app_config),
+    ).generate_ems_run(now=now).plan
 
     actual = serialize_plan(plan)
     expected = json.loads(paths.plan_path.read_text())

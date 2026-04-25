@@ -1,27 +1,30 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import ClassVar, Literal, cast
 
 import pulp
 
+from energy_assistant.ems.components.inverter import InverterComponent
 from energy_assistant.ems.inputs.models import AppliedInputRegistry
 from energy_assistant.ems.inputs.transforms import ForecastMultiplier
 from energy_assistant.ems.milp.context import ConstraintSpec, value_of
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
 from energy_assistant.ems.models import PvComponentPlan
-from energy_assistant.ems.parameters import SeriesParameter
 from energy_assistant.ems.planning.horizon import Horizon
 from energy_assistant.ems.series import bool_series, interval_series_points
 from energy_assistant.ems.system.component import EmsComponent
-from energy_assistant.ems.system.topology import ComponentTopology, GraphBuildContext, PlanContext
+from energy_assistant.ems.system.context import GraphBuildContext, PlanContext
+from energy_assistant.ems.system.types import ComponentType
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import GraphElement
+from energy_assistant.ems.topology.ids import NodeId
 from energy_assistant.ems.topology.nodes import Node
 from energy_assistant.ems.topology.policies import (
     ConnectionPolicy,
     DirectionalLimit,
     FixedFlow,
+    Passthrough,
     UpperBound,
 )
 from energy_assistant.ems.topology.policies.connection_policy import (
@@ -29,7 +32,7 @@ from energy_assistant.ems.topology.policies.connection_policy import (
     FlowDirection,
 )
 from energy_assistant.models.inputs import InputValueKind
-from energy_assistant.models.plant import InverterComponentConfig, PvComponentConfig
+from energy_assistant.models.plant import PvComponentConfig
 
 CurtailmentMode = Literal["load-aware", "binary"] | None
 
@@ -43,75 +46,69 @@ class PvSolveState:
 
 
 class PvComponent(EmsComponent[PvSolveState, PvComponentPlan]):
+    component_type: ClassVar[ComponentType] = "pv"
+
     def __init__(
         self,
         *,
         component_id: str,
-        inverter_id: str,
-        inverter: InverterComponentConfig,
+        inverter: InverterComponent,
         pv: PvComponentConfig,
-        dc_bus_id: str,
     ) -> None:
-        self.id = str(component_id)
-        self.inverter_id = str(inverter_id)
-        self.name = str(inverter.name)
-        self.dc_bus_id = str(dc_bus_id)
-        self.peak_power_kw = float(inverter.peak_power_kw)
-        self.curtailment: CurtailmentMode = inverter.curtailment
-        self._pv_cfg = pv
+        self.id = component_id
+        self.inverter = inverter
+        self._config = pv
 
-        self.node_id = self.id
-        self.connection_id = f"{self.id}_link"
+        self.name = inverter.name
+        self.node_id = NodeId(component_id)
 
-        self._available_kw = SeriesParameter[float](f"{self.id}_available_kw")
-
-    def describe_topology(self) -> ComponentTopology:
-        return ComponentTopology(
-            component_id=self.id,
-            component_type="pv",
-            connection_target_id=self.inverter_id,
-        )
-
-    def update_inputs(self, *, horizon: Horizon, inputs: AppliedInputRegistry) -> None:
-        pv_series = inputs.forecast(self._pv_cfg.forecast.key, kind=InputValueKind.POWER)
-        if len(pv_series) != horizon.num_intervals:
-            raise ValueError("PV forecast series length does not match horizon")
-        pv_series = [max(0.0, min(float(v), float(self.peak_power_kw))) for v in pv_series]
-        pv_series = ForecastMultiplier(self._pv_cfg.forecast_multiplier).apply(
-            pv_series,
-            skip_first_slot=False,
-        )
-        self._available_kw.set([float(x) for x in pv_series])
-
-    def build_graph(
+    def _available_kw_from_inputs(
         self,
         *,
         horizon: Horizon,
+        inputs: AppliedInputRegistry,
+    ) -> list[float]:
+        pv_series = inputs.forecast(self._config.forecast.key, kind=InputValueKind.POWER)
+        if len(pv_series) != horizon.num_intervals:
+            raise ValueError("PV forecast series length does not match horizon")
+        pv_series = [max(0.0, min(v, self.inverter.peak_power_kw)) for v in pv_series]
+        pv_series = ForecastMultiplier(self._config.forecast_multiplier).apply(
+            pv_series,
+            skip_first_slot=False,
+        )
+        return list(pv_series)
+
+    def create_graph_elements(
+        self,
+        *,
+        horizon: Horizon,
+        inputs: AppliedInputRegistry,
         build_ctx: GraphBuildContext,
     ) -> tuple[list[GraphElement], PvSolveState]:
         _ = build_ctx
-        available_kw = self._available_kw.get()
+        available_kw = self._available_kw_from_inputs(horizon=horizon, inputs=inputs)
 
         node = Node(
             horizon=horizon,
             id=self.node_id,
-            name=self._pv_cfg.name or f"PV {self.inverter_id}",
+            name=self._config.name or f"PV {self.inverter.id}",
             node_role="producer",
         )
 
         policies: dict[str, ConnectionPolicy] = {
             "directional_limit": DirectionalLimit(
-                max_a_to_b_kw=self.peak_power_kw,
+                max_a_to_b_kw=self.inverter.peak_power_kw,
                 max_b_to_a_kw=0.0,
             )
         }
 
-        if self.curtailment is None:
+        curtailment = cast(CurtailmentMode, self.inverter.curtailment)
+        if curtailment is None:
             policies["fixed_flow"] = (
                 FixedFlow(
                     direction="a_to_b",
                     values_kw=available_kw,
-                    name=f"pv_fixed_{self.inverter_id}",
+                    name=f"pv_fixed_{self.inverter.id}",
                 )
             )
         else:
@@ -119,28 +116,28 @@ class PvComponent(EmsComponent[PvSolveState, PvComponentPlan]):
                 UpperBound(
                     direction="a_to_b",
                     upper_bounds_kw=available_kw,
-                    name=f"pv_ub_{self.inverter_id}",
+                    name=f"pv_ub_{self.inverter.id}",
                 )
             )
             policies["curtail_tracking"] = PvCurtailTracking(
                 direction="a_to_b",
                 available_kw=available_kw,
-                name=f"pv_{self.inverter_id}",
+                name=f"pv_{self.inverter.id}",
             )
 
-            if self.curtailment == "binary":
+            if curtailment == "binary":
                 policies["binary_curtailment"] = (
                     PvBinaryCurtailment(
                         direction="a_to_b",
                         available_kw=available_kw,
-                        name=f"pv_{self.inverter_id}",
+                        name=f"pv_{self.inverter.id}",
                     )
                 )
         connection = Connection(
             horizon=horizon,
-            id=self.connection_id,
+            id=f"{self.id}_link",
             a_node_id=self.node_id,
-            b_node_id=self.dc_bus_id,
+            b_node_id=self.inverter.dc_bus_id,
             policies=policies,
         )
 
@@ -169,7 +166,7 @@ class PvComponent(EmsComponent[PvSolveState, PvComponentPlan]):
         if curtail_tracking is None:
             return None
         v = pulp.value(curtail_tracking.curtail_kw(solve_state.connection).get(t))
-        return None if v is None else float(v)
+        return None if v is None else v
 
     def curtailment_active(
         self,
@@ -181,9 +178,9 @@ class PvComponent(EmsComponent[PvSolveState, PvComponentPlan]):
         curtail_kw = self.curtail_kw(snapshot, t, solve_state=solve_state)
         if curtail_kw is None:
             return None
-        return bool(float(curtail_kw) > _CURTAIL_POWER_THRESHOLD_KW)
+        return bool(curtail_kw > _CURTAIL_POWER_THRESHOLD_KW)
 
-    def build_plan(
+    def extract_plan(
         self,
         snapshot: ModelSnapshot,
         *,
@@ -208,7 +205,7 @@ class PvComponent(EmsComponent[PvSolveState, PvComponentPlan]):
         )
 
 
-class PvCurtailTracking(ConnectionPolicy):
+class PvCurtailTracking(Passthrough):
     """Expose curtailment as a derived nonnegative series: available - actual."""
 
     def __init__(
@@ -219,8 +216,8 @@ class PvCurtailTracking(ConnectionPolicy):
         name: str,
     ) -> None:
         self.direction: FlowDirection = direction
-        self.available_kw = [float(v) for v in available_kw]
-        self.name = str(name)
+        self.available_kw = list(available_kw)
+        self.name = name
         self._curtail_by_connection: dict[str, dict[int, pulp.LpVariable]] = {}
 
     def curtail_kw(self, connection: ConnectionBinding) -> dict[int, pulp.LpVariable]:
@@ -243,13 +240,13 @@ class PvCurtailTracking(ConnectionPolicy):
         return list(self._passthrough_constraints(connection)) + [
             ConstraintSpec(
                 f"pv_curtail_track_{self.name}_{connection.segment_key}_t{t}",
-                curtail[t] == float(self.available_kw[t]) - flow[t],
+                curtail[t] == self.available_kw[t] - flow[t],
             )
             for t in connection.horizon.T
         ]
 
 
-class PvBinaryCurtailment(ConnectionPolicy):
+class PvBinaryCurtailment(Passthrough):
     """Binary curtailment: either produce full available or zero."""
 
     def __init__(
@@ -260,11 +257,11 @@ class PvBinaryCurtailment(ConnectionPolicy):
         name: str,
     ) -> None:
         self.direction: FlowDirection = direction
-        self.available_kw = [float(v) for v in available_kw]
-        self.name = str(name)
+        self.available_kw = list(available_kw)
+        self.name = name
         self._curtail_binary_by_connection: dict[str, dict[int, pulp.LpVariable]] = {}
 
-    def curtail_binary(self, connection: ConnectionBinding) -> dict[int, pulp.LpVariable]:
+    def _curtail_binary(self, connection: ConnectionBinding) -> dict[int, pulp.LpVariable]:
         if connection.id not in self._curtail_binary_by_connection:
             self._curtail_binary_by_connection[connection.id] = pulp.LpVariable.dicts(
                 f"Curtail_{self.name}_{connection.id}",
@@ -282,11 +279,11 @@ class PvBinaryCurtailment(ConnectionPolicy):
                 f"connection {connection.id!r} horizon length {len(connection.horizon.T)}"
             )
         flow = connection.flow_in_ab if self.direction == "a_to_b" else connection.flow_in_ba
-        curtail = self.curtail_binary(connection)
+        curtail = self._curtail_binary(connection)
         return list(self._passthrough_constraints(connection)) + [
             ConstraintSpec(
                 f"pv_binary_{self.name}_{connection.segment_key}_t{t}",
-                flow[t] == float(self.available_kw[t]) * (1 - curtail[t]),
+                flow[t] == self.available_kw[t] * (1 - curtail[t]),
             )
             for t in connection.horizon.T
         ]

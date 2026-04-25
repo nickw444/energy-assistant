@@ -5,12 +5,12 @@ from collections.abc import Sequence
 from energy_assistant.ems.milp.context import ConstraintSpec
 from energy_assistant.ems.topology.policies.connection_policy import (
     ConnectionBinding,
-    ConnectionPolicy,
     FlowDirection,
 )
+from energy_assistant.ems.topology.policies.passthrough import Passthrough
 
 
-class UpperBound(ConnectionPolicy):
+class UpperBound(Passthrough):
     """Per-slot upper bound on one directional flow (kW)."""
 
     def __init__(
@@ -21,8 +21,8 @@ class UpperBound(ConnectionPolicy):
         name: str,
     ) -> None:
         self.direction: FlowDirection = direction
-        self.upper_bounds_kw = [float(v) for v in upper_bounds_kw]
-        self.name = str(name)
+        self.upper_bounds_kw = list(upper_bounds_kw)
+        self.name = name
 
     def constraints(self, connection: ConnectionBinding) -> list[ConstraintSpec]:
         ub = _series_for_connection(self.upper_bounds_kw, connection, name=self.name)
@@ -33,7 +33,7 @@ class UpperBound(ConnectionPolicy):
             constraints.append(
                 ConstraintSpec(
                     f"ub_{self.name}_{connection.segment_key}_{self.direction}_t{t}",
-                    flow[t] <= float(ub[t]),
+                    flow[t] <= ub[t],
                 )
             )
         return list(constraints)

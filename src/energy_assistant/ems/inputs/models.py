@@ -6,9 +6,9 @@ from energy_assistant.models.inputs import InputValueKind
 
 class AppliedForecastInput:
     def __init__(self, *, key: str, kind: InputValueKind, series: list[float]) -> None:
-        self.key = str(key)
+        self.key = key
         self.kind = kind
-        self.series = [float(value) for value in series]
+        self.series = list(series)
 
 
 class AppliedInputRegistry:
@@ -35,7 +35,7 @@ class AppliedInputRegistry:
         value = self.scalar(key, kind=kind)
         if isinstance(value, bool):
             raise ValueError(f"Scalar input {key} is boolean, not numeric")
-        return float(value)
+        return value
 
     def scalar_bool(self, key: str) -> bool:
         value = self.scalar(key, kind=InputValueKind.BOOLEAN)

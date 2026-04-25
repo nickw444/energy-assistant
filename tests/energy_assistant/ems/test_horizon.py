@@ -2,12 +2,33 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from energy_assistant.ems.planning.horizon import build_horizon, build_horizon_shape
+from energy_assistant.ems.planning.horizon import Horizon, HorizonFactory
 
 
-def test_build_horizon_with_interval_schedule() -> None:
+def _make_horizon(
+    *,
+    now: datetime,
+    timestep_minutes: int,
+    num_intervals: int | None = None,
+    high_res_timestep_minutes: int | None = None,
+    high_res_horizon_minutes: int | None = None,
+    total_minutes: int | None = None,
+) -> Horizon:
+    if total_minutes is None:
+        if num_intervals is None:
+            raise ValueError("num_intervals or total_minutes is required")
+        total_minutes = timestep_minutes * num_intervals
+    return HorizonFactory(
+        timestep_minutes=timestep_minutes,
+        horizon_minutes=total_minutes,
+        high_res_timestep_minutes=high_res_timestep_minutes,
+        high_res_horizon_minutes=high_res_horizon_minutes,
+    ).build(now=now)
+
+
+def test_horizon_factory_with_interval_schedule() -> None:
     now = datetime(2025, 12, 27, 0, 0, tzinfo=UTC)
-    horizon = build_horizon(
+    horizon = _make_horizon(
         now=now,
         timestep_minutes=30,
         high_res_timestep_minutes=5,
@@ -21,9 +42,9 @@ def test_build_horizon_with_interval_schedule() -> None:
     assert horizon.slots[-1].end == now + timedelta(minutes=70)
 
 
-def test_build_horizon_allows_partial_final_slot() -> None:
+def test_horizon_factory_allows_partial_final_slot() -> None:
     now = datetime(2025, 12, 27, 0, 0, tzinfo=UTC)
-    horizon = build_horizon(
+    horizon = _make_horizon(
         now=now,
         timestep_minutes=30,
         high_res_timestep_minutes=5,
@@ -38,7 +59,7 @@ def test_build_horizon_allows_partial_final_slot() -> None:
 
 def test_schedule_alignment_uses_interval_boundaries() -> None:
     now = datetime(2025, 12, 27, 3, 55, tzinfo=UTC)
-    horizon = build_horizon(
+    horizon = _make_horizon(
         now=now,
         timestep_minutes=30,
         high_res_timestep_minutes=5,
@@ -54,7 +75,7 @@ def test_schedule_alignment_uses_interval_boundaries() -> None:
 
 def test_high_res_window_snaps_forward_to_interval_boundary() -> None:
     now = datetime(2025, 12, 27, 3, 55, tzinfo=UTC)
-    horizon = build_horizon(
+    horizon = _make_horizon(
         now=now,
         timestep_minutes=30,
         high_res_timestep_minutes=5,
@@ -72,7 +93,7 @@ def test_high_res_window_snaps_forward_to_interval_boundary() -> None:
 
 def test_high_res_window_can_be_entire_horizon() -> None:
     now = datetime(2025, 12, 27, 0, 0, tzinfo=UTC)
-    horizon = build_horizon(
+    horizon = _make_horizon(
         now=now,
         timestep_minutes=30,
         high_res_timestep_minutes=5,
@@ -87,7 +108,7 @@ def test_high_res_window_can_be_entire_horizon() -> None:
 
 def test_high_res_window_clamps_to_total_minutes() -> None:
     now = datetime(2025, 12, 27, 0, 0, tzinfo=UTC)
-    horizon = build_horizon(
+    horizon = _make_horizon(
         now=now,
         timestep_minutes=30,
         high_res_timestep_minutes=5,
@@ -102,7 +123,7 @@ def test_high_res_window_clamps_to_total_minutes() -> None:
 
 def test_high_res_start_floors_to_high_res_boundary() -> None:
     now = datetime(2025, 12, 27, 3, 29, tzinfo=UTC)
-    horizon = build_horizon(
+    horizon = _make_horizon(
         now=now,
         timestep_minutes=30,
         high_res_timestep_minutes=5,
@@ -116,7 +137,7 @@ def test_high_res_start_floors_to_high_res_boundary() -> None:
 
 def test_default_horizon_uses_single_resolution() -> None:
     now = datetime(2025, 12, 27, 0, 2, tzinfo=UTC)
-    horizon = build_horizon(
+    horizon = _make_horizon(
         now=now,
         timestep_minutes=15,
         num_intervals=4,
@@ -127,16 +148,16 @@ def test_default_horizon_uses_single_resolution() -> None:
     assert horizon.start.minute == 0
 
 
-def test_horizon_shape_uses_configured_total_minutes() -> None:
+def test_horizon_factory_uses_configured_total_minutes() -> None:
     now = datetime(2025, 12, 27, 3, 55, tzinfo=UTC)
-    shape = build_horizon_shape(
+    factory = HorizonFactory(
         timestep_minutes=30,
         horizon_minutes=80,
         high_res_timestep_minutes=5,
         high_res_horizon_minutes=20,
     )
 
-    horizon = shape.build(now=now)
+    horizon = factory.build(now=now)
 
     assert horizon.start.minute == 55
     assert horizon.slots[-1].end == horizon.start + timedelta(minutes=80)

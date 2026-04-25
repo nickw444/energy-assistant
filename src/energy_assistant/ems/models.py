@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import StrEnum
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.functional_serializers import PlainSerializer
+
+from energy_assistant.ems.series_types import EmsSeriesPoint
 
 Rounded3 = Annotated[
     float,
@@ -38,33 +39,9 @@ class EmsPlanTimings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class EmsSeriesPoint(BaseModel):
-    time: datetime
-    value: float | bool
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class PlanIntentMode(StrEnum):
-    BACKUP = "Back-up"
-    FORCE_CHARGE = "Force Charge"
-    FORCE_DISCHARGE = "Force Discharge"
-    EXPORT_PRIORITY = "Export Priority"
-    SELF_USE = "Self Use"
-
-
-class InverterIntent(BaseModel):
-    mode: PlanIntentMode
-    export_limit_kw: Rounded3
-    force_charge_kw: Rounded3
-    force_discharge_kw: Rounded3
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class LoadControlledEvIntent(BaseModel):
-    charge_kw: Rounded3
-    charge_on: bool
+class BaseLoadComponentPlan(BaseModel):
+    type: Literal["load"] = "load"
+    power_kw: list[EmsSeriesPoint]
 
     model_config = ConfigDict(extra="forbid")
 
@@ -89,17 +66,9 @@ class GridComponentPlan(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class LoadComponentPlan(BaseModel):
-    type: Literal["load"] = "load"
-    power_kw: list[EmsSeriesPoint]
-
-    model_config = ConfigDict(extra="forbid")
-
-
 class InverterComponentPlan(BaseModel):
     type: Literal["inverter"] = "inverter"
     ac_net_kw: list[EmsSeriesPoint]
-    intent: InverterIntent
 
     model_config = ConfigDict(extra="forbid")
 
@@ -131,7 +100,6 @@ class LoadControlledEvComponentPlan(BaseModel):
     soc_pct: list[EmsSeriesPoint]
     connected: list[EmsSeriesPoint]
     charge_allowed: list[EmsSeriesPoint]
-    intent: LoadControlledEvIntent
 
     model_config = ConfigDict(extra="forbid")
 
@@ -139,13 +107,16 @@ class LoadControlledEvComponentPlan(BaseModel):
 ComponentPlan = Annotated[
     SwitchboardComponentPlan
     | GridComponentPlan
-    | LoadComponentPlan
+    | BaseLoadComponentPlan
     | InverterComponentPlan
     | PvComponentPlan
     | BatteryComponentPlan
     | LoadControlledEvComponentPlan,
     Field(discriminator="type"),
 ]
+
+
+LoadComponentPlan = BaseLoadComponentPlan
 
 
 class EmsPlanOutput(BaseModel):

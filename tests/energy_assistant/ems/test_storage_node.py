@@ -7,9 +7,10 @@ import pytest
 
 from energy_assistant.ems.milp.context import ModelContext, value_of
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
-from energy_assistant.ems.planning.horizon import build_horizon
+from energy_assistant.ems.planning.horizon import HorizonFactory
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import EnergyGraph
+from energy_assistant.ems.topology.ids import NodeId
 from energy_assistant.ems.topology.nodes import Node, StorageNode
 from energy_assistant.ems.topology.policies import (
     DirectionalEfficiency,
@@ -20,17 +21,19 @@ from energy_assistant.ems.topology.policies import (
 
 def test_storage_soc_dynamics_applies_efficiency() -> None:
     now = datetime(2026, 1, 1, tzinfo=UTC)
-    horizon = build_horizon(now=now, timestep_minutes=60, num_intervals=2)
+    horizon = HorizonFactory(timestep_minutes=60, horizon_minutes=120).build(now=now)
 
     soc0 = 2.0
     charge_kw = [1.0, 0.0]
     discharge_kw = [0.0, 1.0]
 
     graph = EnergyGraph()
-    graph.add_element(Node(horizon=horizon, id="p", name="Port", node_role="prosumer"))
+    graph.add_element(
+        Node(horizon=horizon, id=NodeId("p"), name="Port", node_role="prosumer")
+    )
     node = StorageNode(
         horizon=horizon,
-        id="bat",
+        id=NodeId("bat"),
         name="Battery",
         capacity_kwh=10.0,
         soc_min_kwh=0.0,
@@ -42,8 +45,8 @@ def test_storage_soc_dynamics_applies_efficiency() -> None:
         Connection(
             horizon=horizon,
             id="link",
-            a_node_id="p",
-            b_node_id="bat",
+            a_node_id=NodeId("p"),
+            b_node_id=NodeId("bat"),
             policies={
                 "directional_limit": DirectionalLimit(max_a_to_b_kw=10.0, max_b_to_a_kw=10.0),
                 "fixed_charge_flow": FixedFlow(

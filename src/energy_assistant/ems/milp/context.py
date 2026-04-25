@@ -13,7 +13,7 @@ class ConstraintSpec:
     """
 
     def __init__(self, name: str, constraint: pulp.LpConstraint) -> None:
-        self.name = str(name)
+        self.name = name
         self.constraint = constraint
 
 

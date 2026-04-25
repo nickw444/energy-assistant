@@ -11,7 +11,10 @@ from fastapi import Depends, FastAPI
 
 from energy_assistant.api.dependencies import GlobalDependencies, get_config
 from energy_assistant.api.server import create_app
+from energy_assistant.ems.inputs.alignment import PowerForecastAligner, PriceForecastAligner
+from energy_assistant.ems.inputs.application import EmsInputApplicator
 from energy_assistant.ems.planner import EmsMilpPlanner
+from energy_assistant.ems.planning.horizon import HorizonFactory
 from energy_assistant.ems.system.factory import EmsSystemFactory
 from energy_assistant.inputs.fixtures import load_fixture_input_provider
 from energy_assistant.models.config import AppConfig
@@ -45,8 +48,19 @@ def _build_fixture_plan(config: AppConfig) -> object:
     now = datetime.fromisoformat(captured_at) if captured_at else None
     return EmsMilpPlanner(
         input_provider=input_provider,
-        system_factory=EmsSystemFactory.create(config),
-    ).generate_ems_plan(now=now)
+        horizon_factory=HorizonFactory(
+            timestep_minutes=config.ems.timestep_minutes,
+            horizon_minutes=config.ems.horizon_minutes,
+            high_res_timestep_minutes=config.ems.high_res_timestep_minutes,
+            high_res_horizon_minutes=config.ems.high_res_horizon_minutes,
+        ),
+        input_applicator=EmsInputApplicator(
+            input_configs=config.inputs,
+            power_aligner=PowerForecastAligner(),
+            price_aligner=PriceForecastAligner(),
+        ),
+        system=EmsSystemFactory.create().build(config),
+    ).generate_ems_run(now=now).plan
 
 
 def test_create_app_sets_global_dependencies(tmp_path: Path) -> None:
@@ -110,7 +124,7 @@ async def test_plan_run_uses_injected_worker(tmp_path: Path) -> None:
     worker.trigger_run.assert_awaited_once_with()
 
 
-async def test_plan_latest_returns_component_local_intent(tmp_path: Path) -> None:
+async def test_plan_latest_returns_series_only_components(tmp_path: Path) -> None:
     config = _load_fixture_config(tmp_path)
     worker = _make_worker_mock()
     plan = _build_fixture_plan(config)
@@ -132,11 +146,10 @@ async def test_plan_latest_returns_component_local_intent(tmp_path: Path) -> Non
 
     assert resp.status_code == 200
     payload = resp.json()
-    assert "intent" not in payload
     assert payload["plan"]["components"]["primary"]["type"] == "inverter"
-    assert payload["plan"]["components"]["primary"]["intent"]["mode"] is not None
+    assert "intent" not in payload["plan"]["components"]["primary"]
     assert payload["plan"]["components"]["tessie"]["type"] == "load_controlled_ev"
-    assert payload["plan"]["components"]["tessie"]["intent"]["charge_on"] in {True, False}
+    assert "intent" not in payload["plan"]["components"]["tessie"]
 
 
 async def test_missing_global_dependencies_returns_500() -> None:

@@ -1,26 +1,7 @@
-## Worker (Background Planning)
+## Worker
 
-Scope: `src/energy_assistant/worker/`.
-Assumes repo-wide conventions in the repo-root `AGENTS.md`.
+Keep worker code independent of FastAPI; the API should observe worker state through
+dependency wiring.
 
-What it does:
-- Runs EMS planning on a fallback schedule (every minute).
-- Reacts to Home Assistant price entity updates via WebSocket subscriptions with a short debounce (0.75s) to coalesce rapid import/export updates.
-- Keeps the latest plan and run state in memory for the API to serve.
-
-Key files:
-- `src/energy_assistant/worker/service.py` implements `Worker`.
-- `src/energy_assistant/lib/home_assistant_ws.py` implements a reconnecting HA WebSocket subscription client.
-- `src/energy_assistant/lib/source_resolver/` hydrates and resolves HA sources used by planning.
-
-Design rules:
-- Keep dependencies explicit. The CLI constructs a planner and watched price-entity set, then passes `Worker(planner=..., price_entity_ids=..., ha_ws_client=...)` into the API.
-- Do not couple worker code to FastAPI. The API reads worker state via `energy_assistant.api.dependencies.get_worker` (backed by `app.state.dependencies`).
-- Be careful with concurrency and superseding runs. Price-change triggers may start a new run while another is in progress; stale results must not publish as the latest plan.
-
-Testing:
-- Worker tests live under `tests/energy_assistant/worker/`.
-
-## Continuous learning
-- Update this file when the worker's triggering model, concurrency/cancellation semantics, or dependency boundaries change.
-- Document implementation quirks as comments in `src/energy_assistant/worker/service.py` rather than adding more bullets here.
+Concurrency and superseding-run semantics are part of the worker contract. Document
+non-obvious state transitions beside the implementation.

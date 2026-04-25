@@ -175,20 +175,6 @@ def component_series_getter(
     return _get
 
 
-def component_intent_value_getter(
-    component_id: str,
-    attribute: str,
-) -> Callable[[PlanLatestResponse], Any]:
-    def _get(response: PlanLatestResponse) -> Any:
-        component = response.plan.components.get(component_id)
-        intent = getattr(component, "intent", None)
-        if intent is None:
-            return None
-        return getattr(intent, attribute, None)
-
-    return _get
-
-
 def components_of_type[T: ComponentPlan](
     plan: EmsPlanOutput,
     model: type[T],

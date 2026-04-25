@@ -24,15 +24,17 @@ from energy_assistant.ems.fixtures.harness import (
     resolve_ems_fixture_paths,
     serialize_plan,
 )
+from energy_assistant.ems.inputs.alignment import PowerForecastAligner, PriceForecastAligner
+from energy_assistant.ems.inputs.application import EmsInputApplicator
 from energy_assistant.ems.models import GridComponentPlan
 from energy_assistant.ems.planner import EmsMilpPlanner
+from energy_assistant.ems.planning.horizon import HorizonFactory
 from energy_assistant.ems.system.factory import EmsSystemFactory
 from energy_assistant.inputs.fixtures import (
     load_fixture_input_provider,
     save_resolved_inputs_fixture,
 )
 from energy_assistant.inputs.provider import ResolverBackedInputProvider
-from energy_assistant.inputs.registry import ResolvedInputRegistry
 from energy_assistant.inputs.window import InputWindow
 from energy_assistant.lib.home_assistant import HomeAssistantClient
 from energy_assistant.lib.home_assistant_ws import HomeAssistantWebSocketClientImpl
@@ -82,52 +84,6 @@ def _parse_fixture_scenario(
     return fixture, scenario
 
 
-def _resolve_input_registry_for_capture(
-    *,
-    app_config: AppConfig,
-    input_provider: ResolverBackedInputProvider,
-    captured_at: datetime,
-) -> ResolvedInputRegistry:
-    with freeze_hass_source_time(captured_at):
-        horizon = EmsSystemFactory.create(app_config).horizon_shape.build(now=captured_at)
-        window = InputWindow(now=horizon.now, end=horizon.slots[-1].end)
-        return input_provider.resolve_for_window(window=window)
-
-
-def _build_live_input_provider(
-    app_config: AppConfig,
-) -> tuple[ResolverBackedInputProvider, HomeAssistantClient]:
-    hass_client = HomeAssistantClient(config=app_config.homeassistant)
-    hass_data_provider = HassDataProviderImpl(hass_client=hass_client)
-    resolver = ValueResolverImpl(hass_data_provider=hass_data_provider)
-    return (
-        ResolverBackedInputProvider(app_config=app_config, resolver=resolver),
-        hass_client,
-    )
-
-
-def _build_live_planner(
-    app_config: AppConfig,
-) -> tuple[EmsMilpPlanner, ResolverBackedInputProvider, HomeAssistantClient]:
-    input_provider, hass_client = _build_live_input_provider(app_config)
-    planner = EmsMilpPlanner(
-        input_provider=input_provider,
-        system_factory=EmsSystemFactory.create(app_config),
-    )
-    return planner, input_provider, hass_client
-
-
-def _build_worker(app_config: AppConfig) -> tuple[Worker, HomeAssistantClient]:
-    planner, input_provider, hass_client = _build_live_planner(app_config)
-    ha_ws_client = HomeAssistantWebSocketClientImpl(config=app_config.homeassistant)
-    worker = Worker(
-        planner=planner,
-        price_entity_ids=input_provider.grid_price_watch_entity_ids(),
-        ha_ws_client=ha_ws_client,
-    )
-    return worker, hass_client
-
-
 def _common_options[**P, R](func: Callable[P, R]) -> Callable[P, R]:
     func = click.option(
         "--config",
@@ -160,7 +116,34 @@ def cli(ctx: click.Context, config: Path | None, log_level: str) -> int | None:
 
     app_config = load_app_config(config)
 
-    worker, _hass_client = _build_worker(app_config)
+    hass_data_provider = HassDataProviderImpl(
+        hass_client=HomeAssistantClient(config=app_config.homeassistant)
+    )
+    resolver = ValueResolverImpl(hass_data_provider=hass_data_provider)
+    input_provider = ResolverBackedInputProvider(
+        app_config=app_config,
+        resolver=resolver,
+    )
+    system = EmsSystemFactory.create().build(app_config)
+    worker = Worker(
+        planner=EmsMilpPlanner(
+            input_provider=input_provider,
+            horizon_factory=HorizonFactory(
+                timestep_minutes=app_config.ems.timestep_minutes,
+                horizon_minutes=app_config.ems.horizon_minutes,
+                high_res_timestep_minutes=app_config.ems.high_res_timestep_minutes,
+                high_res_horizon_minutes=app_config.ems.high_res_horizon_minutes,
+            ),
+            input_applicator=EmsInputApplicator(
+                input_configs=app_config.inputs,
+                power_aligner=PowerForecastAligner(),
+                price_aligner=PriceForecastAligner(),
+            ),
+            system=system,
+        ),
+        price_entity_ids=input_provider.grid_price_watch_entity_ids(),
+        ha_ws_client=HomeAssistantWebSocketClientImpl(config=app_config.homeassistant),
+    )
     shutdown_event = Event()
 
     def _handle_signal(signum: int, _frame: object) -> None:
@@ -302,25 +285,60 @@ def ems_solve(
                 raise click.ClickException("Fixture paths not resolved.")
             input_provider, captured_at = load_fixture_input_provider(path=paths.fixture_path)
             now = datetime.fromisoformat(captured_at) if captured_at else None
+            system = EmsSystemFactory.create().build(app_config)
             planner = EmsMilpPlanner(
                 input_provider=input_provider,
-                system_factory=EmsSystemFactory.create(app_config),
+                horizon_factory=HorizonFactory(
+                    timestep_minutes=app_config.ems.timestep_minutes,
+                    horizon_minutes=app_config.ems.horizon_minutes,
+                    high_res_timestep_minutes=app_config.ems.high_res_timestep_minutes,
+                    high_res_horizon_minutes=app_config.ems.high_res_horizon_minutes,
+                ),
+                input_applicator=EmsInputApplicator(
+                    input_configs=app_config.inputs,
+                    power_aligner=PowerForecastAligner(),
+                    price_aligner=PriceForecastAligner(),
+                ),
+                system=system,
             )
 
             click.echo("Solving EMS MILP (fixture replay)...")
-            plan = planner.generate_ems_plan(
+            plan = planner.generate_ems_run(
                 now=now,
                 solver_msg=solver_msg,
-            )
+            ).plan
         else:
-            planner, input_provider, _hass_client = _build_live_planner(app_config)
+            hass_data_provider = HassDataProviderImpl(
+                hass_client=HomeAssistantClient(config=app_config.homeassistant)
+            )
+            resolver = ValueResolverImpl(hass_data_provider=hass_data_provider)
+            input_provider = ResolverBackedInputProvider(
+                app_config=app_config,
+                resolver=resolver,
+            )
+            system = EmsSystemFactory.create().build(app_config)
+            planner = EmsMilpPlanner(
+                input_provider=input_provider,
+                horizon_factory=HorizonFactory(
+                    timestep_minutes=app_config.ems.timestep_minutes,
+                    horizon_minutes=app_config.ems.horizon_minutes,
+                    high_res_timestep_minutes=app_config.ems.high_res_timestep_minutes,
+                    high_res_horizon_minutes=app_config.ems.high_res_horizon_minutes,
+                ),
+                input_applicator=EmsInputApplicator(
+                    input_configs=app_config.inputs,
+                    power_aligner=PowerForecastAligner(),
+                    price_aligner=PriceForecastAligner(),
+                ),
+                system=system,
+            )
             planner.mark_for_hydration()
             planner.hydrate_all()
 
             click.echo("Solving EMS MILP...")
-            plan = planner.generate_ems_plan(
+            plan = planner.generate_ems_run(
                 solver_msg=solver_msg,
-            )
+            ).plan
         grid_component = plan.components.get("grid")
         interval_count = (
             len(grid_component.import_kw) if isinstance(grid_component, GridComponentPlan) else 0
@@ -408,16 +426,44 @@ def ems_record_scenario(
     config_write_path = paths.config_path
 
     try:
-        planner, input_provider, _hass_client = _build_live_planner(app_config)
+        hass_data_provider = HassDataProviderImpl(
+            hass_client=HomeAssistantClient(config=app_config.homeassistant)
+        )
+        resolver = ValueResolverImpl(hass_data_provider=hass_data_provider)
+        input_provider = ResolverBackedInputProvider(
+            app_config=app_config,
+            resolver=resolver,
+        )
+        system = EmsSystemFactory.create().build(app_config)
+        planner = EmsMilpPlanner(
+            input_provider=input_provider,
+            horizon_factory=HorizonFactory(
+                timestep_minutes=app_config.ems.timestep_minutes,
+                horizon_minutes=app_config.ems.horizon_minutes,
+                high_res_timestep_minutes=app_config.ems.high_res_timestep_minutes,
+                high_res_horizon_minutes=app_config.ems.high_res_horizon_minutes,
+            ),
+            input_applicator=EmsInputApplicator(
+                input_configs=app_config.inputs,
+                power_aligner=PowerForecastAligner(),
+                price_aligner=PriceForecastAligner(),
+            ),
+            system=system,
+        )
         planner.mark_for_hydration()
         planner.hydrate_all()
 
         captured_at = datetime.now().astimezone()
-        registry = _resolve_input_registry_for_capture(
-            app_config=app_config,
-            input_provider=input_provider,
-            captured_at=captured_at,
-        )
+        with freeze_hass_source_time(captured_at):
+            horizon = HorizonFactory(
+                timestep_minutes=app_config.ems.timestep_minutes,
+                horizon_minutes=app_config.ems.horizon_minutes,
+                high_res_timestep_minutes=app_config.ems.high_res_timestep_minutes,
+                high_res_horizon_minutes=app_config.ems.high_res_horizon_minutes,
+            ).build(now=captured_at)
+            registry = input_provider.resolve_for_window(
+                window=InputWindow(now=horizon.now, end=horizon.slots[-1].end)
+            )
         save_resolved_inputs_fixture(
             path=paths.fixture_path,
             captured_at=captured_at.isoformat(),
@@ -434,9 +480,21 @@ def ems_record_scenario(
 
         if write_plan:
             fixture_input_provider, _ = load_fixture_input_provider(path=paths.fixture_path)
+            system = EmsSystemFactory.create().build(app_config)
             fixture_planner = EmsMilpPlanner(
                 input_provider=fixture_input_provider,
-                system_factory=EmsSystemFactory.create(app_config),
+                horizon_factory=HorizonFactory(
+                    timestep_minutes=app_config.ems.timestep_minutes,
+                    horizon_minutes=app_config.ems.horizon_minutes,
+                    high_res_timestep_minutes=app_config.ems.high_res_timestep_minutes,
+                    high_res_horizon_minutes=app_config.ems.high_res_horizon_minutes,
+                ),
+                input_applicator=EmsInputApplicator(
+                    input_configs=app_config.inputs,
+                    power_aligner=PowerForecastAligner(),
+                    price_aligner=PriceForecastAligner(),
+                ),
+                system=system,
             )
             run = fixture_planner.generate_ems_run(
                 now=captured_at,
@@ -552,9 +610,21 @@ def _refresh_baseline_bundle(
     app_config = load_app_config(paths.config_path)
     input_provider, captured_at = load_fixture_input_provider(path=paths.fixture_path)
     now = datetime.fromisoformat(captured_at) if captured_at else None
+    system = EmsSystemFactory.create().build(app_config)
     planner = EmsMilpPlanner(
         input_provider=input_provider,
-        system_factory=EmsSystemFactory.create(app_config),
+        horizon_factory=HorizonFactory(
+            timestep_minutes=app_config.ems.timestep_minutes,
+            horizon_minutes=app_config.ems.horizon_minutes,
+            high_res_timestep_minutes=app_config.ems.high_res_timestep_minutes,
+            high_res_horizon_minutes=app_config.ems.high_res_horizon_minutes,
+        ),
+        input_applicator=EmsInputApplicator(
+            input_configs=app_config.inputs,
+            power_aligner=PowerForecastAligner(),
+            price_aligner=PriceForecastAligner(),
+        ),
+        system=system,
     )
     run = planner.generate_ems_run(
         now=now,
@@ -685,14 +755,26 @@ def ems_scenario_report(
             app_config = load_app_config(paths.config_path)
             input_provider, captured_at = load_fixture_input_provider(path=paths.fixture_path)
             now = datetime.fromisoformat(captured_at) if captured_at else None
+            system = EmsSystemFactory.create().build(app_config)
             planner = EmsMilpPlanner(
                 input_provider=input_provider,
-                system_factory=EmsSystemFactory.create(app_config),
+                horizon_factory=HorizonFactory(
+                    timestep_minutes=app_config.ems.timestep_minutes,
+                    horizon_minutes=app_config.ems.horizon_minutes,
+                    high_res_timestep_minutes=app_config.ems.high_res_timestep_minutes,
+                    high_res_horizon_minutes=app_config.ems.high_res_horizon_minutes,
+                ),
+                input_applicator=EmsInputApplicator(
+                    input_configs=app_config.inputs,
+                    power_aligner=PowerForecastAligner(),
+                    price_aligner=PriceForecastAligner(),
+                ),
+                system=system,
             )
-            plan = planner.generate_ems_plan(
+            plan = planner.generate_ems_run(
                 now=now,
                 solver_msg=solver_msg,
-            )
+            ).plan
             results.append(ScenarioPlot(name=label, plan=plan))
         except Exception:
             results.append(ScenarioPlot(name=label, error=traceback.format_exc()))
@@ -730,15 +812,30 @@ def hydrate_load_forecast(ctx: click.Context, limit: int) -> None:
     app_config = load_app_config(ctx.obj.get("config"))
 
     try:
-        _planner, input_provider, _hass_client = _build_live_planner(app_config)
+        hass_data_provider = HassDataProviderImpl(
+            hass_client=HomeAssistantClient(config=app_config.homeassistant)
+        )
+        resolver = ValueResolverImpl(hass_data_provider=hass_data_provider)
+        input_provider = ResolverBackedInputProvider(
+            app_config=app_config,
+            resolver=resolver,
+        )
         input_provider.mark_for_hydration()
         input_provider.hydrate_all()
-        system_factory = EmsSystemFactory.create(app_config)
-        horizon = system_factory.horizon_shape.build(now=datetime.now().astimezone())
+        horizon = HorizonFactory(
+            timestep_minutes=app_config.ems.timestep_minutes,
+            horizon_minutes=app_config.ems.horizon_minutes,
+            high_res_timestep_minutes=app_config.ems.high_res_timestep_minutes,
+            high_res_horizon_minutes=app_config.ems.high_res_horizon_minutes,
+        ).build(now=datetime.now().astimezone())
         resolved = input_provider.resolve_for_window(
             window=InputWindow(now=horizon.now, end=horizon.slots[-1].end)
         )
-        applied = system_factory.input_applicator.apply_to_horizon(
+        applied = EmsInputApplicator(
+            input_configs=app_config.inputs,
+            power_aligner=PowerForecastAligner(),
+            price_aligner=PriceForecastAligner(),
+        ).apply_to_horizon(
             horizon=horizon,
             inputs=resolved,
         )

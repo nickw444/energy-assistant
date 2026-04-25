@@ -1,35 +1,36 @@
 from __future__ import annotations
 
+from typing import ClassVar
+
 from energy_assistant.ems.inputs.models import AppliedInputRegistry
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
 from energy_assistant.ems.models import SwitchboardComponentPlan
 from energy_assistant.ems.planning.horizon import Horizon
 from energy_assistant.ems.system.component import EmsComponent
-from energy_assistant.ems.system.topology import ComponentTopology, GraphBuildContext, PlanContext
+from energy_assistant.ems.system.context import GraphBuildContext, PlanContext
+from energy_assistant.ems.system.types import ComponentType
 from energy_assistant.ems.topology.graph import GraphElement
+from energy_assistant.ems.topology.ids import NodeId
 from energy_assistant.ems.topology.nodes import Node
 
 
 class SwitchboardComponent(EmsComponent[None, SwitchboardComponentPlan]):
     """AC bus representing the main switchboard."""
 
+    component_type: ClassVar[ComponentType] = "switchboard"
+
     def __init__(self, *, component_id: str) -> None:
-        self.id = str(component_id)
-        self.bus_id = self.id
+        self.id = component_id
+        self.bus_id = NodeId(component_id)
 
-    def describe_topology(self) -> ComponentTopology:
-        return ComponentTopology(component_id=self.id, component_type="switchboard")
-
-    def update_inputs(self, *, horizon: Horizon, inputs: AppliedInputRegistry) -> None:
-        _ = horizon, inputs
-
-    def build_graph(
+    def create_graph_elements(
         self,
         *,
         horizon: Horizon,
+        inputs: AppliedInputRegistry,
         build_ctx: GraphBuildContext,
     ) -> tuple[list[GraphElement], None]:
-        _ = build_ctx
+        _ = inputs, build_ctx
         bus = Node(
             horizon=horizon,
             id=self.bus_id,
@@ -38,7 +39,7 @@ class SwitchboardComponent(EmsComponent[None, SwitchboardComponentPlan]):
         )
         return [bus], None
 
-    def build_plan(
+    def extract_plan(
         self,
         snapshot: ModelSnapshot,
         *,

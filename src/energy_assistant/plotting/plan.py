@@ -10,12 +10,12 @@ from pathlib import Path
 from typing import Any
 
 from energy_assistant.ems.models import (
+    BaseLoadComponentPlan,
     BatteryComponentPlan,
     EmsPlanOutput,
     EmsSeriesPoint,
     GridComponentPlan,
     InverterComponentPlan,
-    LoadComponentPlan,
     LoadControlledEvComponentPlan,
     PvComponentPlan,
 )
@@ -43,9 +43,6 @@ COLORS = {
     "price_export_risk": "rgba(233, 30, 99, 0.35)",
     "curtailment_fill": "rgba(255, 193, 7, 0.12)",
 }
-
-_CURTAILMENT_THRESHOLD_KW = 0.01
-
 
 @dataclass(frozen=True, slots=True)
 class ScenarioPlot:
@@ -88,7 +85,7 @@ def _build_plan_figure(
     time_labels = times[:-1]
 
     grid_net = _float_series(grid.net_kw)
-    load_component = _single_component(plan, "load", LoadComponentPlan, optional=True)
+    load_component = _single_component(plan, "load", BaseLoadComponentPlan, optional=True)
     load_kw = _float_series(load_component.power_kw) if load_component is not None else [0.0] * len(
         interval_points
     )
@@ -967,7 +964,7 @@ def _component_interval_series(component: object) -> list[list[EmsSeriesPoint]]:
             component.export_kw,
             component.net_kw,
         ]
-    if isinstance(component, LoadComponentPlan):
+    if isinstance(component, BaseLoadComponentPlan):
         return [component.power_kw]
     if isinstance(component, InverterComponentPlan):
         return [component.ac_net_kw]

@@ -1,17 +1,25 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import cast
 
 import pytest
 
-from energy_assistant.ems.models import EmsPlanOutput
+from energy_assistant.ems.models import EmsPlanOutput, EmsPlanTimings
 from energy_assistant.ems.planner import EmsMilpPlanner
 from energy_assistant.lib.home_assistant import HomeAssistantStateDict
 from energy_assistant.lib.home_assistant_ws import HomeAssistantWebSocketClient
 from energy_assistant.models.config import AppConfig
-from energy_assistant.worker.service import PRICE_DEBOUNCE_SECONDS, Worker
+from energy_assistant.worker.service import (
+    PRICE_DEBOUNCE_SECONDS,
+    PlanRunState,
+    RunTrigger,
+    Worker,
+)
 
 
 class _StubWsClient(HomeAssistantWebSocketClient):
@@ -41,7 +49,7 @@ class _StubPlanner:
     def __init__(self) -> None:
         self.mark_for_hydration_calls = 0
         self.hydrate_all_calls = 0
-        self.generate_ems_plan_calls = 0
+        self.generate_ems_run_calls = 0
         self.plan: EmsPlanOutput | None = None
 
     def mark_for_hydration(self) -> None:
@@ -50,11 +58,25 @@ class _StubPlanner:
     def hydrate_all(self) -> None:
         self.hydrate_all_calls += 1
 
-    def generate_ems_plan(self) -> EmsPlanOutput:
-        self.generate_ems_plan_calls += 1
+    def generate_ems_run(self) -> object:
+        self.generate_ems_run_calls += 1
         if self.plan is None:
             raise AssertionError("Test planner missing plan")
-        return self.plan
+        return SimpleNamespace(plan=self.plan)
+
+
+def _plan() -> EmsPlanOutput:
+    return EmsPlanOutput(
+        generated_at=datetime(2026, 1, 1, tzinfo=UTC),
+        status="Optimal",
+        objective_value=0.0,
+        timings=EmsPlanTimings(
+            build_seconds=0.0,
+            solve_seconds=0.0,
+            total_seconds=0.0,
+        ),
+        components={},
+    )
 
 
 def _app_config() -> AppConfig:
@@ -243,3 +265,67 @@ class TestWorkerDebounce:
 
         assert worker is not None
         assert planner.mark_for_hydration_calls == 1
+
+
+class TestWorkerSerialization:
+    async def test_price_change_waits_for_active_run_before_replanning(self) -> None:
+        planner = _StubPlanner()
+        planner.plan = _plan()
+        ws_client = _StubWsClient()
+        worker = Worker(
+            planner=cast(EmsMilpPlanner, planner),
+            price_entity_ids={"sensor.price_import"},
+            ha_ws_client=ws_client,
+        )
+        worker.start(start_scheduler=False)
+
+        started_first = threading.Event()
+        started_second = threading.Event()
+        release_first = threading.Event()
+        release_second = threading.Event()
+        solve_calls = 0
+
+        def blocking_solve() -> EmsPlanOutput:
+            nonlocal solve_calls
+            solve_calls += 1
+            if solve_calls == 1:
+                started_first.set()
+                release_first.wait()
+            else:
+                started_second.set()
+                release_second.wait()
+            if planner.plan is None:
+                raise AssertionError("Test planner missing plan")
+            return planner.plan
+
+        worker._solve_once_blocking = blocking_solve  # type: ignore[method-assign]
+
+        first_run, already_running = await worker.trigger_run(RunTrigger.MANUAL)
+        assert not already_running
+        await asyncio.wait_for(asyncio.to_thread(started_first.wait), timeout=5)
+
+        active_run, already_running = await worker.trigger_run(RunTrigger.PRICE_CHANGE)
+        assert already_running
+        assert active_run.run_id == first_run.run_id
+        assert solve_calls == 1
+        assert not started_second.is_set()
+
+        release_first.set()
+        await asyncio.wait_for(asyncio.to_thread(started_second.wait), timeout=5)
+        assert solve_calls == 2
+
+        release_second.set()
+
+        async def _latest_plan_ready() -> tuple[PlanRunState, EmsPlanOutput]:
+            while True:
+                latest = await worker.get_latest()
+                if latest is not None:
+                    return latest
+                await asyncio.sleep(0.01)
+
+        latest_run, latest_plan = await asyncio.wait_for(_latest_plan_ready(), timeout=5)
+        assert latest_run.status == "completed"
+        assert latest_plan == planner.plan
+
+        worker.stop()
+        await ws_client.close()
