@@ -1,5 +1,5 @@
 import re
-from typing import Annotated, Literal, Self
+from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -74,6 +74,3 @@ class NonVariableLoad(BaseModel):
         if not re.match(r"^[a-z][a-z0-9_]*$", value):
             raise ValueError("id must be lowercase letters, numbers, and underscores")
         return value
-
-
-LoadConfig = Annotated[ControlledEvLoad | NonVariableLoad, Field(discriminator="load_type")]

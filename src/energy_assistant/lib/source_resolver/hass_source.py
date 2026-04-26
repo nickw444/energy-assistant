@@ -108,6 +108,42 @@ def _amber_price_value(
     return (spot_value + advanced_value) / 2.0
 
 
+def _bucket_time_of_day_averages(
+    entries: list[tuple[datetime.datetime, float]],
+    *,
+    now: datetime.datetime,
+    interval_minutes: int,
+) -> list[float]:
+    buckets_per_day = (24 * 60) // interval_minutes
+    bucket_sums = [0.0] * buckets_per_day
+    bucket_seconds = [0.0] * buckets_per_day
+
+    for idx, (start, value) in enumerate(entries):
+        end = entries[idx + 1][0] if idx + 1 < len(entries) else now
+        if end <= start:
+            continue
+        current = start
+        while current < end:
+            interval_start_minute = (current.minute // interval_minutes) * interval_minutes
+            interval_start = current.replace(
+                minute=interval_start_minute,
+                second=0,
+                microsecond=0,
+            )
+            interval_end = interval_start + datetime.timedelta(minutes=interval_minutes)
+            overlap_end = interval_end if interval_end < end else end
+            seconds = (overlap_end - current).total_seconds()
+            bucket = (interval_start.hour * 60 + interval_start.minute) // interval_minutes
+            bucket_sums[bucket] += value * seconds
+            bucket_seconds[bucket] += seconds
+            current = overlap_end
+
+    return [
+        (bucket_sums[i] / bucket_seconds[i]) if bucket_seconds[i] > 0 else 0.0
+        for i in range(buckets_per_day)
+    ]
+
+
 class HomeAssistantEntitySource(EntitySource[HomeAssistantStateDict, T]):
     type: Literal["home_assistant"]
     entity: str = Field(min_length=1)
@@ -274,6 +310,98 @@ class HomeAssistantAmberExpressForecastSource(
         return intervals
 
 
+class HomeAssistantHistoricalAveragePriceForecastSource(
+    HomeAssistantHistoryEntitySource[list[PriceForecastInterval]]
+):
+    """Build a rolling price forecast from historical realtime price values."""
+
+    platform: Literal["historical_average_price"]
+    interval_duration: int = Field(default=30, ge=1, le=60)
+    forecast_horizon_hours: int = Field(default=48, ge=1)
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    @model_validator(mode="after")
+    def _validate_interval_duration(self) -> HomeAssistantHistoricalAveragePriceForecastSource:
+        if 60 % self.interval_duration != 0:
+            raise ValueError("interval_duration must evenly divide 60 minutes")
+        return self
+
+    def mapper(
+        self,
+        state: HomeAssistantHistoryPayload,
+    ) -> list[PriceForecastInterval]:
+        history = state.history
+        current_state = state.current_state
+        entries: list[tuple[datetime.datetime, float]] = []
+        for item in history:
+            timestamp = _parse_timestamp(item.get("last_updated") or item.get("last_changed"))
+            if timestamp is None:
+                continue
+            try:
+                value = required_float(item.get("state"))
+            except (TypeError, ValueError):
+                continue
+            entries.append((timestamp, value))
+
+        if not entries:
+            return []
+
+        entries.sort(key=lambda item: item[0])
+        tz = entries[0][0].tzinfo or datetime.UTC
+        normalized: list[tuple[datetime.datetime, float]] = []
+        for ts, value in entries:
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=tz)
+            else:
+                ts = ts.astimezone(tz)
+            normalized.append((ts, value))
+        entries = normalized
+
+        now = datetime.datetime.now(tz=tz)
+        if now <= entries[-1][0]:
+            now = entries[-1][0] + datetime.timedelta(minutes=self.interval_duration)
+
+        averages = _bucket_time_of_day_averages(
+            entries,
+            now=now,
+            interval_minutes=self.interval_duration,
+        )
+
+        current_timestamp = _parse_timestamp(
+            current_state.get("last_updated") or current_state.get("last_changed")
+        )
+        start_time = current_timestamp or now
+        if start_time.tzinfo is None:
+            start_time = start_time.replace(tzinfo=tz)
+        else:
+            start_time = start_time.astimezone(tz)
+        aligned_minute = (start_time.minute // self.interval_duration) * self.interval_duration
+        start_time = start_time.replace(
+            minute=aligned_minute,
+            second=0,
+            microsecond=0,
+        )
+
+        horizon_minutes = self.forecast_horizon_hours * 60
+        num_intervals = horizon_minutes // self.interval_duration
+        intervals: list[PriceForecastInterval] = []
+        for offset in range(num_intervals):
+            interval_start = start_time + datetime.timedelta(
+                minutes=offset * self.interval_duration
+            )
+            interval_end = interval_start + datetime.timedelta(minutes=self.interval_duration)
+            bucket = (interval_start.hour * 60 + interval_start.minute) // self.interval_duration
+            intervals.append(
+                PriceForecastInterval(
+                    start=interval_start,
+                    end=interval_end,
+                    value=averages[bucket],
+                )
+            )
+        return intervals
+
+
 class HomeAssistantSolcastForecastSource(
     HomeAssistantMultiEntitySource[list[PowerForecastInterval]]
 ):
@@ -385,34 +513,11 @@ class HomeAssistantHistoricalAverageForecastSource(
             now = entries[-1][0] + datetime.timedelta(minutes=self.interval_duration)
 
         interval_minutes = self.interval_duration
-        buckets_per_day = (24 * 60) // interval_minutes
-        bucket_sums = [0.0] * buckets_per_day
-        bucket_seconds = [0.0] * buckets_per_day
-
-        for idx, (start, value) in enumerate(entries):
-            end = entries[idx + 1][0] if idx + 1 < len(entries) else now
-            if end <= start:
-                continue
-            current = start
-            while current < end:
-                interval_start_minute = (current.minute // interval_minutes) * interval_minutes
-                interval_start = current.replace(
-                    minute=interval_start_minute,
-                    second=0,
-                    microsecond=0,
-                )
-                interval_end = interval_start + datetime.timedelta(minutes=interval_minutes)
-                overlap_end = interval_end if interval_end < end else end
-                seconds = (overlap_end - current).total_seconds()
-                bucket = (interval_start.hour * 60 + interval_start.minute) // interval_minutes
-                bucket_sums[bucket] += value * seconds
-                bucket_seconds[bucket] += seconds
-                current = overlap_end
-
-        averages = [
-            (bucket_sums[i] / bucket_seconds[i]) if bucket_seconds[i] > 0 else 0.0
-            for i in range(buckets_per_day)
-        ]
+        averages = _bucket_time_of_day_averages(
+            entries,
+            now=now,
+            interval_minutes=interval_minutes,
+        )
 
         start_time = now.replace(minute=0, second=0, microsecond=0)
         horizon_minutes = self.forecast_horizon_hours * 60

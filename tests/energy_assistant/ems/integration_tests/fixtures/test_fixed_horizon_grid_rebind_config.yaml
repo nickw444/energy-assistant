@@ -1,0 +1,52 @@
+server:
+  host: 127.0.0.1
+  port: 6070
+  data_dir: ./data
+homeassistant:
+  base_url: https://hass.example.com
+  token: test-token
+inputs:
+  grid_price_import:
+    type: forecast
+    forecast:
+      type: home_assistant
+      platform: amber_express
+      entity: sensor.price_import_forecast
+    realtime:
+      type: home_assistant
+      entity: sensor.price_import
+  grid_price_export:
+    type: forecast
+    forecast:
+      type: home_assistant
+      platform: amber_express
+      entity: sensor.price_export_forecast
+    realtime:
+      type: home_assistant
+      entity: sensor.price_export
+  base_load_power:
+    type: forecast
+    forecast:
+      type: home_assistant
+      platform: solcast
+      entities:
+      - sensor.base_load_forecast_today
+      - sensor.base_load_forecast_tomorrow
+plant:
+  switchboard:
+    type: switchboard
+  grid:
+    type: grid
+    connection: switchboard
+    constraints:
+      max_import_kw: 10.0
+      max_export_kw: 10.0
+    price_import:
+      source: inputs.grid_price_import
+    price_export:
+      source: inputs.grid_price_export
+  base_load:
+    type: load
+    connection: switchboard
+    name: Base Load
+    power: inputs.base_load_power

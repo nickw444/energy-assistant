@@ -7,18 +7,25 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 import aiohttp
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .energy_assistant_client import (
+    BatteryComponentPlan,
+    ComponentPlan,
     EmsPlanOutput,
+    EmsSeriesPoint,
     EnergyAssistantApiClient,
+    GridComponentPlan,
+    InverterComponentPlan,
+    LoadComponentPlan,
+    LoadControlledEvComponentPlan,
     PlanAwaitResponse,
     PlanLatestResponse,
-    TimestepPlan,
+    PvComponentPlan,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -35,13 +42,7 @@ class PlanPayload:
 
 
 class EnergyAssistantCoordinator(DataUpdateCoordinator[PlanPayload | None]):
-    """Coordinator that uses continuous long-polling to fetch plan updates.
-
-    The coordinator runs a background long-poll loop that continuously waits for
-    new plans from the server. When a new plan arrives, it updates the data and
-    notifies all listeners immediately. The standard update_interval serves as a
-    fallback safety net.
-    """
+    """Coordinator that uses continuous long-polling to fetch plan updates."""
 
     def __init__(
         self,
@@ -60,7 +61,6 @@ class EnergyAssistantCoordinator(DataUpdateCoordinator[PlanPayload | None]):
         self._long_poll_task: asyncio.Task[None] | None = None
 
     async def _async_update_data(self) -> PlanPayload | None:
-        """Fallback fetch for when long-poll loop isn't running or times out."""
         try:
             response = await self._client.get_latest_plan()
         except (aiohttp.ClientError, ValueError) as exc:
@@ -68,30 +68,24 @@ class EnergyAssistantCoordinator(DataUpdateCoordinator[PlanPayload | None]):
         if response is None:
             return None
         self._last_generated_at = response.plan.generated_at.isoformat()
-        _LOGGER.debug("Fallback fetch returned plan generated_at=%s", self._last_generated_at)
         return PlanPayload(
             response=response,
             plan_dump=response.plan.model_dump(mode="json"),
         )
 
     def start_long_poll_loop(self) -> None:
-        """Start the background long-poll loop."""
         if self._long_poll_task is not None and not self._long_poll_task.done():
             return
         self._long_poll_task = self.hass.async_create_background_task(  # pyright: ignore[reportAttributeAccessIssue]
             self._run_long_poll_loop(),
             name="energy_assistant_long_poll",
         )
-        _LOGGER.debug("Long-poll loop started")
 
     def stop_long_poll_loop(self) -> None:
-        """Stop the background long-poll loop."""
         if self._long_poll_task is not None and not self._long_poll_task.done():
             self._long_poll_task.cancel()
-            _LOGGER.debug("Long-poll loop stopped")
 
     async def _run_long_poll_loop(self) -> None:
-        """Continuously long-poll for plan updates."""
         while True:
             try:
                 await self._long_poll_once()
@@ -105,27 +99,15 @@ class EnergyAssistantCoordinator(DataUpdateCoordinator[PlanPayload | None]):
                 await asyncio.sleep(LONG_POLL_RETRY_DELAY)
 
     async def _long_poll_once(self) -> None:
-        """Perform a single long-poll request and update data if new plan arrives."""
-        _LOGGER.debug(
-            "Long-polling for plan updates (since=%s, timeout=%ds)",
-            self._last_generated_at,
-            LONG_POLL_TIMEOUT,
-        )
         await_response: PlanAwaitResponse | None = await self._client.await_plan(
             since=self._last_generated_at,
             timeout=LONG_POLL_TIMEOUT,
         )
         if await_response is None:
-            _LOGGER.debug("Long-poll timed out, no new plan")
             return
 
-        response = PlanLatestResponse(
-            run=await_response.run,
-            plan=await_response.plan,
-            intent=await_response.intent,
-        )
+        response = PlanLatestResponse(run=await_response.run, plan=await_response.plan)
         self._last_generated_at = response.plan.generated_at.isoformat()
-        _LOGGER.debug("Long-poll received new plan (generated_at=%s)", self._last_generated_at)
         self.async_set_updated_data(
             PlanPayload(
                 response=response,
@@ -133,116 +115,122 @@ class EnergyAssistantCoordinator(DataUpdateCoordinator[PlanPayload | None]):
             )
         )
 
-
-def get_timestep0(plan: EmsPlanOutput) -> TimestepPlan | None:
-    if not plan.timesteps:
-        return None
-    return plan.timesteps[0]
-
-
-def sorted_items[T](values: dict[str, T]) -> list[tuple[str, T]]:
-    return sorted(values.items(), key=lambda item: str(item[0]))
-
-
 def build_plan_series(
-    plan: EmsPlanOutput,
-    getter: Callable[[TimestepPlan], Any],
+    points: list[EmsSeriesPoint],
     transform: Callable[[Any], Any] | None = None,
 ) -> list[dict[str, Any]]:
     series: list[dict[str, Any]] = []
-    for step in plan.timesteps:
-        value = getter(step)
+    for point in points:
+        value = point.value
         if transform is not None:
             value = transform(value)
         series.append(
             {
+                "time": point.time.isoformat(),
                 "value": value,
-                "start": step.start.isoformat(),
-                "duration_s": step.duration_s,
             }
         )
     return series
 
 
-def inverter_value_getter(
-    inverter_name: str,
+def component_series(component: ComponentPlan | None, attribute: str) -> list[EmsSeriesPoint]:
+    if component is None:
+        return []
+    value = getattr(component, attribute, None)
+    if not isinstance(value, list):
+        return []
+    values = cast(list[Any], value)
+    points: list[EmsSeriesPoint] = []
+    for point in values:
+        if isinstance(point, EmsSeriesPoint):
+            points.append(point)
+    return points
+
+
+def first_series_value(points: list[EmsSeriesPoint]) -> Any:
+    if not points:
+        return None
+    return points[0].value
+
+
+def component_value_getter(
+    component_id: str,
     attribute: str,
 ) -> Callable[[PlanLatestResponse], Any]:
     def _get(response: PlanLatestResponse) -> Any:
-        step = get_timestep0(response.plan)
-        if step is None:
-            return None
-        inverter = step.inverters.get(inverter_name)
-        if inverter is None:
-            return None
-        return getattr(inverter, attribute, None)
+        component = response.plan.components.get(component_id)
+        return first_series_value(component_series(component, attribute))
 
     return _get
 
 
-def inverter_step_getter(
-    inverter_name: str,
+def component_series_getter(
+    component_id: str,
     attribute: str,
-) -> Callable[[TimestepPlan], Any]:
-    def _get(step: TimestepPlan) -> Any:
-        inverter = step.inverters.get(inverter_name)
-        if inverter is None:
-            return None
-        return getattr(inverter, attribute, None)
+) -> Callable[[PlanLatestResponse], list[EmsSeriesPoint]]:
+    def _get(response: PlanLatestResponse) -> list[EmsSeriesPoint]:
+        component = response.plan.components.get(component_id)
+        return component_series(component, attribute)
 
     return _get
 
 
-def ev_value_getter(
-    ev_name: str,
-    attribute: str,
-) -> Callable[[PlanLatestResponse], Any]:
-    def _get(response: PlanLatestResponse) -> Any:
-        step = get_timestep0(response.plan)
-        if step is None:
-            return None
-        ev = step.loads.evs.get(ev_name)
-        if ev is None:
-            return None
-        return getattr(ev, attribute, None)
-
-    return _get
+def components_of_type[T: ComponentPlan](
+    plan: EmsPlanOutput,
+    model: type[T],
+) -> dict[str, T]:
+    return {
+        component_id: component
+        for component_id, component in sorted(plan.components.items())
+        if isinstance(component, model)
+    }
 
 
-def ev_step_getter(
-    ev_name: str,
-    attribute: str,
-) -> Callable[[TimestepPlan], Any]:
-    def _get(step: TimestepPlan) -> Any:
-        ev = step.loads.evs.get(ev_name)
-        if ev is None:
-            return None
-        return getattr(ev, attribute, None)
-
-    return _get
+def single_component[T: ComponentPlan](
+    plan: EmsPlanOutput,
+    model: type[T],
+) -> tuple[str, T] | None:
+    matches = components_of_type(plan, model)
+    if not matches:
+        return None
+    component_id = next(iter(matches))
+    return component_id, matches[component_id]
 
 
-def intent_inverter_value_getter(
-    inverter_name: str,
-    attribute: str,
-) -> Callable[[PlanLatestResponse], Any]:
-    def _get(response: PlanLatestResponse) -> Any:
-        inverter = response.intent.inverters.get(inverter_name)
-        if inverter is None:
-            return None
-        return getattr(inverter, attribute, None)
+def plan_horizon_hours(plan: EmsPlanOutput) -> float | None:
+    timestamps = [
+        point.time
+        for component in plan.components.values()
+        for attribute in _component_series_attributes(component)
+        for point in component_series(component, attribute)
+    ]
+    if len(timestamps) < 2:
+        return None
+    start = min(timestamps)
+    end = max(timestamps)
+    return (end - start).total_seconds() / 3600.0
 
-    return _get
 
-
-def intent_load_value_getter(
-    load_name: str,
-    attribute: str,
-) -> Callable[[PlanLatestResponse], Any]:
-    def _get(response: PlanLatestResponse) -> Any:
-        load = response.intent.loads.get(load_name)
-        if load is None:
-            return None
-        return getattr(load, attribute, None)
-
-    return _get
+def _component_series_attributes(component: ComponentPlan) -> list[str]:
+    if isinstance(component, GridComponentPlan):
+        return [
+            "price_import_raw",
+            "price_export_raw",
+            "price_import_effective",
+            "price_export_effective",
+            "import_allowed",
+            "import_kw",
+            "export_kw",
+            "net_kw",
+        ]
+    if isinstance(component, LoadComponentPlan):
+        return ["power_kw"]
+    if isinstance(component, InverterComponentPlan):
+        return ["ac_net_kw"]
+    if isinstance(component, PvComponentPlan):
+        return ["available_kw", "actual_kw", "curtail_kw", "curtailment"]
+    if isinstance(component, BatteryComponentPlan):
+        return ["charge_kw", "discharge_kw", "soc_kwh", "soc_pct"]
+    if isinstance(component, LoadControlledEvComponentPlan):
+        return ["charge_kw", "soc_kwh", "soc_pct", "connected", "charge_allowed"]
+    return []

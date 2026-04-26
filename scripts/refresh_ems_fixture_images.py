@@ -5,7 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from energy_assistant.ems.fixture_harness import (
+from energy_assistant.ems.fixtures.harness import (
     EmsFixturePaths,
     compute_plan_hash,
     resolve_ems_fixture_paths,
@@ -22,17 +22,24 @@ def _is_complete_bundle(paths: EmsFixturePaths) -> bool:
     )
 
 
-def _discover_scenarios(base_dir: Path) -> list[str]:
+def _discover_scenarios(base_dir: Path) -> list[tuple[str, str | None]]:
     if not base_dir.exists():
         return []
-    scenarios: list[str] = []
-    for child in base_dir.iterdir():
-        if not child.is_dir():
+    scenarios: list[tuple[str, str | None]] = []
+    for fixture_child in base_dir.iterdir():
+        if not fixture_child.is_dir():
             continue
-        paths = resolve_ems_fixture_paths(base_dir, child.name)
+        fixture_name = fixture_child.name
+        paths = resolve_ems_fixture_paths(base_dir, fixture_name, None)
         if _is_complete_bundle(paths):
-            scenarios.append(child.name)
-    return sorted(scenarios)
+            scenarios.append((fixture_name, None))
+        for scenario_child in fixture_child.iterdir():
+            if not scenario_child.is_dir():
+                continue
+            scenario_paths = resolve_ems_fixture_paths(base_dir, fixture_name, scenario_child.name)
+            if _is_complete_bundle(scenario_paths):
+                scenarios.append((fixture_name, scenario_child.name))
+    return sorted(scenarios, key=lambda item: (item[0], item[1] or ""))
 
 
 def _expected_hash(paths: EmsFixturePaths) -> str:
@@ -40,16 +47,18 @@ def _expected_hash(paths: EmsFixturePaths) -> str:
     return compute_plan_hash(payload)
 
 
-def _refresh_scenario(name: str, *, force_image: bool) -> None:
+def _refresh_scenario(fixture: str, scenario: str | None, *, force_image: bool) -> None:
     cmd = [
         sys.executable,
         "-m",
         "energy_assistant.cli",
         "ems",
         "refresh-baseline",
-        "--name",
-        name,
+        "--fixture",
+        fixture,
     ]
+    if scenario is not None:
+        cmd.extend(["--name", scenario])
     if force_image:
         cmd.append("--force-image")
     subprocess.run(cmd, check=True)
@@ -62,8 +71,8 @@ def main() -> int:
         return 0
 
     refreshed: list[str] = []
-    for scenario in scenarios:
-        paths = resolve_ems_fixture_paths(FIXTURE_BASE, scenario)
+    for fixture, scenario in scenarios:
+        paths = resolve_ems_fixture_paths(FIXTURE_BASE, fixture, scenario)
         if not _is_complete_bundle(paths):
             continue
 
@@ -84,9 +93,10 @@ def main() -> int:
         if hash_mismatch:
             reasons.append("hash mismatch")
 
-        print(f"Refreshing {scenario} ({', '.join(reasons)}).")
-        _refresh_scenario(scenario, force_image=missing_plot)
-        refreshed.append(scenario)
+        label = fixture if scenario is None else f"{fixture}/{scenario}"
+        print(f"Refreshing {label} ({', '.join(reasons)}).")
+        _refresh_scenario(fixture, scenario, force_image=missing_plot)
+        refreshed.append(label)
 
     if refreshed:
         print(f"Refreshed {len(refreshed)} scenario(s): {', '.join(refreshed)}.")

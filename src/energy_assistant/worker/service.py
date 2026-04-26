@@ -10,8 +10,6 @@ from typing import Literal
 from energy_assistant.ems.models import EmsPlanOutput
 from energy_assistant.ems.planner import EmsMilpPlanner
 from energy_assistant.lib.home_assistant_ws import HomeAssistantWebSocketClient
-from energy_assistant.lib.source_resolver.resolver import ValueResolver
-from energy_assistant.models.config import AppConfig
 
 logger = logging.getLogger(__name__)
 
@@ -41,19 +39,19 @@ class Worker:
     def __init__(
         self,
         *,
-        app_config: AppConfig,
-        resolver: ValueResolver,
+        planner: EmsMilpPlanner,
+        price_entity_ids: set[str],
         ha_ws_client: HomeAssistantWebSocketClient,
     ) -> None:
-        self._app_config = app_config
-        self._resolver = resolver
-        self._resolver.mark_for_hydration(app_config)
+        self._planner = planner
+        self._planner.mark_for_hydration()
 
         self._condition = asyncio.Condition()
         self._in_progress = False
         self._current_run: PlanRunState | None = None
         self._current_run_task: asyncio.Task[None] | None = None
         self._current_run_cancelled = False
+        self._pending_run_trigger: RunTrigger | None = None
         self._latest_run: PlanRunState | None = None
         self._latest_plan: EmsPlanOutput | None = None
         self._scheduler_task: asyncio.Task[None] | None = None
@@ -64,10 +62,7 @@ class Worker:
         self._run_requested = asyncio.Event()
         self._last_run_finished_at: datetime | None = None
 
-        self._price_entity_ids = {
-            app_config.plant.grid.realtime_price_import.entity,
-            app_config.plant.grid.realtime_price_export.entity,
-        }
+        self._price_entity_ids = set(price_entity_ids)
         self._ha_ws_client = ha_ws_client
 
     def start(self, *, start_scheduler: bool = True, start_price_watcher: bool = True) -> None:
@@ -115,6 +110,7 @@ class Worker:
                         self._current_run.run_id,
                     )
                     self._current_run_cancelled = True
+                    self._pending_run_trigger = RunTrigger.PRICE_CHANGE
                 else:
                     logger.debug(
                         "Run already in progress (run_id=%s), skipping trigger=%s",
@@ -122,21 +118,8 @@ class Worker:
                         trigger.value,
                     )
                     return self._current_run, True
-            now = datetime.now(UTC)
-            run_state = PlanRunState(
-                run_id=_new_run_id(),
-                status="running",
-                accepted_at=now,
-                started_at=now,
-            )
-            self._in_progress = True
-            self._current_run = run_state
-            self._current_run_cancelled = False
-            logger.info(
-                "Starting plan run (run_id=%s, trigger=%s)",
-                run_state.run_id,
-                trigger.value,
-            )
+                return self._current_run, True
+            run_state = self._start_run_locked(trigger)
 
         self._current_run_task = asyncio.create_task(self._run_once(run_state))
         return run_state, False
@@ -202,6 +185,7 @@ class Worker:
             )
             plan = None
 
+        next_run_state: PlanRunState | None = None
         async with self._condition:
             if self._current_run_cancelled:
                 logger.info(
@@ -214,21 +198,56 @@ class Worker:
                     finished_at=finished,
                     message="Cancelled due to price change",
                 )
+                should_queue_followup = (
+                    self._pending_run_trigger is not None and not self._stop_event.is_set()
+                )
+                self._current_run_cancelled = False
+                self._in_progress = False
                 self._current_run = cancelled_state
+                if should_queue_followup:
+                    next_trigger = self._pending_run_trigger
+                    self._pending_run_trigger = None
+                    if next_trigger is None:
+                        raise RuntimeError("Queued run trigger unexpectedly missing")
+                    next_run_state = self._start_run_locked(next_trigger)
+                else:
+                    self._pending_run_trigger = None
+                    self._last_run_finished_at = finished
                 self._condition.notify_all()
-                return
+            else:
+                self._in_progress = False
+                self._current_run = completed_state
+                self._last_run_finished_at = finished
+                self._current_run_cancelled = False
+                if plan is not None:
+                    self._latest_run = completed_state
+                    self._latest_plan = plan
+                self._condition.notify_all()
 
-            self._in_progress = False
-            self._current_run = completed_state
-            self._last_run_finished_at = finished
-            if plan is not None:
-                self._latest_run = completed_state
-                self._latest_plan = plan
-            self._condition.notify_all()
+        if next_run_state is not None:
+            self._current_run_task = asyncio.create_task(self._run_once(next_run_state))
+
+    def _start_run_locked(self, trigger: RunTrigger) -> PlanRunState:
+        now = datetime.now(UTC)
+        run_state = PlanRunState(
+            run_id=_new_run_id(),
+            status="running",
+            accepted_at=now,
+            started_at=now,
+        )
+        self._in_progress = True
+        self._current_run = run_state
+        self._current_run_cancelled = False
+        logger.info(
+            "Starting plan run (run_id=%s, trigger=%s)",
+            run_state.run_id,
+            trigger.value,
+        )
+        return run_state
 
     def _solve_once_blocking(self) -> EmsPlanOutput:
-        self._resolver.hydrate_all()
-        return EmsMilpPlanner(self._app_config, resolver=self._resolver).generate_ems_plan()
+        self._planner.hydrate_all()
+        return self._planner.generate_ems_run().plan
 
     async def _run_scheduler(self) -> None:
         """Scheduler loop: runs immediately, then waits for fallback interval after each run."""
