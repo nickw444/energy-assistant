@@ -12,8 +12,8 @@ from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import EnergyGraph
 from energy_assistant.ems.topology.ids import NodeId
 from energy_assistant.ems.topology.nodes import (
-    ForecastPercentileTerminalSocValue,
     FixedTerminalSocValue,
+    ForecastPercentileTerminalSocValue,
     Node,
     StorageNode,
 )
@@ -175,7 +175,11 @@ def test_storage_fixed_terminal_value_rewards_terminal_soc() -> None:
     )
     graph = EnergyGraph()
     graph.add_element(
-        _ObjectiveFragment(objective=node.objective, terminal_soc=node.terminal_soc, final_soc_kwh=4.0)
+        _ObjectiveFragment(
+            objective=node.objective,
+            terminal_soc=node.terminal_soc,
+            final_soc_kwh=4.0,
+        )
     )
     snapshot = ModelSnapshot(ctx=ModelContext(horizon=horizon), graph=graph)
     snapshot.problem.solve(pulp.PULP_CBC_CMD(msg=False))
@@ -204,7 +208,11 @@ def test_storage_forecast_terminal_value_uses_tail_percentile_window() -> None:
     )
     graph = EnergyGraph()
     graph.add_element(
-        _ObjectiveFragment(objective=node.objective, terminal_soc=node.terminal_soc, final_soc_kwh=2.0)
+        _ObjectiveFragment(
+            objective=node.objective,
+            terminal_soc=node.terminal_soc,
+            final_soc_kwh=2.0,
+        )
     )
     snapshot = ModelSnapshot(ctx=ModelContext(horizon=horizon), graph=graph)
     snapshot.problem.solve(pulp.PULP_CBC_CMD(msg=False))
@@ -234,7 +242,11 @@ def test_storage_forecast_terminal_value_applies_price_floor() -> None:
     )
     graph = EnergyGraph()
     graph.add_element(
-        _ObjectiveFragment(objective=node.objective, terminal_soc=node.terminal_soc, final_soc_kwh=2.0)
+        _ObjectiveFragment(
+            objective=node.objective,
+            terminal_soc=node.terminal_soc,
+            final_soc_kwh=2.0,
+        )
     )
     snapshot = ModelSnapshot(ctx=ModelContext(horizon=horizon), graph=graph)
     snapshot.problem.solve(pulp.PULP_CBC_CMD(msg=False))

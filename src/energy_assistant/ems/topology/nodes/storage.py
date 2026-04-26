@@ -119,7 +119,8 @@ class StorageNode(Node):
     def _price_import_raw(self) -> list[float]:
         if self.price_import_raw is None:
             raise ValueError(
-                f"Storage node {self.id!r} forecast-derived terminal value requires price_import_raw"
+                f"Storage node {self.id!r} forecast-derived terminal value "
+                "requires price_import_raw"
             )
         if len(self.price_import_raw) != int(self.horizon.num_intervals):
             raise ValueError(

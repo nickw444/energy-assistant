@@ -8,6 +8,7 @@ from energy_assistant.models.plant import (
     BatteryComponentConfig,
     ForecastTerminalSocValueConfig,
     InputReference,
+    TerminalSocConfig,
 )
 
 
@@ -68,7 +69,7 @@ def test_battery_terminal_soc_normalizes_legacy_adaptive_mode() -> None:
         min_soc_pct=10.0,
         max_soc_pct=100.0,
         reserve_soc_pct=20.0,
-        terminal_soc={"mode": "adaptive"},
+        terminal_soc=TerminalSocConfig.model_validate({"mode": "adaptive"}),
         state_of_charge_pct=InputReference(source="battery_soc"),
         realtime_power=InputReference(source="battery_power"),
     )

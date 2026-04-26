@@ -19,8 +19,8 @@ from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import EnergyGraph, GraphElement
 from energy_assistant.ems.topology.ids import NodeId
 from energy_assistant.ems.topology.nodes import (
-    ForecastPercentileTerminalSocValue,
     FixedTerminalSocValue,
+    ForecastPercentileTerminalSocValue,
     StorageNode,
     TerminalSocValueConfig,
 )
@@ -120,7 +120,6 @@ class BatteryComponent(EmsComponent[BatterySolveState, BatteryComponentPlan]):
         capacity_kwh = self._config.capacity_kwh
         soc_min_kwh = capacity_kwh * self._config.min_soc_pct / 100.0
         soc_max_kwh = capacity_kwh * self._config.max_soc_pct / 100.0
-        reserve_kwh = capacity_kwh * self._config.reserve_soc_pct / 100.0
         eta = self._config.storage_efficiency_pct / 100.0
 
         storage = StorageNode(

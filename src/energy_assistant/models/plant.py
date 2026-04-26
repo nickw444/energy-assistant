@@ -129,6 +129,7 @@ class PriceBindingConfig(BaseModel):
 
 class TerminalSocConfig(BaseModel):
     mode: Literal["none", "hard"] = "none"
+    penalty_per_kwh: float | Literal["mean", "median"] | None = None
 
     model_config = ConfigDict(extra="forbid")
 
