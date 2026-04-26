@@ -1033,14 +1033,15 @@ def _build_plan_svg(
         tick_lines.extend(
             [
                 f'<line x1="{x_value:.2f}" y1="{chart_top}" x2="{x_value:.2f}" y2="{chart_bottom}" '
-                f'stroke="{time_grid_stroke}" stroke-opacity="{time_grid_opacity:.3f}" stroke-width="1"/>',
+                f'stroke="{time_grid_stroke}" stroke-opacity="{time_grid_opacity:.3f}" '
+                'stroke-width="1"/>',
                 f'<text x="{x_value:.2f}" y="{chart_bottom + 28}" text-anchor="middle" '
                 'font-size="12" fill="#52606d">'
                 f"{html.escape(label)}</text>",
             ]
         )
 
-    curtailment_rects = []
+    curtailment_rects: list[str] = []
     for index, active in enumerate(prepared.curtailment_flags):
         if not active:
             continue
@@ -1063,7 +1064,8 @@ def _build_plan_svg(
             fill, fill_opacity = parse_color(trace.fill_color)
             area_path = area_path_from_points(points, trace.axis)
             trace_elements.append(
-                f'<path d="{area_path}" fill="{fill}" fill-opacity="{fill_opacity:.3f}" stroke="none"/>'
+                f'<path d="{area_path}" fill="{fill}" '
+                f'fill-opacity="{fill_opacity:.3f}" stroke="none"/>'
             )
         trace_elements.append(
             f'<path d="{path_from_points(points, trace.axis)}" fill="none" stroke="{stroke}" '
@@ -1071,7 +1073,7 @@ def _build_plan_svg(
             'stroke-linejoin="round" stroke-linecap="round"/>'
         )
 
-    soc_ticks = []
+    soc_ticks: list[str] = []
     for tick in [0, 20, 40, 60, 80, 100]:
         y_value = y_for("soc", float(tick))
         soc_ticks.append(
@@ -1079,7 +1081,7 @@ def _build_plan_svg(
             f"{tick}%</text>"
         )
 
-    price_ticks = []
+    price_ticks: list[str] = []
     for tick in [
         -prepared.price_max * 1.1,
         0.0,
@@ -1101,7 +1103,8 @@ def _build_plan_svg(
         legend_elements.extend(
             [
                 f'<rect x="{legend_x}" y="{legend_y - 10}" width="18" height="10" fill="{fill}" '
-                f'fill-opacity="{fill_opacity:.3f}" stroke="{stroke}" stroke-opacity="{stroke_opacity:.3f}"/>',
+                f'fill-opacity="{fill_opacity:.3f}" stroke="{stroke}" '
+                f'stroke-opacity="{stroke_opacity:.3f}"/>',
                 f'<text x="{legend_x + 24}" y="{legend_y - 1}" font-size="12" fill="#1f2933">'
                 f"{html.escape(trace.name)}</text>",
             ]
@@ -1115,42 +1118,55 @@ def _build_plan_svg(
     total_export = f"{prepared.total_export_kwh:.2f} kWh"
     total_import = f"{prepared.total_import_kwh:.2f} kWh"
 
-    return "\n".join(
+    svg_lines: list[str] = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        (
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+            f'viewBox="0 0 {width} {height}" role="img" aria-labelledby="ems-plan-title">'
+        ),
+        '<rect width="100%" height="100%" fill="white"/>',
+        '<g font-family="Inter, Avenir Next, Trebuchet MS, sans-serif">',
+        '<title id="ems-plan-title">EMS plan output</title>',
+        f'<text x="{width / 2:.2f}" y="36" text-anchor="middle" font-size="24" fill="#1f2933">'
+        'EMS Plan</text>',
+        f'<text x="{width / 2:.2f}" y="64" text-anchor="middle" '
+        'font-size="14" fill="#52606d">'
+        f'Cost 💰: {html.escape(total_cost)}   |   '
+        f'Grid Export 📤: {html.escape(total_export)}   '
+        f'|   Grid Import 📥: {html.escape(total_import)}</text>',
+    ]
+    svg_lines.extend(curtailment_rects)
+    svg_lines.extend(tick_lines)
+    svg_lines.extend(
         [
-            '<?xml version="1.0" encoding="UTF-8"?>',
-            (
-                f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
-                f'viewBox="0 0 {width} {height}" role="img" aria-labelledby="ems-plan-title">'
-            ),
-            '<rect width="100%" height="100%" fill="white"/>',
-            '<g font-family="Inter, Avenir Next, Trebuchet MS, sans-serif">',
-            '<title id="ems-plan-title">EMS plan output</title>',
-            f'<text x="{width / 2:.2f}" y="36" text-anchor="middle" font-size="24" fill="#1f2933">'
-            'EMS Plan</text>',
-            f'<text x="{width / 2:.2f}" y="64" text-anchor="middle" font-size="14" fill="#52606d">'
-            f'Cost 💰: {html.escape(total_cost)}   |   Grid Export 📤: {html.escape(total_export)}   '
-            f'|   Grid Import 📥: {html.escape(total_import)}</text>',
-            *curtailment_rects,
-            *tick_lines,
-            f'<line x1="{chart_left}" y1="{chart_bottom:.2f}" x2="{chart_right}" y2="{chart_bottom:.2f}" '
+            f'<line x1="{chart_left}" y1="{chart_bottom:.2f}" '
+            f'x2="{chart_right}" y2="{chart_bottom:.2f}" '
             'stroke="#1f2933" stroke-width="1.5"/>',
             f'<line x1="{chart_left}" y1="{chart_top}" x2="{chart_left}" y2="{chart_bottom:.2f}" '
             'stroke="#1f2933" stroke-width="1.5"/>',
             f'<line x1="{soc_axis_x}" y1="{chart_top}" x2="{soc_axis_x}" y2="{chart_bottom:.2f}" '
             'stroke="#4b5563" stroke-width="1"/>',
-            f'<line x1="{price_axis_x}" y1="{chart_top}" x2="{price_axis_x}" y2="{chart_bottom:.2f}" '
+            f'<line x1="{price_axis_x}" y1="{chart_top}" '
+            f'x2="{price_axis_x}" y2="{chart_bottom:.2f}" '
             'stroke="#4b5563" stroke-width="1"/>',
-            *trace_elements,
-            f'<text x="{chart_left - 56}" y="{chart_top - 12}" font-size="13" fill="#1f2933">Power (kW)</text>',
-            f'<text x="{soc_axis_x + 10}" y="{chart_top - 12}" font-size="13" fill="#1f2933">SoC (%)</text>',
-            f'<text x="{price_axis_x - 10}" y="{chart_top - 12}" text-anchor="end" font-size="13" fill="#1f2933">Price ($)</text>',
-            *soc_ticks,
-            *price_ticks,
-            *legend_elements,
-            '</g>',
-            '</svg>',
         ]
     )
+    svg_lines.extend(trace_elements)
+    svg_lines.extend(
+        [
+            f'<text x="{chart_left - 56}" y="{chart_top - 12}" '
+            'font-size="13" fill="#1f2933">Power (kW)</text>',
+            f'<text x="{soc_axis_x + 10}" y="{chart_top - 12}" '
+            'font-size="13" fill="#1f2933">SoC (%)</text>',
+            f'<text x="{price_axis_x - 10}" y="{chart_top - 12}" text-anchor="end" '
+            'font-size="13" fill="#1f2933">Price ($)</text>',
+        ]
+    )
+    svg_lines.extend(soc_ticks)
+    svg_lines.extend(price_ticks)
+    svg_lines.extend(legend_elements)
+    svg_lines.extend(["</g>", "</svg>"])
+    return "\n".join(svg_lines)
 
 
 def _prepare_static_plot(plan: EmsPlanOutput) -> _PreparedStaticPlot:
@@ -1163,7 +1179,9 @@ def _prepare_static_plot(plan: EmsPlanOutput) -> _PreparedStaticPlot:
 
     interval_points = grid.net_kw
     interval_end_times = _interval_end_times(plan, interval_points)
-    interval_boundaries = [_normalize_time(point.time, local_tz=local_tz) for point in interval_points]
+    interval_boundaries = [
+        _normalize_time(point.time, local_tz=local_tz) for point in interval_points
+    ]
     interval_boundaries.append(_normalize_time(interval_end_times[-1], local_tz=local_tz))
 
     load_component = _single_component(plan, "load", BaseLoadComponentPlan, optional=True)
@@ -1393,7 +1411,9 @@ def _prepare_static_plot(plan: EmsPlanOutput) -> _PreparedStaticPlot:
         max(abs(value) for value in price_export_risk) if price_export_risk else 0,
         0.01,
     )
-    soc_values = [value for series in (*batt_soc_pct.values(), *ev_soc_pct.values()) for value in series]
+    soc_values = [
+        value for series in (*batt_soc_pct.values(), *ev_soc_pct.values()) for value in series
+    ]
     soc_axis_max = max(max(soc_values, default=0.0), 100.0)
     power_max = max(
         max(abs(value) for value in grid_net) if grid_net else 0,
