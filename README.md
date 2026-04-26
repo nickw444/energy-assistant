@@ -1,3 +1,5 @@
+![Energy Assistant Logo](docs/assets/logo-text.png)
+
 ## Energy Assistant
 
 Energy Assistant is a source-agnostic home energy management engine. It ingests live and forecast
@@ -8,6 +10,8 @@ data, builds an EMS plan, and exposes a small API for automation.
 - Builds a plan for grid import/export, storage, and flexible loads.
 - Runs a lightweight API for triggering and reading plan runs.
 - Includes an optional Home Assistant custom integration that surfaces plan data as entities.
+
+![Example Plan](docs/assets/example-plan.png)
 
 ### Similar projects
 - [EMHASS](https://github.com/davidusb-geek/emhass) - Home Assistant-focused energy management and optimization.
