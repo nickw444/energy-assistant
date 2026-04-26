@@ -101,7 +101,7 @@ def _make_worker_mock() -> Worker:
 
 def _build_fixture_plan() -> EmsPlanOutput:
     return EmsPlanOutput.model_validate_json(
-        Path("tests/fixtures/ems/nwhass/short-horizon-low-pv/ems_plan.json").read_text()
+        Path("tests/fixtures/ems/nwhass/short-horizon-low-pv/output.json").read_text()
     )
 
 

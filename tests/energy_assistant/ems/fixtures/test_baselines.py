@@ -1,4 +1,4 @@
-"""Validate that ems_plan.json baselines in fixture directories stay in sync."""
+"""Validate that output.json baselines in fixture directories stay in sync."""
 
 from __future__ import annotations
 
@@ -74,7 +74,7 @@ def _discover_fixture_scenarios() -> list[tuple[str, str]]:
     ids=[f"{f}/{s}" for f, s in _discover_fixture_scenarios()],
 )
 def test_fixture_baseline_up_to_date(fixture: str, scenario: str) -> None:
-    """Re-solve each fixture and assert it matches the stored ems_plan.json."""
+    """Re-solve each fixture and assert it matches the stored output.json."""
     paths = resolve_ems_fixture_paths(FIXTURE_BASE, fixture, scenario)
     if not _is_complete_bundle(paths):
         pytest.skip("EMS fixture scenario not recorded.")
@@ -104,7 +104,7 @@ def test_fixture_baseline_up_to_date(fixture: str, scenario: str) -> None:
 
     record_hint = f"energy-assistant ems refresh-baseline --fixture {fixture} --name {scenario}"
     assert actual == expected, (
-        f"Fixture {fixture}/{scenario!r} ems_plan.json is out of date. "
+        f"Fixture {fixture}/{scenario!r} output.json is out of date. "
         "Re-record with: " + record_hint
     )
 
@@ -115,7 +115,7 @@ def test_fixture_baseline_up_to_date(fixture: str, scenario: str) -> None:
     ids=[f"{f}/{s}" for f, s in _discover_fixture_scenarios()],
 )
 def test_fixture_plot_up_to_date(fixture: str, scenario: str) -> None:
-    """Assert the stored ems_plan.jpeg matches its expected hash."""
+    """Assert the stored output.jpeg matches its expected hash."""
     paths = resolve_ems_fixture_paths(FIXTURE_BASE, fixture, scenario)
     if not _is_complete_bundle(paths):
         pytest.skip("EMS fixture scenario not recorded.")
@@ -124,25 +124,25 @@ def test_fixture_plot_up_to_date(fixture: str, scenario: str) -> None:
 
     if paths.hash_path.exists() and not paths.plot_path.exists():
         pytest.fail(
-            f"Fixture {fixture}/{scenario!r} has ems_plan.hash without ems_plan.jpeg. "
+            f"Fixture {fixture}/{scenario!r} has output.hash without output.jpeg. "
             f"Re-record with: {record_hint}"
         )
 
     if paths.plot_path.exists() and not paths.hash_path.exists():
         pytest.fail(
-            f"Fixture {fixture}/{scenario!r} has ems_plan.jpeg without ems_plan.hash. "
+            f"Fixture {fixture}/{scenario!r} has output.jpeg without output.hash. "
             f"Re-record with: {record_hint}"
         )
 
     if not paths.hash_path.exists():
         pytest.fail(
-            f"Fixture {fixture}/{scenario!r} missing ems_plan.hash. "
+            f"Fixture {fixture}/{scenario!r} missing output.hash. "
             f"Re-record with: {record_hint}"
         )
 
     if not paths.plot_path.exists():
         pytest.fail(
-            f"Fixture {fixture}/{scenario!r} missing ems_plan.jpeg. "
+            f"Fixture {fixture}/{scenario!r} missing output.jpeg. "
             f"Re-record with: {record_hint}"
         )
 
@@ -151,7 +151,7 @@ def test_fixture_plot_up_to_date(fixture: str, scenario: str) -> None:
     actual_hash = compute_plan_hash(expected)
 
     assert stored_hash == actual_hash, (
-        f"Fixture {fixture}/{scenario!r} ems_plan.jpeg is out of date "
+        f"Fixture {fixture}/{scenario!r} output.jpeg is out of date "
         f"(hash mismatch: stored={stored_hash}, expected={actual_hash}). "
         "Re-record with: " + record_hint
     )
