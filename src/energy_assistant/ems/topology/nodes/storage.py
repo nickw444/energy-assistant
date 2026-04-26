@@ -215,8 +215,7 @@ def _horizon_duration_minutes(horizon: Horizon) -> float:
 
 
 def _terminal_soc_return_ratio(horizon: Horizon) -> float:
-    # Keep parity with legacy builder: ratio = min(horizon, ref) / max(horizon, ref)
-    # so that 24h keeps full strength and both shorter/longer relax toward reserve.
+    # A 24h horizon keeps full strength; shorter or longer horizons relax toward reserve.
     horizon_minutes = _horizon_duration_minutes(horizon)
     if horizon_minutes <= 0:
         return 1.0

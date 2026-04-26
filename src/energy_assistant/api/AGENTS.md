@@ -3,11 +3,6 @@
 Scope: `src/energy_assistant/api/`.
 Assumes repo-wide conventions in the repo-root `AGENTS.md`.
 
-Key files:
-- `src/energy_assistant/api/server.py` wires the FastAPI app and mounts routers.
-- `src/energy_assistant/api/dependencies.py` defines typed global app-state and FastAPI dependency getters.
-- `src/energy_assistant/api/routes/` contains domain routers and DTOs.
-
 Conventions:
 - Keep routes split by domain (for example, `plan`, `settings`). Prefer adding a new router over growing a single file.
 - Route handlers should use `energy_assistant.api.dependencies` getters instead of reading `request.app.state.*` directly.

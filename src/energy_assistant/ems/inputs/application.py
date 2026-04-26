@@ -25,6 +25,8 @@ from energy_assistant.models.inputs import InputConfig, InputValueKind, input_va
 
 
 class EmsInputApplicator:
+    """Convert resolved source data into horizon-aligned EMS inputs."""
+
     def __init__(
         self,
         *,
@@ -42,6 +44,7 @@ class EmsInputApplicator:
         horizon: Horizon,
         inputs: ResolvedInputRegistry,
     ) -> AppliedInputRegistry:
+        """Apply realtime overrides, forecast extension, and coverage checks for this horizon."""
         scalars: dict[str, ResolvedScalarInput] = inputs.scalars()
         raw_forecasts = inputs.forecasts()
         forecasts: dict[str, AppliedForecastInput] = {}

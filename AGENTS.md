@@ -2,9 +2,7 @@
 
 This file covers repo-wide conventions for coding agents. For domain-specific guidance, see:
 - `src/energy_assistant/api/AGENTS.md` (FastAPI API)
-- `src/energy_assistant/worker/AGENTS.md` (background planning loop)
 - `src/energy_assistant/ems/AGENTS.md` (EMS MILP solver)
-- `src/energy_assistant/lib/source_resolver/AGENTS.md` (Home Assistant data hydration + sources)
 - `custom_components/energy_assistant/AGENTS.md` (Home Assistant custom integration)
 
 ## Work Like A Human (Scope First)
@@ -20,12 +18,12 @@ This file covers repo-wide conventions for coding agents. For domain-specific gu
 - Tests should mirror the `src/energy_assistant` package structure under `tests/energy_assistant/`.
 
 ## Architecture boundaries
-- Keep API and worker logic modular and loosely coupled. Dependencies are wired explicitly in `src/energy_assistant/cli.py`.
+- Keep API and worker logic modular and loosely coupled. Compose runtime dependencies explicitly at application boundaries.
 - Shared helpers (Home Assistant clients, WebSocket subscriptions, source resolver) live under `src/energy_assistant/lib/`.
 
 ## Configuration and persistence
 - Config is a single YAML file (`--config`, defaults to `config.yaml`, then `config.dev.yaml`) parsed into Pydantic models.
-- When adding/renaming/changing YAML config fields, update `QUICKSTART.md` with field-level documentation (inline YAML comments near the field) and keep it in sync with the Pydantic schema.
+- When changing user-facing YAML config fields, keep `QUICKSTART.md`'s representative example valid and point detailed behavior back to the Pydantic schema/code.
 - Persist runtime artifacts to the filesystem under `server.data_dir` (plans, plots, reports). Avoid destructive changes that would drop user data.
 
 ## Schema changes

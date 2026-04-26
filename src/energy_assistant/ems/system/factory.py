@@ -27,7 +27,7 @@ from energy_assistant.models.plant import (
 
 
 class EmsSystemFactory:
-    """Builds persistent EMS component definitions from plant config."""
+    """Resolve flat plant config into persistent logical component objects."""
 
     def __init__(
         self,
@@ -46,6 +46,7 @@ class EmsSystemFactory:
         )
 
     def build(self, app_config: AppConfig) -> EmsSystem:
+        """Build an `EmsSystem` while preserving plant declaration order for export."""
         connection_by_component: dict[str, str | None] = {}
         dependents_by_connection: dict[str, list[str]] = {}
         remaining_connection_count: dict[str, int] = {}

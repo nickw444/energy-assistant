@@ -11,7 +11,12 @@ from energy_assistant.ems.topology.graph import EnergyGraph, GraphElement
 
 
 class EmsComponent[TSolveState, TPlanExport](ABC, SupportsSolveState[TSolveState]):
-    """Typed EMS component contract."""
+    """Persistent logical component that contributes to each solve.
+
+    Components keep configuration and stable ids. For each solve they emit fresh topology
+    elements, optionally add cross-component fragments after all components have built their local
+    graph, then extract their typed plan payload from the solved snapshot.
+    """
 
     id: str
 
@@ -23,7 +28,7 @@ class EmsComponent[TSolveState, TPlanExport](ABC, SupportsSolveState[TSolveState
         inputs: AppliedInputRegistry,
         build_ctx: GraphBuildContext,
     ) -> tuple[list[GraphElement], TSolveState]:
-        """Build solve-scoped physical topology elements from the current inputs."""
+        """Build this component's local solve-scoped topology elements."""
 
     def create_graph_fragments(
         self,
@@ -32,6 +37,7 @@ class EmsComponent[TSolveState, TPlanExport](ABC, SupportsSolveState[TSolveState
         build_ctx: GraphBuildContext,
         solve_states: SolveStateStore,
     ) -> list[GraphElement]:
+        """Add late-bound graph fragments that need other components' graph elements."""
         _ = graph, build_ctx, solve_states
         return []
 
@@ -43,4 +49,4 @@ class EmsComponent[TSolveState, TPlanExport](ABC, SupportsSolveState[TSolveState
         solve_state: TSolveState,
         plan_ctx: PlanContext,
     ) -> TPlanExport:
-        """Extract a typed plan payload from the solved model."""
+        """Extract this component's export payload from the solved model."""

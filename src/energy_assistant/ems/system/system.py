@@ -18,7 +18,7 @@ _COMPONENT_PLAN_ADAPTER: TypeAdapter[ComponentPlan] = TypeAdapter(ComponentPlan)
 
 
 class EmsSystem:
-    """Persistent EMS component definitions with per-solve resolved inputs."""
+    """Persistent logical component registry used to build per-solve model snapshots."""
 
     def __init__(
         self,
@@ -35,6 +35,7 @@ class EmsSystem:
         horizon: Horizon,
         inputs: AppliedInputRegistry,
     ) -> tuple[ModelSnapshot, SolveStateStore]:
+        """Create the solve-scoped graph, MILP snapshot, and component solve-state store."""
         graph = EnergyGraph()
         solve_states = SolveStateStore()
         build_ctx = GraphBuildContext(
@@ -69,6 +70,7 @@ class EmsSystem:
         *,
         solve_state: EmsSystemSolveState,
     ) -> dict[str, ComponentPlan]:
+        """Extract and normalize the flat component-plan export after the model is solved."""
         plan_ctx = PlanContext(
             components=self.components,
             solve_states=solve_state,

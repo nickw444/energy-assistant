@@ -220,7 +220,7 @@ class BatteryComponent(EmsComponent[BatterySolveState, BatteryComponentPlan]):
 
 
 class BatteryExportReservePolicy:
-    """Blocks *all* grid export unless the battery stays above reserve SoC (parity with legacy)."""
+    """Blocks grid export unless the battery stays above reserve SoC."""
 
     def __init__(
         self,

@@ -42,6 +42,8 @@ class EmsSolvedRun:
 
 
 class EmsMilpPlanner:
+    """Orchestrate input resolution, snapshot construction, solving, and plan extraction."""
+
     def __init__(
         self,
         *,

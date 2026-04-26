@@ -2,7 +2,7 @@
   "domain": "energy_assistant",
   "name": "Energy Assistant",
   "version": "0.1.0",
-  "documentation": "https://github.com/",
+  "documentation": "https://github.com/nickw444/energy-assistant",
   "requirements": ["pydantic>=2.5.0,<3.0.0"],
   "dependencies": [],
   "codeowners": [],

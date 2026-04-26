@@ -5,27 +5,27 @@ single YAML file.
 
 ## Requirements
 - Python 3.13.2+
-- A Home Assistant instance and a long-lived access token (current data connector)
+- A Home Assistant instance and a long-lived access token
 - Entity IDs for the sensors you want to use
 
 ## Install
 1. Install `uv`: `pip install uv`
-2. Install dependencies: `uv sync --all-extras --dev`
+2. Install dependencies: `uv sync --dev`
 
 ## Configure
 1. Create `config.yaml` in the repo root (or pass `--config` to point elsewhere).
 2. Fill in the configuration below with your Home Assistant URL, token, and entity IDs.
 
-Full example (covers all available config options):
+Representative example:
 
 ```yaml
-# API + worker runtime settings.
+# API and worker runtime settings.
 server:
   # Bind address for the FastAPI service.
   host: 0.0.0.0
   # Port for the FastAPI service.
   port: 6070
-  # Directory for runtime artifacts (plans, logs, etc).
+  # Directory for runtime artifacts such as plan JSON, plots, and reports.
   data_dir: ./data
 
 # Home Assistant connection details.
@@ -160,8 +160,8 @@ inputs:
       type: home_assistant
       entity: sensor.ev_soc
 
-# Flat plant registry. Keys are component ids and `connection` points to another
-# plant component id. Attachment semantics are implicit:
+# Flat plant registry. Keys are component ids. `connection` points to another
+# plant component id, and the component types define the attachment semantics:
 # - grid/load/EV connect to switchboard AC
 # - inverter connects AC to switchboard
 # - battery/PV connect to inverter DC
@@ -295,7 +295,7 @@ plant:
 3. Fetch the latest plan: `curl http://localhost:6070/plan/latest`
 
 Notes:
-- The worker runs immediately at startup, then at least every minute, and also after price changes.
+- The worker runs immediately at startup, then on a roughly one-minute fallback schedule, and also after watched price changes.
 - `months` must use 3-letter abbreviations (`jan`..`dec`).
 - `homeassistant.base_url` should include `http://` or `https://`.
 - Set `homeassistant.verify_tls: false` if you use a self-signed certificate.
@@ -303,7 +303,7 @@ Notes:
 - All sources use `type: home_assistant` today; `platform` selects forecast providers.
 - `inputs` is the only place that defines data sources. `plant` only references `inputs.*`.
 - String input references like `inputs.grid_price_import` are a shortcut for `{ source: inputs.grid_price_import }`.
-- The app requires exactly one `switchboard`, one `grid`, and one base `load` component.
+- A typical plant has one switchboard, grid, and base load. The plant registry can also include multiple grids, PV arrays, batteries, and EV loads when they are wired to compatible parent components.
 - `data_dir` is created automatically if it does not exist.
 
 ## Home Assistant Helpers
@@ -422,9 +422,10 @@ docker run --rm -p 6070:6070 \
 Or with compose:
 
 ```bash
-docker compose up -d
+docker compose -f docker-compose.example.yml up -d
 ```
 
 ## Optional Home Assistant integration
 A Home Assistant custom integration (early POC) lives in `custom_components/energy_assistant` and can
-surface plans back into HA. It is optional and separate from the core service.
+surface plans back into HA. It also exposes a button entity that triggers `/plan/run`. It is optional
+and separate from the core service.
