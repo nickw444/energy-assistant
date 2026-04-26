@@ -1,4 +1,0 @@
-{
-  "$schema": "https://www.cursor.com/schemas/environment.schema.json",
-  "install": "python3 -m pip install uv && python3 -m uv sync --dev --frozen"
-}
