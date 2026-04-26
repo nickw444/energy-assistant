@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+from energy_assistant.ems.horizon import Horizon
 from energy_assistant.ems.inputs.alignment import (
     PowerForecastAligner,
     PriceForecastAligner,
@@ -11,7 +12,6 @@ from energy_assistant.ems.inputs.models import (
     AppliedForecastInput,
     AppliedInputRegistry,
 )
-from energy_assistant.ems.planning.horizon import Horizon
 from energy_assistant.inputs.registry import (
     ResolvedForecastInput,
     ResolvedInputRegistry,

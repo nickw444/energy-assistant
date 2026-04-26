@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import calendar
 import re
+from dataclasses import dataclass
 from typing import Annotated, Literal, Self, cast
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from energy_assistant.models.inputs import ForecastInputConfig, InputValueKind, ScalarInputConfig
 
 _ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 
@@ -79,6 +82,13 @@ class InputReference(BaseModel):
         return self.source
 
 
+@dataclass(frozen=True)
+class InputRequirement:
+    reference: InputReference
+    input_config_type: type[ScalarInputConfig] | type[ForecastInputConfig]
+    value_kind: InputValueKind
+
+
 class PriceBiasFilterConfig(BaseModel):
     type: Literal["bias"]
     bias_pct: float = Field(default=0.0, ge=0, le=100)
@@ -141,6 +151,9 @@ class SwitchboardComponentConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
+    def input_requirements(self) -> tuple[InputRequirement, ...]:
+        return ()
+
 
 class GridConstraintsConfig(BaseModel):
     max_import_kw: float = Field(ge=0)
@@ -166,6 +179,29 @@ class GridComponentConfig(BaseModel):
     def _validate_connection(cls, value: str) -> str:
         return normalize_registry_key(value)
 
+    def input_requirements(self) -> tuple[InputRequirement, ...]:
+        requirements = [
+            InputRequirement(
+                self.price_import.source,
+                ForecastInputConfig,
+                InputValueKind.PRICE,
+            ),
+            InputRequirement(
+                self.price_export.source,
+                ForecastInputConfig,
+                InputValueKind.PRICE,
+            ),
+        ]
+        if self.realtime_grid_power is not None:
+            requirements.append(
+                InputRequirement(
+                    self.realtime_grid_power,
+                    ScalarInputConfig,
+                    InputValueKind.POWER,
+                )
+            )
+        return tuple(requirements)
+
 
 class LoadComponentConfig(BaseModel):
     type: Literal["load"]
@@ -179,6 +215,15 @@ class LoadComponentConfig(BaseModel):
     @classmethod
     def _validate_connection(cls, value: str) -> str:
         return normalize_registry_key(value)
+
+    def input_requirements(self) -> tuple[InputRequirement, ...]:
+        return (
+            InputRequirement(
+                self.power,
+                ForecastInputConfig,
+                InputValueKind.POWER,
+            ),
+        )
 
 
 class InverterComponentConfig(BaseModel):
@@ -194,6 +239,9 @@ class InverterComponentConfig(BaseModel):
     @classmethod
     def _validate_connection(cls, value: str) -> str:
         return normalize_registry_key(value)
+
+    def input_requirements(self) -> tuple[InputRequirement, ...]:
+        return ()
 
 
 class BatteryComponentConfig(BaseModel):
@@ -229,6 +277,20 @@ class BatteryComponentConfig(BaseModel):
             raise ValueError("reserve_soc_pct must be <= max_soc_pct")
         return self
 
+    def input_requirements(self) -> tuple[InputRequirement, ...]:
+        return (
+            InputRequirement(
+                self.state_of_charge_pct,
+                ScalarInputConfig,
+                InputValueKind.PERCENTAGE,
+            ),
+            InputRequirement(
+                self.realtime_power,
+                ScalarInputConfig,
+                InputValueKind.POWER,
+            ),
+        )
+
 
 class PvComponentConfig(BaseModel):
     type: Literal["pv"]
@@ -243,6 +305,15 @@ class PvComponentConfig(BaseModel):
     @classmethod
     def _validate_connection(cls, value: str) -> str:
         return normalize_registry_key(value)
+
+    def input_requirements(self) -> tuple[InputRequirement, ...]:
+        return (
+            InputRequirement(
+                self.forecast,
+                ForecastInputConfig,
+                InputValueKind.POWER,
+            ),
+        )
 
 
 class SocIncentive(BaseModel):
@@ -280,6 +351,34 @@ class ControlledEvComponentConfig(BaseModel):
         if self.min_power_kw > self.max_power_kw:
             raise ValueError("min_power_kw must be <= max_power_kw")
         return self
+
+    def input_requirements(self) -> tuple[InputRequirement, ...]:
+        requirements = [
+            InputRequirement(
+                self.connected,
+                ScalarInputConfig,
+                InputValueKind.BOOLEAN,
+            ),
+            InputRequirement(
+                self.realtime_power,
+                ScalarInputConfig,
+                InputValueKind.POWER,
+            ),
+            InputRequirement(
+                self.state_of_charge_pct,
+                ScalarInputConfig,
+                InputValueKind.PERCENTAGE,
+            ),
+        ]
+        if self.can_connect is not None:
+            requirements.append(
+                InputRequirement(
+                    self.can_connect,
+                    ScalarInputConfig,
+                    InputValueKind.BOOLEAN,
+                )
+            )
+        return tuple(requirements)
 
 
 PlantComponentConfig = Annotated[

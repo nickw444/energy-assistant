@@ -1,18 +1,18 @@
 from __future__ import annotations
 
 from collections import deque
-from typing import Any, TypeVar
+from typing import Any
 
 from energy_assistant.ems.components.base_load import BaseLoadComponent
 from energy_assistant.ems.components.battery import BatteryComponent
+from energy_assistant.ems.components.component import EmsComponent
 from energy_assistant.ems.components.ev import EvComponent
 from energy_assistant.ems.components.grid import GridComponent
+from energy_assistant.ems.components.grid.price_bindings import PriceBindingApplicator
 from energy_assistant.ems.components.inverter import InverterComponent
+from energy_assistant.ems.components.lib.time_windows import TimeWindowMatcher
 from energy_assistant.ems.components.pv import PvComponent
 from energy_assistant.ems.components.switchboard import SwitchboardComponent
-from energy_assistant.ems.planning.pricing import PriceSeriesBuilder
-from energy_assistant.ems.planning.time_windows import TimeWindowMatcher
-from energy_assistant.ems.system.component import EmsComponent
 from energy_assistant.ems.system.system import EmsSystem
 from energy_assistant.models.config import AppConfig
 from energy_assistant.models.plant import (
@@ -33,16 +33,16 @@ class EmsSystemFactory:
         self,
         *,
         time_window_matcher: TimeWindowMatcher,
-        price_series_builder: PriceSeriesBuilder,
+        price_binding_applicator: PriceBindingApplicator,
     ) -> None:
         self._time_window_matcher = time_window_matcher
-        self._price_series_builder = price_series_builder
+        self._price_binding_applicator = price_binding_applicator
 
     @classmethod
     def create(cls) -> EmsSystemFactory:
         return cls(
             time_window_matcher=TimeWindowMatcher(),
-            price_series_builder=PriceSeriesBuilder(),
+            price_binding_applicator=PriceBindingApplicator(),
         )
 
     def build(self, app_config: AppConfig) -> EmsSystem:
@@ -77,7 +77,7 @@ class EmsSystemFactory:
                 components=components,
                 connection_by_component=connection_by_component,
                 grid_configs_by_switchboard=grid_configs_by_switchboard,
-                price_series_builder=self._price_series_builder,
+                price_binding_applicator=self._price_binding_applicator,
                 time_window_matcher=self._time_window_matcher,
             )
             components[component_id] = component
@@ -108,7 +108,7 @@ class EmsSystemFactory:
         components: dict[str, EmsComponent[Any, Any]],
         connection_by_component: dict[str, str | None],
         grid_configs_by_switchboard: dict[str, list[GridComponentConfig]],
-        price_series_builder: PriceSeriesBuilder,
+        price_binding_applicator: PriceBindingApplicator,
         time_window_matcher: TimeWindowMatcher,
     ) -> EmsComponent[Any, Any]:
         if isinstance(component_cfg, SwitchboardComponentConfig):
@@ -125,7 +125,7 @@ class EmsSystemFactory:
                 ),
                 grid=component_cfg,
                 time_window_matcher=time_window_matcher,
-                price_series_builder=price_series_builder,
+                price_binding_applicator=price_binding_applicator,
             )
         if isinstance(component_cfg, LoadComponentConfig):
             return BaseLoadComponent(
@@ -174,7 +174,8 @@ class EmsSystemFactory:
             inverter_connection_target_id = connection_by_component[component_cfg.connection]
             if inverter_connection_target_id is None:  # pragma: no cover - defensive
                 raise ValueError(
-                    f"component {component_id} references inverter {component_cfg.connection!r} with no switchboard parent"
+                    f"component {component_id} references inverter "
+                    f"{component_cfg.connection!r} with no switchboard parent"
                 )
             return BatteryComponent(
                 component_id=component_id,
@@ -196,11 +197,10 @@ class EmsSystemFactory:
             load=component_cfg,
             grid_export_bias_pct=cls.grid_export_bias_pct_from_configs(
                 grid_configs_by_switchboard.get(component_cfg.connection, []),
-                price_series_builder=price_series_builder,
+                price_binding_applicator=price_binding_applicator,
             ),
             time_window_matcher=time_window_matcher,
         )
-
 
     @staticmethod
     def grid_max_export_kw_from_configs(grids: list[GridComponentConfig]) -> float:
@@ -212,12 +212,12 @@ class EmsSystemFactory:
     def grid_export_bias_pct_from_configs(
         grids: list[GridComponentConfig],
         *,
-        price_series_builder: PriceSeriesBuilder,
+        price_binding_applicator: PriceBindingApplicator,
     ) -> float:
         if not grids:
             return 0.0
         first_grid = grids[0]
-        return price_series_builder.binding_bias_pct(
+        return price_binding_applicator.binding_bias_pct(
             binding=first_grid.price_export,
             direction="export",
         )
@@ -232,10 +232,7 @@ class EmsSystemFactory:
         return grouped
 
 
-TResolvedComponent = TypeVar("TResolvedComponent", bound=EmsComponent[Any, Any])
-
-
-def _resolve_component(
+def _resolve_component[TResolvedComponent: EmsComponent[Any, Any]](
     components: dict[str, EmsComponent[Any, Any]],
     *,
     expected_type: type[TResolvedComponent],
@@ -251,6 +248,7 @@ def _resolve_component(
         ) from exc
     if not isinstance(target, expected_type):  # pragma: no cover - defensive
         raise ValueError(
-            f"component {component_key} expected {expected_label} {target_key!r} but found {type(target).__name__}"
+            f"component {component_key} expected {expected_label} {target_key!r} "
+            f"but found {type(target).__name__}"
         )
     return target

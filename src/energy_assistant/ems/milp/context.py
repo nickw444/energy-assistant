@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pulp
 
-from energy_assistant.ems.planning.horizon import Horizon
+from energy_assistant.ems.horizon import Horizon
 
 
 class ConstraintSpec:

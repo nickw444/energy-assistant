@@ -8,6 +8,7 @@ from typing import get_args
 
 import pulp
 
+from energy_assistant.ems.horizon import HorizonFactory
 from energy_assistant.ems.inputs.application import EmsInputApplicator
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
 from energy_assistant.ems.models import (
@@ -15,7 +16,6 @@ from energy_assistant.ems.models import (
     EmsPlanStatus,
     EmsPlanTimings,
 )
-from energy_assistant.ems.planning.horizon import HorizonFactory
 from energy_assistant.ems.system.state import EmsSystemSolveState
 from energy_assistant.ems.system.system import EmsSystem
 from energy_assistant.inputs.provider import EmsInputProvider

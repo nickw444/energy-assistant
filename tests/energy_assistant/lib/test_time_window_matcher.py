@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from energy_assistant.ems.planning.time_windows import TimeWindowMatcher
+from energy_assistant.ems.components.lib.time_windows import TimeWindowMatcher
 from energy_assistant.models.plant import TimeWindow
 
 

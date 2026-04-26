@@ -11,10 +11,10 @@ from fastapi import Depends, FastAPI
 
 from energy_assistant.api.dependencies import GlobalDependencies, get_config
 from energy_assistant.api.server import create_app
+from energy_assistant.ems.horizon import HorizonFactory
 from energy_assistant.ems.inputs.alignment import PowerForecastAligner, PriceForecastAligner
 from energy_assistant.ems.inputs.application import EmsInputApplicator
 from energy_assistant.ems.planner import EmsMilpPlanner
-from energy_assistant.ems.planning.horizon import HorizonFactory
 from energy_assistant.ems.system.factory import EmsSystemFactory
 from energy_assistant.inputs.fixtures import load_fixture_input_provider
 from energy_assistant.models.config import AppConfig

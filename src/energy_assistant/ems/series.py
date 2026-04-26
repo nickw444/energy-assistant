@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from datetime import datetime
 
-from energy_assistant.ems.planning.horizon import Horizon
+from energy_assistant.ems.horizon import Horizon
 from energy_assistant.ems.series_types import EmsSeriesPoint
 
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from energy_assistant.ems.planning.horizon import Horizon, HorizonFactory
+from energy_assistant.ems.horizon import Horizon, HorizonFactory
 
 
 def _make_horizon(

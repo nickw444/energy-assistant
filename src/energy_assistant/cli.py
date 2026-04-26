@@ -24,11 +24,11 @@ from energy_assistant.ems.fixtures.harness import (
     resolve_ems_fixture_paths,
     serialize_plan,
 )
+from energy_assistant.ems.horizon import HorizonFactory
 from energy_assistant.ems.inputs.alignment import PowerForecastAligner, PriceForecastAligner
 from energy_assistant.ems.inputs.application import EmsInputApplicator
 from energy_assistant.ems.models import GridComponentPlan
 from energy_assistant.ems.planner import EmsMilpPlanner
-from energy_assistant.ems.planning.horizon import HorizonFactory
 from energy_assistant.ems.system.factory import EmsSystemFactory
 from energy_assistant.inputs.fixtures import (
     load_fixture_input_provider,

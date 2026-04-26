@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
-from energy_assistant.ems.planning.horizon import Horizon
+from energy_assistant.ems.horizon import Horizon
 from energy_assistant.lib.source_resolver.models import PowerForecastInterval, PriceForecastInterval
 
 

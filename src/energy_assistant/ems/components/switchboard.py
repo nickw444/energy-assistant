@@ -1,14 +1,11 @@
 from __future__ import annotations
 
-from typing import ClassVar
-
+from energy_assistant.ems.components.component import EmsComponent
+from energy_assistant.ems.components.context import GraphBuildContext, PlanContext
+from energy_assistant.ems.horizon import Horizon
 from energy_assistant.ems.inputs.models import AppliedInputRegistry
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
 from energy_assistant.ems.models import SwitchboardComponentPlan
-from energy_assistant.ems.planning.horizon import Horizon
-from energy_assistant.ems.system.component import EmsComponent
-from energy_assistant.ems.system.context import GraphBuildContext, PlanContext
-from energy_assistant.ems.system.types import ComponentType
 from energy_assistant.ems.topology.graph import GraphElement
 from energy_assistant.ems.topology.ids import NodeId
 from energy_assistant.ems.topology.nodes import Node
@@ -16,8 +13,6 @@ from energy_assistant.ems.topology.nodes import Node
 
 class SwitchboardComponent(EmsComponent[None, SwitchboardComponentPlan]):
     """AC bus representing the main switchboard."""
-
-    component_type: ClassVar[ComponentType] = "switchboard"
 
     def __init__(self, *, component_id: str) -> None:
         self.id = component_id

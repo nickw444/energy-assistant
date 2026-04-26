@@ -1,22 +1,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import ClassVar
 
 import pulp
 
+from energy_assistant.ems.components.component import EmsComponent
+from energy_assistant.ems.components.context import GraphBuildContext, PlanContext
 from energy_assistant.ems.components.grid import GridComponent
 from energy_assistant.ems.components.inverter import InverterComponent
+from energy_assistant.ems.horizon import Horizon
 from energy_assistant.ems.inputs.models import AppliedInputRegistry
 from energy_assistant.ems.milp.context import ConstraintSpec, value_of
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
 from energy_assistant.ems.models import BatteryComponentPlan
-from energy_assistant.ems.planning.horizon import Horizon
 from energy_assistant.ems.series import interval_series_points, state_series_points
-from energy_assistant.ems.system.component import EmsComponent
-from energy_assistant.ems.system.context import GraphBuildContext, PlanContext
 from energy_assistant.ems.system.state import SolveStateStore
-from energy_assistant.ems.system.types import ComponentType
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import EnergyGraph, GraphElement
 from energy_assistant.ems.topology.ids import NodeId
@@ -38,8 +36,6 @@ class BatterySolveState:
 
 
 class BatteryComponent(EmsComponent[BatterySolveState, BatteryComponentPlan]):
-    component_type: ClassVar[ComponentType] = "battery"
-
     def __init__(
         self,
         *,

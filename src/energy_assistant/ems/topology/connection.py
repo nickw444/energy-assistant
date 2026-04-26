@@ -5,8 +5,8 @@ from typing import TypeVar
 
 import pulp
 
+from energy_assistant.ems.horizon import Horizon
 from energy_assistant.ems.milp.context import ConstraintSpec
-from energy_assistant.ems.planning.horizon import Horizon
 from energy_assistant.ems.topology.ids import NodeId
 from energy_assistant.ems.topology.policies import ConnectionPolicy, Passthrough
 
