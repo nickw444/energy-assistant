@@ -3,7 +3,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from energy_assistant.ems.fixtures.harness import render_fixture_json, resolve_ems_fixture_paths
+from energy_assistant.ems.fixtures.harness import (
+    normalize_plan_payload,
+    render_fixture_json,
+    resolve_ems_fixture_paths,
+)
 
 
 def test_resolve_ems_fixture_paths_fixture_only(tmp_path: Path) -> None:
@@ -89,3 +93,43 @@ def test_render_fixture_json_inlines_scalar_objects_inside_arrays() -> None:
     assert '    {"time": "2026-01-14T20:50:00+11:00", "value": 0.525},' in rendered
     assert '    {"time": "2026-01-14T20:55:00+11:00", "value": 0.646}' in rendered
     assert json.loads(rendered) == payload
+
+
+def test_normalize_plan_payload_rounds_nested_floats_and_clamps_near_zero() -> None:
+    payload = {
+        "objective_value": 1.23456,
+        "timings": {
+            "build_seconds": 12.34567,
+            "solve_seconds": 0.0049,
+        },
+        "components": {
+            "battery": {
+                "charge_kw": [
+                    {"time": "2026-01-14T20:50:00+11:00", "value": 1.23456},
+                    {"time": "2026-01-14T20:55:00+11:00", "value": -0.0000004},
+                ],
+                "soc_kwh": [
+                    {"time": "2026-01-14T20:50:00+11:00", "value": 5.55555},
+                ],
+            }
+        },
+    }
+
+    assert normalize_plan_payload(payload) == {
+        "objective_value": 1.235,
+        "timings": {
+            "build_seconds": 0.0,
+            "solve_seconds": 0.0,
+        },
+        "components": {
+            "battery": {
+                "charge_kw": [
+                    {"time": "2026-01-14T20:50:00+11:00", "value": 1.235},
+                    {"time": "2026-01-14T20:55:00+11:00", "value": 0.0},
+                ],
+                "soc_kwh": [
+                    {"time": "2026-01-14T20:50:00+11:00", "value": 5.556},
+                ],
+            }
+        },
+    }

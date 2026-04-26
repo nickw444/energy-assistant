@@ -11,6 +11,9 @@ from energy_assistant.ems.models import (
     EmsPlanOutput,
 )
 
+_FIXTURE_FLOAT_EPSILON = 1e-6
+_FIXTURE_FLOAT_DECIMALS = 3
+
 
 @dataclass(frozen=True, slots=True)
 class EmsFixturePaths:
@@ -127,7 +130,10 @@ def _is_json_scalar(value: Any) -> bool:
 
 def _round_floats(value: Any) -> Any:
     if isinstance(value, float):
-        return round(value, 3)
+        if abs(value) < _FIXTURE_FLOAT_EPSILON:
+            return 0.0
+        rounded = round(value, _FIXTURE_FLOAT_DECIMALS)
+        return 0.0 if rounded == 0 else rounded
     if isinstance(value, Mapping):
         mapping = cast(dict[str, Any], value)
         return {key: _round_floats(item) for key, item in mapping.items()}
@@ -138,13 +144,14 @@ def _round_floats(value: Any) -> Any:
 
 
 def normalize_plan_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    normalized = _round_floats(payload)
     timings = payload.get("timings")
     if isinstance(timings, dict):
         timings_dict = cast(dict[str, object], timings)
-        normalized = dict(payload)
         normalized["timings"] = {key: 0.0 for key in timings_dict}
-        return normalized
-    return payload
+    return normalized
+
+
 def serialize_plan(plan: EmsPlanOutput, *, normalize_timings: bool = True) -> dict[str, Any]:
     payload = plan.model_dump(mode="json")
     if normalize_timings:
