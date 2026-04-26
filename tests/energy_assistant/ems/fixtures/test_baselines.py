@@ -13,6 +13,7 @@ from energy_assistant.config import load_app_config
 from energy_assistant.ems.fixtures.harness import (
     EmsFixturePaths,
     compute_plan_hash,
+    normalize_plan_payload,
     resolve_ems_fixture_paths,
     serialize_plan,
 )
@@ -100,7 +101,7 @@ def test_fixture_baseline_up_to_date(fixture: str, scenario: str) -> None:
     ).generate_ems_run(now=now).plan
 
     actual = serialize_plan(plan)
-    expected = json.loads(paths.plan_path.read_text())
+    expected = normalize_plan_payload(json.loads(paths.plan_path.read_text()))
 
     record_hint = f"energy-assistant ems refresh-baseline --fixture {fixture} --name {scenario}"
     assert actual == expected, (
