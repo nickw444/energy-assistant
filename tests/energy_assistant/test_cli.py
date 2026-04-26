@@ -78,7 +78,7 @@ def test_record_scenario_writes_resolved_inputs_fixture(
         cli,
         [
             "--config",
-            "tests/fixtures/ems/nwhass/config.yaml",
+            "tests/fixtures/ems/nwhass/short-horizon-low-pv/config.yaml",
             "ems",
             "record-scenario",
             "--output-dir",
