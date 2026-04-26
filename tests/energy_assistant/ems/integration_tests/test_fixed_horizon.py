@@ -85,12 +85,9 @@ class StubResolver:
 
 def _load_fixture_config() -> AppConfig:
     fixture_path = (
-        Path(__file__).resolve().parents[4]
-        / "tests"
+        Path(__file__).resolve().parent
         / "fixtures"
-        / "ems"
-        / "nwhass"
-        / "config.yaml"
+        / "test_fixed_horizon_grid_rebind_config.yaml"
     )
     loaded_raw: Any = yaml.safe_load(fixture_path.read_text())
     assert isinstance(loaded_raw, dict)
