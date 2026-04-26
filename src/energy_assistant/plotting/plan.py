@@ -51,6 +51,31 @@ class ScenarioPlot:
     error: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class _StaticTrace:
+    name: str
+    axis: str
+    times: list[datetime]
+    values: list[float]
+    stroke_color: str
+    stroke_width: float = 2.0
+    fill_color: str | None = None
+    dash: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _PreparedStaticPlot:
+    traces: list[_StaticTrace]
+    interval_boundaries: list[datetime]
+    curtailment_flags: list[bool]
+    power_max: float
+    soc_axis_max: float
+    price_max: float
+    total_cost: float
+    total_import_kwh: float
+    total_export_kwh: float
+
+
 def _build_plan_figure(
     plan: EmsPlanOutput,
     *,
@@ -849,6 +874,29 @@ def plot_scenarios_html(
     return html_content
 
 
+def write_plan_svg(
+    plan: EmsPlanOutput,
+    output: Path,
+    *,
+    width: int = 1600,
+    height: int = 900,
+) -> None:
+    """Write the plan as a static SVG plot for fixture baselines and reviews.
+
+    Args:
+        plan: The plan output to plot.
+        output: Path to write the SVG image.
+        width: SVG viewport width in pixels.
+        height: SVG viewport height in pixels.
+    """
+    svg = _build_plan_svg(plan, width=width, height=height)
+    output.write_text(svg)
+    if not output.exists():
+        raise ValueError(f"Failed to write plan SVG to {output}")
+    if output.stat().st_size == 0:
+        raise ValueError(f"Plan SVG {output} is empty")
+
+
 def write_plan_image(
     plan: EmsPlanOutput,
     output: Path,
@@ -856,20 +904,520 @@ def write_plan_image(
     width: int = 1600,
     height: int = 900,
 ) -> None:
-    """Write the plan as a static JPEG image for PR review.
+    """Backward-compatible wrapper for writing the static plan plot."""
+    write_plan_svg(plan, output, width=width, height=height)
 
-    Args:
-        plan: The plan output to plot.
-        output: Path to write the JPEG image.
-        width: Image width in pixels.
-        height: Image height in pixels.
-    """
-    fig, _ = _build_plan_figure(plan, include_hover=False)
-    fig.write_image(str(output), width=width, height=height, format="jpeg", scale=2)
-    if not output.exists():
-        raise ValueError(f"Failed to write plan image to {output}")
-    if output.stat().st_size == 0:
-        raise ValueError(f"Plan image {output} is empty")
+
+def _build_plan_svg(
+    plan: EmsPlanOutput,
+    *,
+    width: int,
+    height: int,
+) -> str:
+    prepared = _prepare_static_plot(plan)
+    chart_left = 80
+    chart_top = 110
+    chart_right = width - 180
+    chart_bottom = height - 145
+    chart_width = chart_right - chart_left
+    chart_height = chart_bottom - chart_top
+    soc_axis_x = width - 88
+    price_axis_x = width - 138
+
+    start_time = prepared.interval_boundaries[0]
+    end_time = prepared.interval_boundaries[-1]
+    if end_time <= start_time:
+        end_time = start_time + timedelta(minutes=5)
+
+    def x_for(value: datetime) -> float:
+        span = (end_time - start_time).total_seconds()
+        offset = (value - start_time).total_seconds()
+        return chart_left + (offset / span) * chart_width
+
+    def y_for(axis: str, value: float) -> float:
+        if axis == "soc":
+            y_min, y_max = -prepared.soc_axis_max, prepared.soc_axis_max
+        elif axis == "price":
+            y_min, y_max = -prepared.price_max * 1.1, prepared.price_max * 1.1
+        else:
+            y_min, y_max = -prepared.power_max, prepared.power_max
+        span = y_max - y_min or 1.0
+        return chart_top + ((y_max - value) / span) * chart_height
+
+    def step_points(times: list[datetime], values: list[float]) -> list[tuple[float, float]]:
+        if not times or not values:
+            return []
+        points: list[tuple[float, float]] = []
+        if len(times) == len(values) + 1:
+            points.append((x_for(times[0]), values[0]))
+            for index in range(1, len(values)):
+                x_value = x_for(times[index])
+                points.append((x_value, values[index - 1]))
+                points.append((x_value, values[index]))
+            points.append((x_for(times[-1]), values[-1]))
+            return points
+
+        points.append((x_for(times[0]), values[0]))
+        for index in range(1, min(len(times), len(values))):
+            x_value = x_for(times[index])
+            points.append((x_value, values[index - 1]))
+            points.append((x_value, values[index]))
+        return points
+
+    def path_from_points(points: list[tuple[float, float]], axis: str) -> str:
+        svg_points = [
+            f"{'M' if index == 0 else 'L'} {x_value:.2f} {y_for(axis, y_value):.2f}"
+            for index, (x_value, y_value) in enumerate(points)
+        ]
+        return " ".join(svg_points)
+
+    def area_path_from_points(points: list[tuple[float, float]], axis: str) -> str:
+        if not points:
+            return ""
+        baseline_y = y_for(axis, 0.0)
+        start_x = points[0][0]
+        end_x = points[-1][0]
+        line_segments = [
+            f"L {x_value:.2f} {y_for(axis, y_value):.2f}" for x_value, y_value in points[1:]
+        ]
+        return (
+            f"M {start_x:.2f} {baseline_y:.2f} "
+            f"L {start_x:.2f} {y_for(axis, points[0][1]):.2f} "
+            f"{' '.join(line_segments)} "
+            f"L {end_x:.2f} {baseline_y:.2f} Z"
+        )
+
+    def parse_color(value: str) -> tuple[str, float]:
+        if value.startswith("rgba(") and value.endswith(")"):
+            red, green, blue, alpha = [part.strip() for part in value[5:-1].split(",")]
+            return f"rgb({red}, {green}, {blue})", float(alpha)
+        return value, 1.0
+
+    def format_tick(value: float, *, decimals: int = 1, suffix: str = "") -> str:
+        if abs(value) < 1e-9:
+            value = 0.0
+        return f"{value:.{decimals}f}{suffix}"
+
+    tick_lines: list[str] = []
+    grid_stroke, grid_opacity = parse_color("rgba(128, 128, 128, 0.18)")
+    time_grid_stroke, time_grid_opacity = parse_color("rgba(128, 128, 128, 0.12)")
+    for power_tick in [
+        -prepared.power_max,
+        -prepared.power_max / 2,
+        0.0,
+        prepared.power_max / 2,
+        prepared.power_max,
+    ]:
+        y_value = y_for("power", power_tick)
+        tick_lines.extend(
+            [
+                f'<line x1="{chart_left}" y1="{y_value:.2f}" x2="{chart_right}" y2="{y_value:.2f}" '
+                f'stroke="{grid_stroke}" stroke-opacity="{grid_opacity:.3f}" stroke-width="1"/>',
+                f'<text x="{chart_left - 12}" y="{y_value + 4:.2f}" text-anchor="end" '
+                'font-size="12" fill="#52606d">'
+                f"{html.escape(format_tick(power_tick, decimals=1))}</text>",
+            ]
+        )
+
+    tick_indexes = list(range(min(len(prepared.interval_boundaries), 7)))
+    if len(prepared.interval_boundaries) > 7:
+        tick_indexes = sorted(
+            {
+                round(index * (len(prepared.interval_boundaries) - 1) / 6)
+                for index in range(7)
+            }
+        )
+    for index in tick_indexes:
+        x_value = x_for(prepared.interval_boundaries[index])
+        label = prepared.interval_boundaries[index].strftime("%H:%M %d %b")
+        tick_lines.extend(
+            [
+                f'<line x1="{x_value:.2f}" y1="{chart_top}" x2="{x_value:.2f}" y2="{chart_bottom}" '
+                f'stroke="{time_grid_stroke}" stroke-opacity="{time_grid_opacity:.3f}" stroke-width="1"/>',
+                f'<text x="{x_value:.2f}" y="{chart_bottom + 28}" text-anchor="middle" '
+                'font-size="12" fill="#52606d">'
+                f"{html.escape(label)}</text>",
+            ]
+        )
+
+    curtailment_rects = []
+    for index, active in enumerate(prepared.curtailment_flags):
+        if not active:
+            continue
+        fill, opacity = parse_color(COLORS["curtailment_fill"])
+        x0 = x_for(prepared.interval_boundaries[index])
+        x1 = x_for(prepared.interval_boundaries[index + 1])
+        curtailment_rects.append(
+            f'<rect x="{x0:.2f}" y="{chart_top}" width="{x1 - x0:.2f}" height="{chart_height}" '
+            f'fill="{fill}" fill-opacity="{opacity:.3f}"/>'
+        )
+
+    trace_elements: list[str] = []
+    for trace in prepared.traces:
+        points = step_points(trace.times, trace.values)
+        if not points:
+            continue
+        stroke, stroke_opacity = parse_color(trace.stroke_color)
+        dash_attr = ' stroke-dasharray="6 4"' if trace.dash else ""
+        if trace.fill_color is not None:
+            fill, fill_opacity = parse_color(trace.fill_color)
+            area_path = area_path_from_points(points, trace.axis)
+            trace_elements.append(
+                f'<path d="{area_path}" fill="{fill}" fill-opacity="{fill_opacity:.3f}" stroke="none"/>'
+            )
+        trace_elements.append(
+            f'<path d="{path_from_points(points, trace.axis)}" fill="none" stroke="{stroke}" '
+            f'stroke-opacity="{stroke_opacity:.3f}" stroke-width="{trace.stroke_width}"{dash_attr} '
+            'stroke-linejoin="round" stroke-linecap="round"/>'
+        )
+
+    soc_ticks = []
+    for tick in [0, 20, 40, 60, 80, 100]:
+        y_value = y_for("soc", float(tick))
+        soc_ticks.append(
+            f'<text x="{soc_axis_x + 10}" y="{y_value + 4:.2f}" font-size="12" fill="#52606d">'
+            f"{tick}%</text>"
+        )
+
+    price_ticks = []
+    for tick in [
+        -prepared.price_max * 1.1,
+        0.0,
+        prepared.price_max * 1.1,
+    ]:
+        y_value = y_for("price", tick)
+        price_ticks.append(
+            f'<text x="{price_axis_x - 10}" y="{y_value + 4:.2f}" text-anchor="end" '
+            'font-size="12" fill="#52606d">'
+            f"{html.escape(format_tick(tick, decimals=2))}</text>"
+        )
+
+    legend_elements: list[str] = []
+    legend_x = chart_left
+    legend_y = height - 82
+    for trace in prepared.traces:
+        stroke, stroke_opacity = parse_color(trace.stroke_color)
+        fill, fill_opacity = parse_color(trace.fill_color or trace.stroke_color)
+        legend_elements.extend(
+            [
+                f'<rect x="{legend_x}" y="{legend_y - 10}" width="18" height="10" fill="{fill}" '
+                f'fill-opacity="{fill_opacity:.3f}" stroke="{stroke}" stroke-opacity="{stroke_opacity:.3f}"/>',
+                f'<text x="{legend_x + 24}" y="{legend_y - 1}" font-size="12" fill="#1f2933">'
+                f"{html.escape(trace.name)}</text>",
+            ]
+        )
+        legend_x += max(120, len(trace.name) * 8 + 36)
+        if legend_x > width - 250:
+            legend_x = chart_left
+            legend_y += 22
+
+    total_cost = f"${prepared.total_cost:.2f}"
+    total_export = f"{prepared.total_export_kwh:.2f} kWh"
+    total_import = f"{prepared.total_import_kwh:.2f} kWh"
+
+    return "\n".join(
+        [
+            '<?xml version="1.0" encoding="UTF-8"?>',
+            (
+                f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+                f'viewBox="0 0 {width} {height}" role="img" aria-labelledby="ems-plan-title">'
+            ),
+            '<rect width="100%" height="100%" fill="white"/>',
+            '<g font-family="Inter, Avenir Next, Trebuchet MS, sans-serif">',
+            '<title id="ems-plan-title">EMS plan output</title>',
+            f'<text x="{width / 2:.2f}" y="36" text-anchor="middle" font-size="24" fill="#1f2933">'
+            'EMS Plan</text>',
+            f'<text x="{width / 2:.2f}" y="64" text-anchor="middle" font-size="14" fill="#52606d">'
+            f'Cost 💰: {html.escape(total_cost)}   |   Grid Export 📤: {html.escape(total_export)}   '
+            f'|   Grid Import 📥: {html.escape(total_import)}</text>',
+            *curtailment_rects,
+            *tick_lines,
+            f'<line x1="{chart_left}" y1="{chart_bottom:.2f}" x2="{chart_right}" y2="{chart_bottom:.2f}" '
+            'stroke="#1f2933" stroke-width="1.5"/>',
+            f'<line x1="{chart_left}" y1="{chart_top}" x2="{chart_left}" y2="{chart_bottom:.2f}" '
+            'stroke="#1f2933" stroke-width="1.5"/>',
+            f'<line x1="{soc_axis_x}" y1="{chart_top}" x2="{soc_axis_x}" y2="{chart_bottom:.2f}" '
+            'stroke="#4b5563" stroke-width="1"/>',
+            f'<line x1="{price_axis_x}" y1="{chart_top}" x2="{price_axis_x}" y2="{chart_bottom:.2f}" '
+            'stroke="#4b5563" stroke-width="1"/>',
+            *trace_elements,
+            f'<text x="{chart_left - 56}" y="{chart_top - 12}" font-size="13" fill="#1f2933">Power (kW)</text>',
+            f'<text x="{soc_axis_x + 10}" y="{chart_top - 12}" font-size="13" fill="#1f2933">SoC (%)</text>',
+            f'<text x="{price_axis_x - 10}" y="{chart_top - 12}" text-anchor="end" font-size="13" fill="#1f2933">Price ($)</text>',
+            *soc_ticks,
+            *price_ticks,
+            *legend_elements,
+            '</g>',
+            '</svg>',
+        ]
+    )
+
+
+def _prepare_static_plot(plan: EmsPlanOutput) -> _PreparedStaticPlot:
+    local_tz = datetime.now().astimezone().tzinfo or UTC
+    grid = _single_component(plan, "grid", GridComponentPlan)
+    if grid is None:
+        raise ValueError("Plan is missing required 'grid' component.")
+    if not grid.net_kw:
+        raise ValueError("Plan has no interval series to plot.")
+
+    interval_points = grid.net_kw
+    interval_end_times = _interval_end_times(plan, interval_points)
+    interval_boundaries = [_normalize_time(point.time, local_tz=local_tz) for point in interval_points]
+    interval_boundaries.append(_normalize_time(interval_end_times[-1], local_tz=local_tz))
+
+    load_component = _single_component(plan, "load", BaseLoadComponentPlan, optional=True)
+    load_kw = _float_series(load_component.power_kw) if load_component is not None else [0.0] * len(
+        interval_points
+    )
+
+    pv_components = _components_of_type(plan, PvComponentPlan)
+    battery_components = _components_of_type(plan, BatteryComponentPlan)
+    ev_components = _components_of_type(plan, LoadControlledEvComponentPlan)
+
+    pv_series = {
+        name: _float_series(component.actual_kw)
+        for name, component in pv_components.items()
+    }
+    batt_charge = {
+        name: _float_series(component.charge_kw) for name, component in battery_components.items()
+    }
+    batt_discharge = {
+        name: _float_series(component.discharge_kw)
+        for name, component in battery_components.items()
+    }
+    batt_soc_pct = {
+        name: _float_series(component.soc_pct) for name, component in battery_components.items()
+    }
+    batt_soc_times = {
+        name: _normalize_times(component.soc_pct, local_tz=local_tz)
+        for name, component in battery_components.items()
+    }
+
+    ev_charge = {
+        name: _float_series(component.charge_kw)
+        for name, component in ev_components.items()
+    }
+    ev_soc_pct = {
+        name: _float_series(component.soc_pct)
+        for name, component in ev_components.items()
+    }
+    ev_soc_times = {
+        name: _normalize_times(component.soc_pct, local_tz=local_tz)
+        for name, component in ev_components.items()
+    }
+
+    price_import = _float_series(grid.price_import_raw)
+    price_export = _float_series(grid.price_export_raw)
+    price_import_risk = _float_series(grid.price_import_effective)
+    price_export_risk = _float_series(grid.price_export_effective)
+
+    total_pv = _aggregate_series(pv_series)
+    total_curtailment = _aggregate_series(
+        {name: _float_series(component.curtail_kw) for name, component in pv_components.items()}
+    )
+    curtailment_flags = _aggregate_bool_series(
+        {
+            name: _bool_series(component.curtailment)
+            for name, component in pv_components.items()
+        }
+    )
+    total_batt_charge = _aggregate_series(batt_charge)
+    total_batt_discharge = _aggregate_series(batt_discharge)
+    total_ev_charge = _aggregate_series(ev_charge)
+    grid_net = _float_series(grid.net_kw)
+
+    traces: list[_StaticTrace] = []
+    if _has_any(total_pv):
+        traces.append(
+            _StaticTrace(
+                name="PV Power",
+                axis="power",
+                times=interval_boundaries,
+                values=total_pv,
+                stroke_color=COLORS["pv"],
+                fill_color=COLORS["pv_fill"],
+            )
+        )
+    if _has_any(total_curtailment):
+        traces.append(
+            _StaticTrace(
+                name="PV Curtailment",
+                axis="power",
+                times=interval_boundaries,
+                values=total_curtailment,
+                stroke_color=COLORS["curtailment"],
+                fill_color=COLORS["curtailment_line"],
+            )
+        )
+    if _has_any(load_kw):
+        traces.append(
+            _StaticTrace(
+                name="Load",
+                axis="power",
+                times=interval_boundaries,
+                values=load_kw,
+                stroke_color=COLORS["load"],
+                fill_color=COLORS["load_fill"],
+            )
+        )
+    traces.append(
+        _StaticTrace(
+            name="Grid Net",
+            axis="power",
+            times=interval_boundaries,
+            values=grid_net,
+            stroke_color=COLORS["grid_net"],
+            fill_color=COLORS["grid_net_fill"],
+        )
+    )
+    if _has_any(total_batt_charge):
+        traces.append(
+            _StaticTrace(
+                name="Battery Charge",
+                axis="power",
+                times=interval_boundaries,
+                values=[-value for value in total_batt_charge],
+                stroke_color=COLORS["batt_charge"],
+                fill_color=COLORS["batt_charge_fill"],
+            )
+        )
+    if _has_any(total_batt_discharge):
+        traces.append(
+            _StaticTrace(
+                name="Battery Discharge",
+                axis="power",
+                times=interval_boundaries,
+                values=total_batt_discharge,
+                stroke_color=COLORS["batt_discharge"],
+                fill_color=COLORS["batt_discharge_fill"],
+            )
+        )
+    if _has_any(total_ev_charge):
+        traces.append(
+            _StaticTrace(
+                name="EV Charge",
+                axis="power",
+                times=interval_boundaries,
+                values=total_ev_charge,
+                stroke_color=COLORS["ev_charge"],
+                fill_color=COLORS["ev_charge_fill"],
+            )
+        )
+
+    for name, series in batt_soc_pct.items():
+        if _has_any(series):
+            traces.append(
+                _StaticTrace(
+                    name=f"Battery SoC ({name})" if len(batt_soc_pct) > 1 else "Battery SoC",
+                    axis="soc",
+                    times=batt_soc_times[name],
+                    values=series,
+                    stroke_color=COLORS["batt_soc"],
+                    stroke_width=3.0,
+                    dash="dot",
+                )
+            )
+    for name, series in ev_soc_pct.items():
+        if _has_any(series):
+            traces.append(
+                _StaticTrace(
+                    name=f"EV SoC ({name})" if len(ev_soc_pct) > 1 else "EV SoC",
+                    axis="soc",
+                    times=ev_soc_times[name],
+                    values=series,
+                    stroke_color=COLORS["ev_soc"],
+                    stroke_width=3.0,
+                    dash="dot",
+                )
+            )
+
+    if _has_any(price_import):
+        traces.append(
+            _StaticTrace(
+                name="Buy Price",
+                axis="price",
+                times=interval_boundaries,
+                values=price_import,
+                stroke_color=COLORS["price_import"],
+            )
+        )
+    if _has_any(price_import_risk):
+        traces.append(
+            _StaticTrace(
+                name="Buy Price (Risk Bias)",
+                axis="price",
+                times=interval_boundaries,
+                values=price_import_risk,
+                stroke_color=COLORS["price_import_risk"],
+                stroke_width=1.5,
+                dash="dot",
+            )
+        )
+    if _has_any(price_export):
+        traces.append(
+            _StaticTrace(
+                name="Sell Price",
+                axis="price",
+                times=interval_boundaries,
+                values=price_export,
+                stroke_color=COLORS["price_export"],
+            )
+        )
+    if _has_any(price_export_risk):
+        traces.append(
+            _StaticTrace(
+                name="Sell Price (Risk Bias)",
+                axis="price",
+                times=interval_boundaries,
+                values=price_export_risk,
+                stroke_color=COLORS["price_export_risk"],
+                stroke_width=1.5,
+                dash="dot",
+            )
+        )
+
+    total_cost = _interval_settlement_cost(
+        import_kw=grid.import_kw,
+        export_kw=grid.export_kw,
+        price_import=grid.price_import_raw,
+        price_export=grid.price_export_raw,
+        end_times=interval_end_times,
+    )
+    total_import_kwh = _interval_energy_kwh(grid.import_kw, interval_end_times)
+    total_export_kwh = _interval_energy_kwh(grid.export_kw, interval_end_times)
+    price_max = max(
+        max(abs(value) for value in price_import) if price_import else 0,
+        max(abs(value) for value in price_export) if price_export else 0,
+        max(abs(value) for value in price_import_risk) if price_import_risk else 0,
+        max(abs(value) for value in price_export_risk) if price_export_risk else 0,
+        0.01,
+    )
+    soc_values = [value for series in (*batt_soc_pct.values(), *ev_soc_pct.values()) for value in series]
+    soc_axis_max = max(max(soc_values, default=0.0), 100.0)
+    power_max = max(
+        max(abs(value) for value in grid_net) if grid_net else 0,
+        max(abs(value) for value in load_kw) if load_kw else 0,
+        max(abs(value) for value in total_pv) if total_pv else 0,
+        max(abs(value) for value in total_curtailment) if total_curtailment else 0,
+        max(abs(value) for value in total_batt_charge) if total_batt_charge else 0,
+        max(abs(value) for value in total_batt_discharge) if total_batt_discharge else 0,
+        max(abs(value) for value in total_ev_charge) if total_ev_charge else 0,
+        1.0,
+    )
+    power_max = max(power_max * 1.1, 1.0)
+
+    return _PreparedStaticPlot(
+        traces=traces,
+        interval_boundaries=interval_boundaries,
+        curtailment_flags=curtailment_flags,
+        power_max=power_max,
+        soc_axis_max=soc_axis_max,
+        price_max=price_max,
+        total_cost=total_cost,
+        total_import_kwh=total_import_kwh,
+        total_export_kwh=total_export_kwh,
+    )
 
 
 def _normalize_time(value: datetime, *, local_tz: tzinfo) -> datetime:
