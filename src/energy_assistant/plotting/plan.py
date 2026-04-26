@@ -415,7 +415,13 @@ def _build_plan_figure(
                 ),
             )
 
-    total_cost = float(plan.objective_value or 0.0)
+    total_cost = _interval_settlement_cost(
+        import_kw=grid.import_kw,
+        export_kw=grid.export_kw,
+        price_import=grid.price_import_raw,
+        price_export=grid.price_export_raw,
+        end_times=interval_end_times,
+    )
     total_import_kwh = _interval_energy_kwh(grid.import_kw, interval_end_times)
     total_export_kwh = _interval_energy_kwh(grid.export_kw, interval_end_times)
 
@@ -989,6 +995,35 @@ def _interval_energy_kwh(points: list[EmsSeriesPoint], end_times: list[datetime]
     for point, end_time in zip(points, end_times, strict=True):
         duration_h = (end_time - point.time).total_seconds() / 3600.0
         total += float(point.value) * duration_h
+    return total
+
+
+def _interval_settlement_cost(
+    *,
+    import_kw: list[EmsSeriesPoint],
+    export_kw: list[EmsSeriesPoint],
+    price_import: list[EmsSeriesPoint],
+    price_export: list[EmsSeriesPoint],
+    end_times: list[datetime],
+) -> float:
+    lengths = {
+        len(import_kw),
+        len(export_kw),
+        len(price_import),
+        len(price_export),
+        len(end_times),
+    }
+    if len(lengths) != 1:
+        raise ValueError("Interval settlement inputs must have matching lengths.")
+    total = 0.0
+    for import_point, export_point, import_price, export_price, end_time in zip(
+        import_kw, export_kw, price_import, price_export, end_times, strict=True
+    ):
+        duration_h = (end_time - import_point.time).total_seconds() / 3600.0
+        total += (
+            float(import_point.value) * float(import_price.value)
+            - float(export_point.value) * float(export_price.value)
+        ) * duration_h
     return total
 
 
