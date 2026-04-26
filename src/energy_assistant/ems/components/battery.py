@@ -18,7 +18,12 @@ from energy_assistant.ems.system.state import SolveStateStore
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import EnergyGraph, GraphElement
 from energy_assistant.ems.topology.ids import NodeId
-from energy_assistant.ems.topology.nodes import StorageNode
+from energy_assistant.ems.topology.nodes import (
+    ForecastPercentileTerminalSocValue,
+    FixedTerminalSocValue,
+    StorageNode,
+    TerminalSocValueConfig,
+)
 from energy_assistant.ems.topology.policies import (
     ConnectionPolicy,
     DirectionalEfficiency,
@@ -26,7 +31,7 @@ from energy_assistant.ems.topology.policies import (
     LinearCost,
 )
 from energy_assistant.models.inputs import InputValueKind
-from energy_assistant.models.plant import BatteryComponentConfig
+from energy_assistant.models.plant import BatteryComponentConfig, ForecastTerminalSocValueConfig
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +70,20 @@ class BatteryComponent(EmsComponent[BatterySolveState, BatteryComponentPlan]):
         capacity_kwh = self._config.capacity_kwh
         initial_soc_kwh = capacity_kwh * initial_soc_pct / 100.0
         return max(0.0, min(capacity_kwh, initial_soc_kwh))
+
+    def _terminal_soc_value_config(self) -> TerminalSocValueConfig | None:
+        config = self._config.soc_value_per_kwh
+        if config is None:
+            return None
+        if isinstance(config, float):
+            return FixedTerminalSocValue(value_per_kwh=config)
+        if isinstance(config, ForecastTerminalSocValueConfig):
+            return ForecastPercentileTerminalSocValue(
+                percentile=config.percentile,
+                lookahead_window_minutes=config.lookahead_window_minutes,
+                price_floor_per_kwh=config.price_floor_per_kwh,
+            )
+        raise TypeError(f"Unsupported battery terminal value config: {type(config).__name__}")
 
     def create_graph_elements(
         self,
@@ -113,10 +132,8 @@ class BatteryComponent(EmsComponent[BatterySolveState, BatteryComponentPlan]):
             soc_max_kwh=soc_max_kwh,
             initial_soc_kwh=initial_soc_kwh,
             terminal_mode=self._config.terminal_soc.mode,
-            terminal_reserve_kwh=reserve_kwh,
-            terminal_penalty_per_kwh=self._config.terminal_soc.penalty_per_kwh,
             price_import_raw=None,
-            terminal_soc_value_per_kwh=self._config.soc_value_per_kwh,
+            terminal_soc_value=self._terminal_soc_value_config(),
         )
 
         connection = Connection(

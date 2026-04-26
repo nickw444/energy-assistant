@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Literal
 
 import pulp
@@ -10,7 +11,22 @@ from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.ids import NodeId
 from energy_assistant.ems.topology.nodes.node import Node
 
-TerminalMode = Literal["none", "hard", "adaptive"]
+TerminalMode = Literal["none", "hard"]
+
+
+@dataclass(frozen=True, slots=True)
+class FixedTerminalSocValue:
+    value_per_kwh: float
+
+
+@dataclass(frozen=True, slots=True)
+class ForecastPercentileTerminalSocValue:
+    percentile: float = 70.0
+    lookahead_window_minutes: int = 1440
+    price_floor_per_kwh: float = 0.0
+
+
+type TerminalSocValueConfig = FixedTerminalSocValue | ForecastPercentileTerminalSocValue
 
 
 class StorageNode(Node):
@@ -27,11 +43,9 @@ class StorageNode(Node):
         soc_max_kwh: float,
         initial_soc_kwh: float,
         terminal_mode: TerminalMode = "none",
-        terminal_reserve_kwh: float = 0.0,
-        terminal_penalty_per_kwh: float | Literal["mean", "median"] | None = "median",
         price_import_raw: list[float] | None = None,
-        terminal_soc_value_per_kwh: float | None = None,
-        ) -> None:
+        terminal_soc_value: TerminalSocValueConfig | None = None,
+    ) -> None:
         super().__init__(
             horizon=horizon,
             id=id,
@@ -43,12 +57,8 @@ class StorageNode(Node):
         self.soc_max_kwh = soc_max_kwh
         self.initial_soc_kwh = initial_soc_kwh
         self.terminal_mode: TerminalMode = terminal_mode
-        self.terminal_reserve_kwh = terminal_reserve_kwh
-        self.terminal_penalty_per_kwh: float | Literal["mean", "median"] | None = (
-            terminal_penalty_per_kwh
-        )
         self.price_import_raw = None if price_import_raw is None else list(price_import_raw)
-        self.terminal_soc_value_per_kwh = terminal_soc_value_per_kwh
+        self.terminal_soc_value = terminal_soc_value
 
         soc_indices = range(int(horizon.num_intervals) + 1)
         self.E_by_i: dict[int, pulp.LpVariable] = pulp.LpVariable.dicts(
@@ -56,11 +66,6 @@ class StorageNode(Node):
             soc_indices,
             lowBound=self.soc_min_kwh,
             upBound=self.soc_max_kwh,
-        )
-        self.terminal_shortfall_kwh: pulp.LpVariable | None = (
-            pulp.LpVariable(f"E_{self.id}_terminal_shortfall_kwh", lowBound=0)
-            if self.terminal_mode == "adaptive"
-            else None
         )
 
     @property
@@ -102,16 +107,6 @@ class StorageNode(Node):
     def terminal_soc(self) -> pulp.LpVariable:
         return self.E_by_i[self.terminal_index]
 
-    def _adaptive_shortfall_var(self) -> pulp.LpVariable:
-        if self.terminal_shortfall_kwh is None:
-            raise ValueError(f"Storage node {self.id!r} missing terminal shortfall variable")
-        return self.terminal_shortfall_kwh
-
-    def _adaptive_terminal_target_kwh(self) -> float:
-        ratio = _terminal_soc_return_ratio(self.horizon)
-        floor_kwh = min(self.initial_soc_kwh, self.terminal_reserve_kwh)
-        return floor_kwh + ratio * (self.initial_soc_kwh - floor_kwh)
-
     def _terminal_constraint(self) -> ConstraintSpec | None:
         if self.terminal_mode == "hard":
             return ConstraintSpec(
@@ -119,25 +114,12 @@ class StorageNode(Node):
                 self.terminal_soc >= self.initial_soc_kwh,
             )
 
-        if self.terminal_mode == "adaptive":
-            if self.price_import_raw is None:
-                raise ValueError(
-                    f"Storage node {self.id!r} terminal_mode='adaptive' requires price_import_raw"
-                )
-            return ConstraintSpec(
-                f"soc_terminal_{self.id}",
-                self.terminal_soc + self._adaptive_shortfall_var()
-                >= self._adaptive_terminal_target_kwh(),
-            )
-
         return None
 
-    def _adaptive_terminal_penalty_objective(self) -> pulp.LpAffineExpression | None:
-        if self.terminal_mode != "adaptive":
-            return None
+    def _price_import_raw(self) -> list[float]:
         if self.price_import_raw is None:
             raise ValueError(
-                f"Storage node {self.id!r} terminal_mode='adaptive' requires price_import_raw"
+                f"Storage node {self.id!r} forecast-derived terminal value requires price_import_raw"
             )
         if len(self.price_import_raw) != int(self.horizon.num_intervals):
             raise ValueError(
@@ -145,21 +127,33 @@ class StorageNode(Node):
                 f"{len(self.price_import_raw)} "
                 f"!= num_intervals={int(self.horizon.num_intervals)}"
             )
+        return self.price_import_raw
 
-        penalty = _terminal_penalty_per_kwh(
-            horizon=self.horizon,
-            price_import=self.price_import_raw,
-            penalty_cfg=self.terminal_penalty_per_kwh,
-            ratio=_terminal_soc_return_ratio(self.horizon),
-        )
-        if penalty <= 0:
+    def _terminal_soc_value_per_kwh(self) -> float | None:
+        if self.terminal_soc_value is None:
             return None
-        return penalty * self._adaptive_shortfall_var()
+
+        if isinstance(self.terminal_soc_value, FixedTerminalSocValue):
+            value_per_kwh = self.terminal_soc_value.value_per_kwh
+        else:
+            price_import_raw = self._price_import_raw()
+            price_window = _tail_price_window(
+                horizon=self.horizon,
+                price_import=price_import_raw,
+                window_minutes=self.terminal_soc_value.lookahead_window_minutes,
+            )
+            value_per_kwh = max(
+                self.terminal_soc_value.price_floor_per_kwh,
+                _percentile(price_window, self.terminal_soc_value.percentile),
+            )
+
+        return value_per_kwh if value_per_kwh > 0 else None
 
     def _terminal_soc_value_objective(self) -> pulp.LpAffineExpression | None:
-        if self.terminal_soc_value_per_kwh is None or self.terminal_soc_value_per_kwh <= 0:
+        value_per_kwh = self._terminal_soc_value_per_kwh()
+        if value_per_kwh is None:
             return None
-        return -self.terminal_soc_value_per_kwh * self.terminal_soc
+        return -value_per_kwh * self.terminal_soc
 
     @property
     def constraints(self) -> list[ConstraintSpec]:
@@ -188,11 +182,6 @@ class StorageNode(Node):
     @property
     def objective(self) -> pulp.LpAffineExpression:
         objective_parts: list[pulp.LpAffineExpression] = []
-
-        adaptive_penalty = self._adaptive_terminal_penalty_objective()
-        if adaptive_penalty is not None:
-            objective_parts.append(adaptive_penalty)
-
         terminal_value = self._terminal_soc_value_objective()
         if terminal_value is not None:
             objective_parts.append(terminal_value)
@@ -200,59 +189,47 @@ class StorageNode(Node):
         return pulp.lpSum(objective_parts) if objective_parts else pulp.LpAffineExpression()
 
     def bind_terminal_import_prices(self, price_import: list[float]) -> None:
-        """Set grid import prices for adaptive terminal SoC (late-bound after the graph exists)."""
+        """Set grid import prices for forecast-derived terminal energy value."""
 
         self.price_import_raw = list(price_import)
 
 
-_TERMINAL_SOC_REFERENCE_MINUTES = 1440.0
-
-
-def _horizon_duration_minutes(horizon: Horizon) -> float:
-    if not horizon.slots:
-        return 0.0
-    return (horizon.slots[-1].end - horizon.start).total_seconds() / 60.0
-
-
-def _terminal_soc_return_ratio(horizon: Horizon) -> float:
-    # A 24h horizon keeps full strength; shorter or longer horizons relax toward reserve.
-    horizon_minutes = _horizon_duration_minutes(horizon)
-    if horizon_minutes <= 0:
-        return 1.0
-    reference_minutes = _TERMINAL_SOC_REFERENCE_MINUTES
-    shorter = min(horizon_minutes, reference_minutes)
-    longer = max(horizon_minutes, reference_minutes)
-    return shorter / longer if longer > 0 else 1.0
-
-
-def _average(values: list[float]) -> float:
-    return 0.0 if not values else sum(values) / len(values)
-
-
-def _median(values: list[float]) -> float:
-    if not values:
-        return 0.0
-    vals = sorted(values)
-    mid = len(vals) // 2
-    if len(vals) % 2 == 1:
-        return vals[mid]
-    return (vals[mid - 1] + vals[mid]) / 2.0
-
-
-def _terminal_penalty_per_kwh(
+def _tail_price_window(
     *,
     horizon: Horizon,
     price_import: list[float],
-    penalty_cfg: float | Literal["mean", "median"] | None,
-    ratio: float,
-) -> float:
-    penalty: float
-    if penalty_cfg is None or penalty_cfg == "median":
-        penalty = _median(price_import)
-    elif penalty_cfg == "mean":
-        penalty = _average(price_import)
-    else:
-        penalty = penalty_cfg
-    penalty = max(0.0, penalty)
-    penalty *= ratio
-    return penalty
+    window_minutes: int,
+) -> list[float]:
+    if not price_import:
+        return []
+
+    selected: list[float] = []
+    remaining_minutes = float(window_minutes)
+    for t in reversed(horizon.T):
+        selected.append(price_import[t])
+        remaining_minutes -= horizon.dt_hours(t) * 60.0
+        if remaining_minutes <= 0:
+            break
+
+    return list(reversed(selected)) if selected else list(price_import)
+
+
+def _percentile(values: list[float], percentile: float) -> float:
+    if not values:
+        return 0.0
+
+    vals = sorted(values)
+    if len(vals) == 1:
+        return vals[0]
+    if percentile <= 0:
+        return vals[0]
+    if percentile >= 100:
+        return vals[-1]
+
+    rank = (len(vals) - 1) * (percentile / 100.0)
+    lower_idx = int(rank)
+    upper_idx = lower_idx if lower_idx == len(vals) - 1 else lower_idx + 1
+    lower = vals[lower_idx]
+    upper = vals[upper_idx]
+    fraction = rank - lower_idx
+    return lower + (upper - lower) * fraction

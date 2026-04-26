@@ -128,21 +128,25 @@ class PriceBindingConfig(BaseModel):
 
 
 class TerminalSocConfig(BaseModel):
-    mode: Literal["hard", "adaptive"] = "adaptive"
-    penalty_per_kwh: float | Literal["mean", "median"] | None = Field(default="median")
+    mode: Literal["none", "hard"] = "none"
 
     model_config = ConfigDict(extra="forbid")
 
-    @field_validator("penalty_per_kwh")
+    @field_validator("mode", mode="before")
     @classmethod
-    def _validate_penalty_per_kwh(
-        cls, value: float | Literal["mean", "median"] | None
-    ) -> float | Literal["mean", "median"] | None:
-        if value is None or value in {"mean", "median"}:
-            return value
-        if isinstance(value, float) and value < 0:
-            raise ValueError("penalty_per_kwh must be >= 0")
+    def _normalize_mode(cls, value: object) -> object:
+        if value == "adaptive":
+            return "none"
         return value
+
+
+class ForecastTerminalSocValueConfig(BaseModel):
+    type: Literal["forecast_percentile"] = "forecast_percentile"
+    percentile: float = Field(default=70.0, ge=0, le=100)
+    lookahead_window_minutes: int = Field(default=1440, gt=0)
+    price_floor_per_kwh: float = Field(default=0.0, ge=0)
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class SwitchboardComponentConfig(BaseModel):
@@ -252,7 +256,9 @@ class BatteryComponentConfig(BaseModel):
     storage_efficiency_pct: float = Field(gt=0, le=100)
     charge_cost_per_kwh: float = Field(default=0.0, ge=0)
     discharge_cost_per_kwh: float = Field(default=0.0, ge=0)
-    soc_value_per_kwh: float | None = Field(default=None, ge=0)
+    soc_value_per_kwh: float | ForecastTerminalSocValueConfig | None = Field(
+        default_factory=ForecastTerminalSocValueConfig
+    )
     min_soc_pct: float = Field(ge=0, le=100)
     max_soc_pct: float = Field(ge=0, le=100)
     reserve_soc_pct: float = Field(ge=0, le=100)
@@ -276,6 +282,17 @@ class BatteryComponentConfig(BaseModel):
         if self.reserve_soc_pct > self.max_soc_pct:
             raise ValueError("reserve_soc_pct must be <= max_soc_pct")
         return self
+
+    @field_validator("soc_value_per_kwh")
+    @classmethod
+    def _validate_soc_value_per_kwh(
+        cls, value: float | ForecastTerminalSocValueConfig | None
+    ) -> float | ForecastTerminalSocValueConfig | None:
+        if value is None:
+            return value
+        if isinstance(value, float) and value < 0:
+            raise ValueError("soc_value_per_kwh must be >= 0")
+        return value
 
     def input_requirements(self) -> tuple[InputRequirement, ...]:
         return (

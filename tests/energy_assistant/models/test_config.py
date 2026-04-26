@@ -4,7 +4,11 @@ import pytest
 from pydantic import ValidationError
 
 from energy_assistant.models.config import EmsConfig
-from energy_assistant.models.plant import BatteryComponentConfig, InputReference
+from energy_assistant.models.plant import (
+    BatteryComponentConfig,
+    ForecastTerminalSocValueConfig,
+    InputReference,
+)
 
 
 def test_high_res_requires_both_fields() -> None:
@@ -36,7 +40,7 @@ def test_high_res_horizon_must_not_exceed_total_horizon() -> None:
         )
 
 
-def test_battery_terminal_soc_defaults_to_adaptive() -> None:
+def test_battery_terminal_soc_defaults_to_dynamic_value() -> None:
     battery = BatteryComponentConfig(
         type="battery",
         connection="primary",
@@ -50,5 +54,23 @@ def test_battery_terminal_soc_defaults_to_adaptive() -> None:
         realtime_power=InputReference(source="battery_power"),
     )
 
-    assert battery.terminal_soc.mode == "adaptive"
-    assert battery.terminal_soc.penalty_per_kwh == "median"
+    assert battery.terminal_soc.mode == "none"
+    assert battery.soc_value_per_kwh == ForecastTerminalSocValueConfig()
+
+
+def test_battery_terminal_soc_normalizes_legacy_adaptive_mode() -> None:
+    battery = BatteryComponentConfig(
+        type="battery",
+        connection="primary",
+        name="Battery Primary",
+        capacity_kwh=13.5,
+        storage_efficiency_pct=95.0,
+        min_soc_pct=10.0,
+        max_soc_pct=100.0,
+        reserve_soc_pct=20.0,
+        terminal_soc={"mode": "adaptive"},
+        state_of_charge_pct=InputReference(source="battery_soc"),
+        realtime_power=InputReference(source="battery_power"),
+    )
+
+    assert battery.terminal_soc.mode == "none"

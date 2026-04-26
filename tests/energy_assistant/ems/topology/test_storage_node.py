@@ -11,7 +11,12 @@ from energy_assistant.ems.milp.snapshot import ModelSnapshot
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import EnergyGraph
 from energy_assistant.ems.topology.ids import NodeId
-from energy_assistant.ems.topology.nodes import Node, StorageNode
+from energy_assistant.ems.topology.nodes import (
+    ForecastPercentileTerminalSocValue,
+    FixedTerminalSocValue,
+    Node,
+    StorageNode,
+)
 from energy_assistant.ems.topology.policies import (
     DirectionalEfficiency,
     DirectionalLimit,
@@ -115,7 +120,7 @@ def test_storage_hard_terminal_mode_enforces_final_soc_floor() -> None:
     assert pulp.LpStatus.get(snapshot.problem.status) == "Infeasible"
 
 
-def test_storage_adaptive_mode_requires_price_series() -> None:
+def test_storage_forecast_terminal_value_requires_price_series() -> None:
     horizon = HorizonFactory(timestep_minutes=60, horizon_minutes=60).build(
         now=datetime(2026, 1, 1, tzinfo=UTC)
     )
@@ -127,115 +132,112 @@ def test_storage_adaptive_mode_requires_price_series() -> None:
         soc_min_kwh=0.0,
         soc_max_kwh=10.0,
         initial_soc_kwh=5.0,
-        terminal_mode="adaptive",
-    )
-    graph = EnergyGraph()
-    graph.add_element(Node(horizon=horizon, id=NodeId("bus"), name="Bus", node_role="bus"))
-    graph.add_element(node)
-    graph.add_element(
-        Connection(
-            horizon=horizon,
-            id="link",
-            a_node_id=NodeId("bus"),
-            b_node_id=NodeId("bat"),
-            policies={"directional_limit": DirectionalLimit(max_a_to_b_kw=0.0, max_b_to_a_kw=0.0)},
-        )
+        terminal_soc_value=ForecastPercentileTerminalSocValue(),
     )
     with pytest.raises(ValueError, match="requires price_import_raw"):
-        _ = node.constraints
-
-
-def test_storage_adaptive_penalty_supports_mean_and_median() -> None:
-    horizon = HorizonFactory(timestep_minutes=60, horizon_minutes=120).build(
-        now=datetime(2026, 1, 1, tzinfo=UTC)
-    )
-    median_node = StorageNode(
-        horizon=horizon,
-        id=NodeId("bat_median"),
-        name="Battery",
-        capacity_kwh=10.0,
-        soc_min_kwh=0.0,
-        soc_max_kwh=10.0,
-        initial_soc_kwh=5.0,
-        terminal_mode="adaptive",
-        price_import_raw=[10.0, 30.0],
-        terminal_penalty_per_kwh="median",
-    )
-    mean_node = StorageNode(
-        horizon=horizon,
-        id=NodeId("bat_mean"),
-        name="Battery",
-        capacity_kwh=10.0,
-        soc_min_kwh=0.0,
-        soc_max_kwh=10.0,
-        initial_soc_kwh=5.0,
-        terminal_mode="adaptive",
-        price_import_raw=[10.0, 30.0],
-        terminal_penalty_per_kwh="mean",
-    )
-
-    assert value_of(median_node.objective) == pytest.approx(value_of(mean_node.objective))
+        _ = node.objective
 
 
 class _ObjectiveFragment:
-    def __init__(self, *, objective: pulp.LpAffineExpression, shortfall: pulp.LpVariable) -> None:
+    def __init__(
+        self,
+        *,
+        objective: pulp.LpAffineExpression,
+        terminal_soc: pulp.LpVariable,
+        final_soc_kwh: float,
+    ) -> None:
         self._objective = objective
-        self._shortfall = shortfall
+        self._terminal_soc = terminal_soc
+        self._final_soc_kwh = final_soc_kwh
 
     @property
     def constraints(self) -> list[ConstraintSpec]:
-        return [ConstraintSpec("force_shortfall", self._shortfall == 1.0)]
+        return [ConstraintSpec("force_terminal_soc", self._terminal_soc == self._final_soc_kwh)]
 
     @property
     def objective(self) -> pulp.LpAffineExpression:
         return self._objective
 
 
-def test_storage_adaptive_penalty_scales_with_horizon_ratio() -> None:
-    short_horizon = HorizonFactory(timestep_minutes=60, horizon_minutes=120).build(
+def test_storage_fixed_terminal_value_rewards_terminal_soc() -> None:
+    horizon = HorizonFactory(timestep_minutes=60, horizon_minutes=120).build(
         now=datetime(2026, 1, 1, tzinfo=UTC)
     )
-    ref_horizon = HorizonFactory(timestep_minutes=60, horizon_minutes=1440).build(
-        now=datetime(2026, 1, 1, tzinfo=UTC)
-    )
-    short = StorageNode(
-        horizon=short_horizon,
-        id=NodeId("short"),
-        name="Short",
+    node = StorageNode(
+        horizon=horizon,
+        id=NodeId("bat"),
+        name="Battery",
         capacity_kwh=10.0,
         soc_min_kwh=0.0,
         soc_max_kwh=10.0,
         initial_soc_kwh=5.0,
-        terminal_mode="adaptive",
-        price_import_raw=[20.0] * short_horizon.num_intervals,
-        terminal_penalty_per_kwh="mean",
+        terminal_soc_value=FixedTerminalSocValue(value_per_kwh=0.25),
     )
-    ref = StorageNode(
-        horizon=ref_horizon,
-        id=NodeId("ref"),
-        name="Ref",
+    graph = EnergyGraph()
+    graph.add_element(
+        _ObjectiveFragment(objective=node.objective, terminal_soc=node.terminal_soc, final_soc_kwh=4.0)
+    )
+    snapshot = ModelSnapshot(ctx=ModelContext(horizon=horizon), graph=graph)
+    snapshot.problem.solve(pulp.PULP_CBC_CMD(msg=False))
+
+    assert pulp.LpStatus.get(snapshot.problem.status) == "Optimal"
+    assert value_of(snapshot.objective) == pytest.approx(-1.0)
+
+
+def test_storage_forecast_terminal_value_uses_tail_percentile_window() -> None:
+    horizon = HorizonFactory(timestep_minutes=60, horizon_minutes=240).build(
+        now=datetime(2026, 1, 1, tzinfo=UTC)
+    )
+    node = StorageNode(
+        horizon=horizon,
+        id=NodeId("bat"),
+        name="Battery",
         capacity_kwh=10.0,
         soc_min_kwh=0.0,
         soc_max_kwh=10.0,
         initial_soc_kwh=5.0,
-        terminal_mode="adaptive",
-        price_import_raw=[20.0] * ref_horizon.num_intervals,
-        terminal_penalty_per_kwh="mean",
+        price_import_raw=[1.0, 2.0, 4.0, 8.0],
+        terminal_soc_value=ForecastPercentileTerminalSocValue(
+            percentile=50.0,
+            lookahead_window_minutes=180,
+        ),
     )
-    short_shortfall = short._adaptive_shortfall_var()  # pyright: ignore[reportPrivateUsage]
-    ref_shortfall = ref._adaptive_shortfall_var()  # pyright: ignore[reportPrivateUsage]
-    short_graph = EnergyGraph()
-    short_graph.add_element(
-        _ObjectiveFragment(objective=short.objective, shortfall=short_shortfall)
+    graph = EnergyGraph()
+    graph.add_element(
+        _ObjectiveFragment(objective=node.objective, terminal_soc=node.terminal_soc, final_soc_kwh=2.0)
     )
-    ref_graph = EnergyGraph()
-    ref_graph.add_element(_ObjectiveFragment(objective=ref.objective, shortfall=ref_shortfall))
+    snapshot = ModelSnapshot(ctx=ModelContext(horizon=horizon), graph=graph)
+    snapshot.problem.solve(pulp.PULP_CBC_CMD(msg=False))
 
-    short_snapshot = ModelSnapshot(ctx=ModelContext(horizon=short_horizon), graph=short_graph)
-    ref_snapshot = ModelSnapshot(ctx=ModelContext(horizon=ref_horizon), graph=ref_graph)
-    short_snapshot.problem.solve(pulp.PULP_CBC_CMD(msg=False))
-    ref_snapshot.problem.solve(pulp.PULP_CBC_CMD(msg=False))
+    assert pulp.LpStatus.get(snapshot.problem.status) == "Optimal"
+    assert value_of(snapshot.objective) == pytest.approx(-8.0)
 
-    short_value = value_of(short_snapshot.objective)
-    ref_value = value_of(ref_snapshot.objective)
-    assert short_value < ref_value
+
+def test_storage_forecast_terminal_value_applies_price_floor() -> None:
+    horizon = HorizonFactory(timestep_minutes=60, horizon_minutes=180).build(
+        now=datetime(2026, 1, 1, tzinfo=UTC)
+    )
+    node = StorageNode(
+        horizon=horizon,
+        id=NodeId("bat"),
+        name="Battery",
+        capacity_kwh=10.0,
+        soc_min_kwh=0.0,
+        soc_max_kwh=10.0,
+        initial_soc_kwh=5.0,
+        price_import_raw=[-5.0, -3.0, -1.0],
+        terminal_soc_value=ForecastPercentileTerminalSocValue(
+            percentile=50.0,
+            lookahead_window_minutes=180,
+            price_floor_per_kwh=0.0,
+        ),
+    )
+    graph = EnergyGraph()
+    graph.add_element(
+        _ObjectiveFragment(objective=node.objective, terminal_soc=node.terminal_soc, final_soc_kwh=2.0)
+    )
+    snapshot = ModelSnapshot(ctx=ModelContext(horizon=horizon), graph=graph)
+    snapshot.problem.solve(pulp.PULP_CBC_CMD(msg=False))
+
+    assert pulp.LpStatus.get(snapshot.problem.status) == "Optimal"
+    assert value_of(snapshot.objective) == pytest.approx(0.0)

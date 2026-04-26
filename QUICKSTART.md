@@ -234,29 +234,30 @@ plant:
     storage_efficiency_pct: 95
     charge_cost_per_kwh: 0.02
     discharge_cost_per_kwh: 0.02
-    soc_value_per_kwh: 0.06
+    # Terminal stored-energy value.
+    # By default this is forecast-derived, using a percentile of the import-price
+    # tail near the end of the planning horizon as a salvage value for energy left
+    # in the battery.
+    soc_value_per_kwh:
+      type: forecast_percentile
+      percentile: 70
+      # Tail window taken from the end of the import-price forecast.
+      lookahead_window_minutes: 1440
+      # Clamp the derived value so negative-price tails do not make stored energy
+      # artificially harmful.
+      price_floor_per_kwh: 0.0
     min_soc_pct: 10
     max_soc_pct: 100
     reserve_soc_pct: 20
     # Terminal state-of-charge handling.
-    # Keeps the optimizer from draining the battery at the end of the horizon and
-    # assuming "tomorrow is free." Adaptive mode exists because horizons shorter
-    # or longer than a day can make a hard end-SoC target unrealistic; it relaxes
-    # toward reserve using a fixed 24h reference and prices any shortfall so energy
-    # still has value.
+    # Most sites should leave this disabled and rely on the terminal energy value
+    # above. Use hard mode only when you need to force the battery to finish at or
+    # above its starting state of charge.
     terminal_soc:
       # Mode options:
+      # - none: no hard terminal SoC constraint (default).
       # - hard: enforce end SoC >= start SoC.
-      # - adaptive: relax toward reserve using the 24h reference scaling.
-      mode: adaptive
-      # Penalty applied per kWh of terminal SoC shortfall when adaptive slack is used.
-      # The objective adds `penalty_per_kwh * shortfall_kwh`, scaled by the adaptive
-      # horizon ratio, so missing energy is priced rather than ignored.
-      # Options:
-      # - "median": median import price (default).
-      # - "mean": average import price.
-      # - number: explicit $/kWh penalty.
-      penalty_per_kwh: median
+      mode: none
     max_charge_kw: 5.0
     max_discharge_kw: 5.0
     state_of_charge_pct: inputs.battery_soc
