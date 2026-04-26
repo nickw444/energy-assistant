@@ -44,7 +44,7 @@ def resolve_ems_fixture_paths(
         scenario_config_path=scenario_config_path,
         config_path=config_path,
         plan_path=scenario_dir / "output.json",
-        plot_path=scenario_dir / "output.jpeg",
+        plot_path=scenario_dir / "output.svg",
         hash_path=scenario_dir / "output.hash",
     )
 

@@ -1,8 +1,9 @@
-"""Interactive HTML plotting using Plotly."""
+"""Energy plan plotting utilities."""
 
 from __future__ import annotations
 
 import html
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta, tzinfo
@@ -849,27 +850,392 @@ def plot_scenarios_html(
     return html_content
 
 
-def write_plan_image(
+def write_plan_svg(
     plan: EmsPlanOutput,
     output: Path,
     *,
     width: int = 1600,
     height: int = 900,
 ) -> None:
-    """Write the plan as a static JPEG image for PR review.
+    """Write the plan as a static SVG for fixture review.
 
     Args:
         plan: The plan output to plot.
-        output: Path to write the JPEG image.
+        output: Path to write the SVG image.
         width: Image width in pixels.
         height: Image height in pixels.
     """
-    fig, _ = _build_plan_figure(plan, include_hover=False)
-    fig.write_image(str(output), width=width, height=height, format="jpeg", scale=2)
+    try:
+        import matplotlib.dates as mdates
+        import matplotlib.pyplot as plt
+        from matplotlib.axes import Axes
+    except ImportError as exc:
+        raise ImportError(
+            "matplotlib is required for static SVG plotting: uv add matplotlib"
+        ) from exc
+
+    local_tz = datetime.now().astimezone().tzinfo or UTC
+    grid = _single_component(plan, "grid", GridComponentPlan)
+    if grid is None:
+        raise ValueError("Plan is missing required 'grid' component.")
+    if not grid.net_kw:
+        raise ValueError("Plan has no interval series to plot.")
+
+    interval_points = grid.net_kw
+    interval_end_times = _interval_end_times(plan, interval_points)
+    times = [_normalize_time(point.time, local_tz=local_tz) for point in interval_points]
+    times.append(_normalize_time(interval_end_times[-1], local_tz=local_tz))
+
+    load_component = _single_component(plan, "load", BaseLoadComponentPlan, optional=True)
+    load_kw = _float_series(load_component.power_kw) if load_component is not None else [0.0] * len(
+        interval_points
+    )
+    grid_net = _float_series(grid.net_kw)
+    pv_components = _components_of_type(plan, PvComponentPlan)
+    battery_components = _components_of_type(plan, BatteryComponentPlan)
+    ev_components = _components_of_type(plan, LoadControlledEvComponentPlan)
+
+    total_pv = _aggregate_series(
+        {name: _float_series(component.actual_kw) for name, component in pv_components.items()}
+    )
+    total_curtailment = _aggregate_series(
+        {name: _float_series(component.curtail_kw) for name, component in pv_components.items()}
+    )
+    curtailment_flags = _aggregate_bool_series(
+        {
+            name: _bool_series(component.curtailment)
+            for name, component in pv_components.items()
+        }
+    )
+    total_batt_charge = _aggregate_series(
+        {name: _float_series(component.charge_kw) for name, component in battery_components.items()}
+    )
+    total_batt_discharge = _aggregate_series(
+        {
+            name: _float_series(component.discharge_kw)
+            for name, component in battery_components.items()
+        }
+    )
+    batt_soc_pct = {
+        name: _float_series(component.soc_pct) for name, component in battery_components.items()
+    }
+    batt_soc_times = {
+        name: _normalize_times(component.soc_pct, local_tz=local_tz)
+        for name, component in battery_components.items()
+    }
+    total_ev_charge = _aggregate_series(
+        {name: _float_series(component.charge_kw) for name, component in ev_components.items()}
+    )
+    ev_soc_pct = {
+        name: _float_series(component.soc_pct) for name, component in ev_components.items()
+    }
+    ev_soc_times = {
+        name: _normalize_times(component.soc_pct, local_tz=local_tz)
+        for name, component in ev_components.items()
+    }
+    price_import = _float_series(grid.price_import_raw)
+    price_export = _float_series(grid.price_export_raw)
+    price_import_risk = _float_series(grid.price_import_effective)
+    price_export_risk = _float_series(grid.price_export_effective)
+
+    has_soc = any(_has_any(series) for series in batt_soc_pct.values()) or any(
+        _has_any(series) for series in ev_soc_pct.values()
+    )
+    has_price = (
+        _has_any(price_import)
+        or _has_any(price_export)
+        or _has_any(price_import_risk)
+        or _has_any(price_export_risk)
+    )
+    total_cost = _interval_settlement_cost(
+        import_kw=grid.import_kw,
+        export_kw=grid.export_kw,
+        price_import=grid.price_import_raw,
+        price_export=grid.price_export_raw,
+        end_times=interval_end_times,
+    )
+    total_import_kwh = _interval_energy_kwh(grid.import_kw, interval_end_times)
+    total_export_kwh = _interval_energy_kwh(grid.export_kw, interval_end_times)
+
+    power_max = max(
+        max(abs(v) for v in grid_net) if grid_net else 0,
+        max(abs(v) for v in load_kw) if load_kw else 0,
+        max(abs(v) for v in total_pv) if total_pv else 0,
+        max(abs(v) for v in total_curtailment) if total_curtailment else 0,
+        max(abs(v) for v in total_batt_charge) if total_batt_charge else 0,
+        max(abs(v) for v in total_batt_discharge) if total_batt_discharge else 0,
+        max(abs(v) for v in total_ev_charge) if total_ev_charge else 0,
+        1.0,
+    )
+    power_max = max(power_max * 1.1, 1.0)
+    soc_values = [
+        value for series in (*batt_soc_pct.values(), *ev_soc_pct.values()) for value in series
+    ]
+    soc_axis_max = max(max(soc_values, default=0.0), 100.0)
+    price_max = max(
+        max(abs(p) for p in price_import) if price_import else 0,
+        max(abs(p) for p in price_export) if price_export else 0,
+        max(abs(p) for p in price_import_risk) if price_import_risk else 0,
+        max(abs(p) for p in price_export_risk) if price_export_risk else 0,
+        0.01,
+    )
+
+    def color(name: str) -> tuple[float, float, float, float]:
+        return _rgba(COLORS[name])
+
+    with plt.rc_context(
+        {
+            "svg.fonttype": "none",
+            "svg.hashsalt": "energy-assistant-plan",
+            "font.family": "DejaVu Sans",
+        }
+    ):
+        time_numbers = _date_numbers(times, mdates.date2num)
+        fig, ax_power = plt.subplots(figsize=(width / 100, height / 100), dpi=100)
+        fig.patch.set_facecolor("white")
+        ax_power.set_facecolor("white")
+
+        for index, active in enumerate(curtailment_flags):
+            if active:
+                ax_power.axvspan(
+                    time_numbers[index],
+                    time_numbers[index + 1],
+                    facecolor=color("curtailment_fill"),
+                    edgecolor="none",
+                    zorder=0,
+                )
+
+        _plot_step_area(
+            ax_power,
+            time_numbers,
+            total_pv,
+            label="PV Power",
+            line_color=color("pv"),
+            fill_color=color("pv_fill"),
+        )
+        _plot_step_area(
+            ax_power,
+            time_numbers,
+            total_curtailment,
+            label="PV Curtailment",
+            line_color=color("curtailment"),
+            fill_color=color("curtailment_line"),
+        )
+        _plot_step_area(
+            ax_power,
+            time_numbers,
+            load_kw,
+            label="Load",
+            line_color=color("load"),
+            fill_color=color("load_fill"),
+        )
+        _plot_step_area(
+            ax_power,
+            time_numbers,
+            grid_net,
+            label="Grid Net",
+            line_color=color("grid_net"),
+            fill_color=color("grid_net_fill"),
+            always=True,
+        )
+        _plot_step_area(
+            ax_power,
+            time_numbers,
+            [-v for v in total_batt_charge],
+            label="Battery Charge",
+            line_color=color("batt_charge"),
+            fill_color=color("batt_charge_fill"),
+        )
+        _plot_step_area(
+            ax_power,
+            time_numbers,
+            total_batt_discharge,
+            label="Battery Discharge",
+            line_color=color("batt_discharge"),
+            fill_color=color("batt_discharge_fill"),
+        )
+        _plot_step_area(
+            ax_power,
+            time_numbers,
+            total_ev_charge,
+            label="EV Charge",
+            line_color=color("ev_charge"),
+            fill_color=color("ev_charge_fill"),
+        )
+
+        axes: list[Axes] = [ax_power]
+        if has_soc:
+            ax_soc = ax_power.twinx()
+            axes.append(ax_soc)
+            ax_soc.set_ylim(-soc_axis_max, soc_axis_max)
+            ax_soc.set_ylabel("SoC (%)")
+            ax_soc.set_yticks([0, 20, 40, 60, 80, 100])
+            ax_soc.axhline(100, color=color("batt_soc"), linewidth=1, linestyle=":", alpha=0.6)
+            for name, series in batt_soc_pct.items():
+                if _has_any(series):
+                    label = f"Battery SoC ({name})" if len(batt_soc_pct) > 1 else "Battery SoC"
+                    ax_soc.step(
+                        _date_numbers(batt_soc_times[name], mdates.date2num),
+                        series,
+                        where="post",
+                        label=label,
+                        color=color("batt_soc"),
+                        linewidth=2.2,
+                        linestyle=":",
+                    )
+            for name, series in ev_soc_pct.items():
+                if _has_any(series):
+                    label = f"EV SoC ({name})" if len(ev_soc_pct) > 1 else "EV SoC"
+                    ax_soc.step(
+                        _date_numbers(ev_soc_times[name], mdates.date2num),
+                        series,
+                        where="post",
+                        label=label,
+                        color=color("ev_soc"),
+                        linewidth=2.2,
+                        linestyle=":",
+                    )
+
+        if has_price:
+            ax_price = ax_power.twinx()
+            axes.append(ax_price)
+            ax_price.spines["right"].set_position(("axes", 1.1 if has_soc else 1.0))
+            ax_price.set_ylim(-price_max * 1.1, price_max * 1.1)
+            ax_price.set_ylabel("Price ($)")
+            _plot_step_line(
+                ax_price,
+                time_numbers,
+                price_import,
+                label="Buy Price",
+                color=color("price_import"),
+            )
+            _plot_step_line(
+                ax_price,
+                time_numbers,
+                price_import_risk,
+                label="Buy Price (Risk Bias)",
+                color=color("price_import_risk"),
+                linestyle=":",
+                linewidth=1.5,
+            )
+            _plot_step_line(
+                ax_price,
+                time_numbers,
+                price_export,
+                label="Sell Price",
+                color=color("price_export"),
+            )
+            _plot_step_line(
+                ax_price,
+                time_numbers,
+                price_export_risk,
+                label="Sell Price (Risk Bias)",
+                color=color("price_export_risk"),
+                linestyle=":",
+                linewidth=1.5,
+            )
+
+        ax_power.set_xlim(time_numbers[0], time_numbers[-1])
+        ax_power.set_ylim(-power_max, power_max)
+        ax_power.set_ylabel("Power (kW)")
+        ax_power.grid(True, color=(0.5, 0.5, 0.5, 0.2), linewidth=0.8)
+        ax_power.axhline(0, color=(0.5, 0.5, 0.5, 0.5), linewidth=0.8)
+        ax_power.xaxis.set_major_formatter(mdates.DateFormatter("%I:%M %p\n%d %b", tz=local_tz))
+
+        fig.suptitle(
+            "EMS Plan | "
+            f"Cost: ${total_cost:.2f} | "
+            f"Grid Export: {total_export_kwh:.2f} kWh | "
+            f"Grid Import: {total_import_kwh:.2f} kWh",
+            fontsize=16,
+        )
+
+        handles: list[Any] = []
+        labels: list[str] = []
+        for axis in axes:
+            axis_handles, axis_labels = axis.get_legend_handles_labels()
+            handles.extend(axis_handles)
+            labels.extend(axis_labels)
+        if handles:
+            fig.legend(
+                handles,
+                labels,
+                loc="lower center",
+                ncol=min(4, len(handles)),
+                frameon=True,
+                bbox_to_anchor=(0.5, 0.02),
+            )
+
+        fig.subplots_adjust(left=0.06, right=0.84 if has_price else 0.9, top=0.92, bottom=0.16)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(output, format="svg", metadata={"Date": None})
+        plt.close(fig)
+
     if not output.exists():
-        raise ValueError(f"Failed to write plan image to {output}")
+        raise ValueError(f"Failed to write plan SVG to {output}")
     if output.stat().st_size == 0:
-        raise ValueError(f"Plan image {output} is empty")
+        raise ValueError(f"Plan SVG {output} is empty")
+
+
+def _plot_step_area(
+    ax: Any,
+    times: Sequence[float],
+    values: list[float],
+    *,
+    label: str,
+    line_color: tuple[float, float, float, float],
+    fill_color: tuple[float, float, float, float],
+    always: bool = False,
+) -> None:
+    if not always and not _has_any(values):
+        return
+    step_values = _extend_step_values(times, values)
+    ax.step(times, step_values, where="post", label=label, color=line_color, linewidth=2)
+    ax.fill_between(times, step_values, 0, step="post", color=fill_color, linewidth=0)
+
+
+def _plot_step_line(
+    ax: Any,
+    times: Sequence[float],
+    values: list[float],
+    *,
+    label: str,
+    color: tuple[float, float, float, float],
+    linestyle: str = "-",
+    linewidth: float = 2,
+) -> None:
+    if not _has_any(values):
+        return
+    ax.step(
+        times,
+        _extend_step_values(times, values),
+        where="post",
+        label=label,
+        color=color,
+        linewidth=linewidth,
+        linestyle=linestyle,
+    )
+
+
+def _extend_step_values(times: Sequence[float], values: list[float]) -> list[float]:
+    if len(times) != len(values) + 1:
+        raise ValueError("Step plot requires interval edge times and one value per interval.")
+    return [*values, values[-1]]
+
+
+def _date_numbers(times: Sequence[datetime], converter: Any) -> list[float]:
+    return [float(converter(time)) for time in times]
+
+
+def _rgba(value: str) -> tuple[float, float, float, float]:
+    match = re.fullmatch(
+        r"rgba\(\s*(\d+),\s*(\d+),\s*(\d+),\s*([0-9.]+)\s*\)",
+        value,
+    )
+    if match is None:
+        raise ValueError(f"Unsupported color format: {value}")
+    red, green, blue, alpha = match.groups()
+    return (int(red) / 255.0, int(green) / 255.0, int(blue) / 255.0, float(alpha))
 
 
 def _normalize_time(value: datetime, *, local_tz: tzinfo) -> datetime:
