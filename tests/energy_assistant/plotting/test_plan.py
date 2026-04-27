@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from energy_assistant.plotting.plan import major_tick_hour_interval_for_range
+from energy_assistant.plotting.plan import (
+    major_tick_hour_interval_for_range,
+    major_tick_times_for_range,
+)
 
 
 def test_major_tick_hour_interval_prefers_hour_boundaries() -> None:
@@ -15,3 +18,12 @@ def test_major_tick_hour_interval_scales_for_long_horizons() -> None:
     start = datetime(2026, 1, 15, 0, 0, tzinfo=UTC)
     end = start + timedelta(hours=72)
     assert major_tick_hour_interval_for_range(start, end) == 8
+
+
+def test_major_tick_times_for_range_aligns_to_hour() -> None:
+    start = datetime(2026, 1, 15, 0, 37, tzinfo=UTC)
+    end = start + timedelta(hours=6)
+    ticks = major_tick_times_for_range(start, end)
+    assert ticks
+    assert ticks[0] == datetime(2026, 1, 15, 1, 0, tzinfo=UTC)
+    assert all(tick.minute == 0 and tick.second == 0 for tick in ticks)

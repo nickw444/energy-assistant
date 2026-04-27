@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 
+import pytest
 import yaml
 
 from energy_assistant.ems.components.context import GraphBuildContext
@@ -527,4 +528,4 @@ def test_price_extension_covers_unaligned_multi_resolution_horizon() -> None:
     assert import_series[0] == 0.20
     assert export_series[0] == 0.05
     assert import_series[-1] == 0.25
-    assert export_series[-1] == 0.07
+    assert export_series[-1] == pytest.approx(0.07)

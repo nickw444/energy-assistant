@@ -869,6 +869,7 @@ def write_plan_svg(
         import matplotlib.dates as mdates
         import matplotlib.pyplot as plt
         from matplotlib.axes import Axes
+        from matplotlib.ticker import FixedLocator
     except ImportError as exc:
         raise ImportError(
             "matplotlib is required for static SVG plotting: uv add matplotlib"
@@ -1140,9 +1141,9 @@ def write_plan_svg(
         ax_power.set_ylabel("Power (kW)")
         ax_power.grid(True, color=(0.5, 0.5, 0.5, 0.2), linewidth=0.8)
         ax_power.axhline(0, color=(0.5, 0.5, 0.5, 0.5), linewidth=0.8)
-        major_tick_hour_interval = major_tick_hour_interval_for_range(times[0], times[-1])
+        major_ticks = major_tick_times_for_range(times[0], times[-1])
         ax_power.xaxis.set_major_locator(
-            mdates.HourLocator(interval=major_tick_hour_interval, tz=local_tz)
+            FixedLocator(_date_numbers(major_ticks, mdates.date2num))
         )
         ax_power.xaxis.set_major_formatter(mdates.DateFormatter("%I:%M %p\n%d %b", tz=local_tz))
 
@@ -1241,6 +1242,33 @@ def major_tick_hour_interval_for_range(
         if duration_hours / interval <= max_ticks:
             return interval
     return 24
+
+
+def major_tick_times_for_range(
+    start: datetime,
+    end: datetime,
+    *,
+    max_ticks: int = 10,
+) -> list[datetime]:
+    """Build stable major tick datetimes aligned to top-of-hour boundaries."""
+    if end < start:
+        return [start]
+
+    first_tick = start.replace(minute=0, second=0, microsecond=0)
+    if first_tick < start:
+        first_tick += timedelta(hours=1)
+
+    interval_hours = major_tick_hour_interval_for_range(first_tick, end, max_ticks=max_ticks)
+    step = timedelta(hours=interval_hours)
+
+    ticks: list[datetime] = []
+    current = first_tick
+    while current <= end:
+        ticks.append(current)
+        current += step
+    if not ticks:
+        ticks.append(first_tick)
+    return ticks
 
 
 def _date_numbers(times: Sequence[datetime], converter: Any) -> list[float]:
