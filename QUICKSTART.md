@@ -234,21 +234,25 @@ plant:
     storage_efficiency_pct: 95
     charge_cost_per_kwh: 0.02
     discharge_cost_per_kwh: 0.02
-    soc_value_per_kwh: 0.06
+    soc_value:
+      # Keep value on stored energy at the end of the optimization horizon.
+      # - forecast_percentile: derive dynamic value from future import price forecast.
+      # - fixed: use value_per_kwh.
+      # - none: disable terminal SoC valuation.
+      mode: forecast_percentile
+      # 50 = median. Increase to bias toward preserving energy for expensive periods.
+      percentile: 50
     min_soc_pct: 10
     max_soc_pct: 100
     reserve_soc_pct: 20
-    # Terminal state-of-charge handling.
-    # Keeps the optimizer from draining the battery at the end of the horizon and
-    # assuming "tomorrow is free." Adaptive mode exists because horizons shorter
-    # or longer than a day can make a hard end-SoC target unrealistic; it relaxes
-    # toward reserve using a fixed 24h reference and prices any shortfall so energy
-    # still has value.
+    # Optional terminal SoC constraints (disabled by default).
+    # With dynamic SoC valuation above, most setups can leave this as `none`.
     terminal_soc:
       # Mode options:
+      # - none: no terminal SoC constraint.
       # - hard: enforce end SoC >= start SoC.
       # - adaptive: relax toward reserve using the 24h reference scaling.
-      mode: adaptive
+      mode: none
       # Penalty applied per kWh of terminal SoC shortfall when adaptive slack is used.
       # The objective adds `penalty_per_kwh * shortfall_kwh`, scaled by the adaptive
       # horizon ratio, so missing energy is priced rather than ignored.

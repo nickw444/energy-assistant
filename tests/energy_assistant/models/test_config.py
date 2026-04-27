@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from energy_assistant.models.config import EmsConfig
-from energy_assistant.models.plant import BatteryComponentConfig, InputReference
+from energy_assistant.models.plant import BatteryComponentConfig, InputReference, SocValueConfig
 
 
 def test_high_res_requires_both_fields() -> None:
@@ -36,7 +36,7 @@ def test_high_res_horizon_must_not_exceed_total_horizon() -> None:
         )
 
 
-def test_battery_terminal_soc_defaults_to_adaptive() -> None:
+def test_battery_terminal_soc_defaults_to_adaptive_with_dynamic_soc_value() -> None:
     battery = BatteryComponentConfig(
         type="battery",
         connection="primary",
@@ -52,3 +52,29 @@ def test_battery_terminal_soc_defaults_to_adaptive() -> None:
 
     assert battery.terminal_soc.mode == "adaptive"
     assert battery.terminal_soc.penalty_per_kwh == "median"
+    assert battery.soc_value.mode == "none"
+    assert battery.soc_value.percentile == 50.0
+
+
+def test_battery_soc_value_fixed_requires_value() -> None:
+    with pytest.raises(ValidationError, match="value_per_kwh is required"):
+        SocValueConfig(mode="fixed")
+
+
+def test_battery_legacy_soc_value_per_kwh_is_upgraded() -> None:
+    battery = BatteryComponentConfig(
+        type="battery",
+        connection="primary",
+        name="Battery Primary",
+        capacity_kwh=13.5,
+        storage_efficiency_pct=95.0,
+        min_soc_pct=10.0,
+        max_soc_pct=100.0,
+        reserve_soc_pct=20.0,
+        soc_value_per_kwh=0.08,  # pyright: ignore[reportCallIssue]
+        state_of_charge_pct=InputReference(source="battery_soc"),
+        realtime_power=InputReference(source="battery_power"),
+    )
+
+    assert battery.soc_value.mode == "fixed"
+    assert battery.soc_value.value_per_kwh == 0.08

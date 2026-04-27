@@ -128,7 +128,7 @@ class PriceBindingConfig(BaseModel):
 
 
 class TerminalSocConfig(BaseModel):
-    mode: Literal["hard", "adaptive"] = "adaptive"
+    mode: Literal["none", "hard", "adaptive"] = "adaptive"
     penalty_per_kwh: float | Literal["mean", "median"] | None = Field(default="median")
 
     model_config = ConfigDict(extra="forbid")
@@ -143,6 +143,20 @@ class TerminalSocConfig(BaseModel):
         if isinstance(value, float) and value < 0:
             raise ValueError("penalty_per_kwh must be >= 0")
         return value
+
+
+class SocValueConfig(BaseModel):
+    mode: Literal["none", "fixed", "forecast_percentile"] = "none"
+    value_per_kwh: float | None = Field(default=None, ge=0)
+    percentile: float = Field(default=50.0, ge=0, le=100)
+
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="after")
+    def _validate_value_mode(self) -> Self:
+        if self.mode == "fixed" and self.value_per_kwh is None:
+            raise ValueError("value_per_kwh is required when soc_value.mode='fixed'")
+        return self
 
 
 class SwitchboardComponentConfig(BaseModel):
@@ -252,7 +266,7 @@ class BatteryComponentConfig(BaseModel):
     storage_efficiency_pct: float = Field(gt=0, le=100)
     charge_cost_per_kwh: float = Field(default=0.0, ge=0)
     discharge_cost_per_kwh: float = Field(default=0.0, ge=0)
-    soc_value_per_kwh: float | None = Field(default=None, ge=0)
+    soc_value: SocValueConfig = Field(default_factory=SocValueConfig)
     min_soc_pct: float = Field(ge=0, le=100)
     max_soc_pct: float = Field(ge=0, le=100)
     reserve_soc_pct: float = Field(ge=0, le=100)
@@ -263,6 +277,22 @@ class BatteryComponentConfig(BaseModel):
     realtime_power: InputReference
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _upgrade_legacy_soc_value(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+        data = dict(cast(dict[str, object], value))
+        legacy = data.pop("soc_value_per_kwh", None)
+        if legacy is None:
+            return data
+        if "soc_value" not in data:
+            data["soc_value"] = {
+                "mode": "fixed",
+                "value_per_kwh": legacy,
+            }
+        return data
 
     @field_validator("connection")
     @classmethod

@@ -52,6 +52,31 @@ class BatteryComponent(EmsComponent[BatterySolveState, BatteryComponentPlan]):
         self.name = self._config.name
         self.node_id = NodeId(component_id)
 
+    @staticmethod
+    def _percentile(values: list[float], percentile: float) -> float:
+        if not values:
+            return 0.0
+        clamped = max(0.0, min(100.0, percentile))
+        ranked = sorted(values)
+        if len(ranked) == 1:
+            return ranked[0]
+        pos = (len(ranked) - 1) * clamped / 100.0
+        low = int(pos)
+        high = min(low + 1, len(ranked) - 1)
+        fraction = pos - low
+        return ranked[low] + (ranked[high] - ranked[low]) * fraction
+
+    def _terminal_soc_value_per_kwh(self, grid_price_import_raw: list[float]) -> float | None:
+        config = self._config.soc_value
+        if config.mode == "none":
+            return None
+        if config.mode == "fixed":
+            return config.value_per_kwh
+        return self._percentile(
+            grid_price_import_raw,
+            percentile=config.percentile,
+        )
+
 
     def _initial_soc_kwh_from_inputs(
         self,
@@ -116,7 +141,7 @@ class BatteryComponent(EmsComponent[BatterySolveState, BatteryComponentPlan]):
             terminal_reserve_kwh=reserve_kwh,
             terminal_penalty_per_kwh=self._config.terminal_soc.penalty_per_kwh,
             price_import_raw=None,
-            terminal_soc_value_per_kwh=self._config.soc_value_per_kwh,
+            terminal_soc_value_per_kwh=None,
         )
 
         connection = Connection(
@@ -171,6 +196,9 @@ class BatteryComponent(EmsComponent[BatterySolveState, BatteryComponentPlan]):
             grid_solve_state = solve_states.get(same_switchboard_grids[0])
             grid_price_import_raw = list(grid_solve_state.price_import_raw)
         battery_state.storage.bind_terminal_import_prices(grid_price_import_raw)
+        battery_state.storage.bind_terminal_soc_value_per_kwh(
+            self._terminal_soc_value_per_kwh(grid_price_import_raw)
+        )
 
         if not grid_connections:
             return []

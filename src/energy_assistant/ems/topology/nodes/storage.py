@@ -204,6 +204,11 @@ class StorageNode(Node):
 
         self.price_import_raw = list(price_import)
 
+    def bind_terminal_soc_value_per_kwh(self, value_per_kwh: float | None) -> None:
+        """Set terminal SoC value after graph wiring and price resolution."""
+
+        self.terminal_soc_value_per_kwh = value_per_kwh
+
 
 _TERMINAL_SOC_REFERENCE_MINUTES = 1440.0
 
