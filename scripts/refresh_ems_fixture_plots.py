@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from energy_assistant.ems.fixtures.harness import (
     EmsFixturePaths,
-    compute_plan_hash,
     resolve_ems_fixture_paths,
 )
 from energy_assistant.ems.models import EmsPlanOutput
@@ -42,11 +40,6 @@ def _discover_scenarios(base_dir: Path) -> list[tuple[str, str | None]]:
     return sorted(scenarios, key=lambda item: (item[0], item[1] or ""))
 
 
-def _expected_hash(paths: EmsFixturePaths) -> str:
-    payload = json.loads(paths.plan_path.read_text())
-    return compute_plan_hash(payload)
-
-
 def _refresh_scenario(paths: EmsFixturePaths) -> None:
     plan = EmsPlanOutput.model_validate_json(paths.plan_path.read_text())
     write_plan_svg(plan, paths.plot_path)
@@ -66,12 +59,8 @@ def main() -> int:
 
         missing_plot = not paths.plot_path.exists()
         legacy_plot = paths.scenario_dir / "output.jpeg"
-        missing_hash = not paths.hash_path.exists()
-        expected_hash = _expected_hash(paths)
-        stored_hash = paths.hash_path.read_text().strip() if paths.hash_path.exists() else None
-        hash_mismatch = stored_hash is not None and stored_hash != expected_hash
 
-        if not (missing_plot or missing_hash or hash_mismatch or legacy_plot.exists()):
+        if not (missing_plot or legacy_plot.exists()):
             continue
 
         reasons = []
@@ -79,10 +68,6 @@ def main() -> int:
             reasons.append("missing plot")
         if legacy_plot.exists():
             reasons.append("legacy JPEG present")
-        if missing_hash:
-            reasons.append("missing hash")
-        if hash_mismatch:
-            reasons.append("hash mismatch")
 
         label = fixture if scenario is None else f"{fixture}/{scenario}"
         print(f"Refreshing {label} ({', '.join(reasons)}).")

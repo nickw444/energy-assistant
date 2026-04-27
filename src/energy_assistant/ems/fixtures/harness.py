@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -22,7 +21,6 @@ class EmsFixturePaths:
     config_path: Path
     plan_path: Path
     plot_path: Path
-    hash_path: Path
 
 
 def resolve_ems_fixture_paths(
@@ -45,20 +43,7 @@ def resolve_ems_fixture_paths(
         config_path=config_path,
         plan_path=scenario_dir / "output.json",
         plot_path=scenario_dir / "output.svg",
-        hash_path=scenario_dir / "output.hash",
     )
-
-
-def compute_plan_hash(plan_summary: dict[str, Any]) -> str:
-    """Compute a stable hash from the plan summary for change detection."""
-    normalized = dict(plan_summary)
-    normalized.pop("generated_at", None)
-    if "meta" in normalized:
-        meta = dict(normalized["meta"])
-        meta.pop("generated_at", None)
-        normalized["meta"] = meta
-    serialized = json.dumps(normalized, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(serialized.encode()).hexdigest()[:16]
 
 
 def render_fixture_json(payload: dict[str, Any]) -> str:
