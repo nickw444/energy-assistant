@@ -61,20 +61,18 @@ def test_battery_soc_value_fixed_requires_value() -> None:
         SocValueConfig(mode="fixed")
 
 
-def test_battery_legacy_soc_value_per_kwh_is_upgraded() -> None:
-    battery = BatteryComponentConfig(
-        type="battery",
-        connection="primary",
-        name="Battery Primary",
-        capacity_kwh=13.5,
-        storage_efficiency_pct=95.0,
-        min_soc_pct=10.0,
-        max_soc_pct=100.0,
-        reserve_soc_pct=20.0,
-        soc_value_per_kwh=0.08,  # pyright: ignore[reportCallIssue]
-        state_of_charge_pct=InputReference(source="battery_soc"),
-        realtime_power=InputReference(source="battery_power"),
-    )
-
-    assert battery.soc_value.mode == "fixed"
-    assert battery.soc_value.value_per_kwh == 0.08
+def test_battery_legacy_soc_value_per_kwh_is_rejected() -> None:
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        BatteryComponentConfig(
+            type="battery",
+            connection="primary",
+            name="Battery Primary",
+            capacity_kwh=13.5,
+            storage_efficiency_pct=95.0,
+            min_soc_pct=10.0,
+            max_soc_pct=100.0,
+            reserve_soc_pct=20.0,
+            soc_value_per_kwh=0.08,  # pyright: ignore[reportCallIssue]
+            state_of_charge_pct=InputReference(source="battery_soc"),
+            realtime_power=InputReference(source="battery_power"),
+        )

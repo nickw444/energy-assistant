@@ -278,22 +278,6 @@ class BatteryComponentConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    @model_validator(mode="before")
-    @classmethod
-    def _upgrade_legacy_soc_value(cls, value: object) -> object:
-        if not isinstance(value, dict):
-            return value
-        data = dict(cast(dict[str, object], value))
-        legacy = data.pop("soc_value_per_kwh", None)
-        if legacy is None:
-            return data
-        if "soc_value" not in data:
-            data["soc_value"] = {
-                "mode": "fixed",
-                "value_per_kwh": legacy,
-            }
-        return data
-
     @field_validator("connection")
     @classmethod
     def _validate_connection(cls, value: str) -> str:
