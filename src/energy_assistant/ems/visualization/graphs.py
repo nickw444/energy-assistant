@@ -205,41 +205,59 @@ def _policy_edge_tooltip(connection_id: str, name: str, policy: Any | None) -> s
 def _compact_policy_label(name: str, policy: Any | None) -> str:
     if policy is None:
         return "pass"
+    policy_header = f"{name}\\n{type(policy).__name__}"
+    if _is_dynamic_series_policy(policy):
+        return policy_header
     if isinstance(policy, DirectionalLimit):
         label = "limit ex" if policy.exclusive else "limit"
         return (
+            f"{policy_header}\\n"
             f"{label}\\n"
             f"ab<={_fmt_limit_short(policy.max_a_to_b_kw)}\\n"
             f"ba<={_fmt_limit_short(policy.max_b_to_a_kw)}"
         )
     if isinstance(policy, DirectionalEfficiency):
-        return f"eff\\nab={_fmt_number(policy.eta_a_to_b)}\\nba={_fmt_number(policy.eta_b_to_a)}"
+        return (
+            f"{policy_header}\\n"
+            f"eff\\n"
+            f"ab={_fmt_number(policy.eta_a_to_b)}\\n"
+            f"ba={_fmt_number(policy.eta_b_to_a)}"
+        )
     if isinstance(policy, FixedFlow):
         return (
-            f"fixed\\n{_direction_arrow(policy.direction)}\\n"
+            f"{policy_header}\\n"
+            f"fixed\\n"
+            f"{_direction_arrow(policy.direction)}\\n"
             f"kw={_fmt_series(policy.values_kw)}"
         )
     if isinstance(policy, UpperBound):
         return (
-            f"upper bound\\n{_direction_arrow(policy.direction)}\\n"
+            f"{policy_header}\\n"
+            f"upper bound\\n"
+            f"{_direction_arrow(policy.direction)}\\n"
             f"<={_fmt_series(policy.upper_bounds_kw)}"
         )
     if isinstance(policy, SoftDirectionalLimit):
         return (
-            f"soft\\n{_direction_arrow(policy.direction)}\\n"
+            f"{policy_header}\\n"
+            f"soft\\n"
+            f"{_direction_arrow(policy.direction)}\\n"
             f"<={_fmt_series(policy.limit_kw)}\\n"
             f"pen={_fmt_number(policy.penalty_per_kwh)}"
         )
     if isinstance(policy, LinearCost):
         return (
+            f"{policy_header}\\n"
             f"cost\\n"
             f"ab={_fmt_series(policy.cost_a_to_b_per_kwh)}\\n"
             f"ba={_fmt_series(policy.cost_b_to_a_per_kwh)}"
         )
-    return name.replace("_", " ")
+    return policy_header
 
 
 def _policy_label(name: str, policy: Any) -> str:
+    if _is_dynamic_series_policy(policy):
+        return f"{name}: dynamic per-timestep policy"
     if isinstance(policy, DirectionalLimit):
         exclusive = ", exclusive" if policy.exclusive else ""
         return (
@@ -273,6 +291,10 @@ def _policy_label(name: str, policy: Any) -> str:
     return f"{name}: {type(policy).__name__}"
 
 
+def _is_dynamic_series_policy(policy: Any) -> bool:
+    return isinstance(policy, FixedFlow | UpperBound | SoftDirectionalLimit | LinearCost)
+
+
 def _fmt_limit(value: float | None) -> str:
     return "unbounded" if value is None else _fmt_number(value)
 
@@ -282,7 +304,11 @@ def _fmt_limit_short(value: float | None) -> str:
 
 
 def _fmt_number(value: float) -> str:
-    return f"{value:g}"
+    # Force fixed-point output so tiny values stay readable in rendered SVG labels.
+    formatted = f"{value:.8f}".rstrip("0").rstrip(".")
+    if formatted in {"", "-0"}:
+        return "0"
+    return formatted
 
 
 def _fmt_series(values: list[float]) -> str:

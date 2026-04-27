@@ -10,6 +10,7 @@ from energy_assistant.ems.topology.graph import EnergyGraph
 from energy_assistant.ems.topology.ids import NodeId
 from energy_assistant.ems.topology.nodes import Node
 from energy_assistant.ems.topology.policies import DirectionalLimit
+from energy_assistant.ems.topology.policies import LinearCost
 from energy_assistant.ems.visualization import (
     write_logical_component_graph_svg,
     write_topological_energy_graph_svg,
@@ -77,4 +78,57 @@ def test_write_topological_energy_graph_svg(tmp_path: Path) -> None:
     assert content.lstrip().startswith("<?xml")
     assert "load_link" in content
     assert "directional_limit" in content
+    assert "DirectionalLimit" in content
     assert "switchboard" in content
+
+
+def test_write_topological_energy_graph_svg_hides_dynamic_series_values(
+    tmp_path: Path,
+) -> None:
+    horizon = HorizonFactory(timestep_minutes=60, horizon_minutes=120).build(
+        now=datetime.fromisoformat("2026-01-01T00:00:00+00:00")
+    )
+    graph = EnergyGraph()
+    graph.add_element(
+        Node(
+            horizon=horizon,
+            id=NodeId("switchboard"),
+            name="AC Switchboard",
+            node_role="bus",
+        )
+    )
+    graph.add_element(
+        Node(
+            horizon=horizon,
+            id=NodeId("battery"),
+            name="Battery",
+            node_role="consumer",
+        )
+    )
+    graph.add_element(
+        Connection(
+            horizon=horizon,
+            id="battery_link",
+            a_node_id=NodeId("switchboard"),
+            b_node_id=NodeId("battery"),
+            policies={
+                "time_cost": LinearCost(
+                    cost_a_to_b_per_kwh=[0.000001, 0.000058],
+                    cost_b_to_a_per_kwh=[0.000001, 0.000058],
+                    name="time_cost",
+                )
+            },
+        )
+    )
+    output = tmp_path / "topological_energy_graph.svg"
+
+    write_topological_energy_graph_svg(graph, output)
+
+    content = output.read_text(encoding="utf-8")
+    assert content.lstrip().startswith("<?xml")
+    assert "time_cost" in content
+    assert "LinearCost" in content
+    assert "ab=" not in content
+    assert "ba=" not in content
+    assert "0.000001" not in content
+    assert "0.000058" not in content
