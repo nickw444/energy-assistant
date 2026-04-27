@@ -17,6 +17,10 @@ import yaml
 
 from energy_assistant.api.server import create_app
 from energy_assistant.config import load_app_config
+from energy_assistant.ems.fixtures.graph_viz import (
+    write_logical_component_graph_svg,
+    write_topology_graph_svg,
+)
 from energy_assistant.ems.fixtures.harness import (
     EmsFixturePaths,
     render_fixture_json,
@@ -506,6 +510,10 @@ def ems_record_scenario(
 
             write_plan_svg(plan, paths.plot_path)
             click.echo(f"Wrote plan SVG to {paths.plot_path}")
+            write_logical_component_graph_svg(app_config, paths.logical_graph_path)
+            click.echo(f"Wrote logical graph SVG to {paths.logical_graph_path}")
+            write_topology_graph_svg(run.snapshot, paths.topology_graph_path)
+            click.echo(f"Wrote topology graph SVG to {paths.topology_graph_path}")
     except Exception as exc:
         raise click.ClickException(traceback.format_exc()) from exc
 
@@ -632,6 +640,10 @@ def _refresh_baseline_bundle(
 
     write_plan_svg(plan, paths.plot_path)
     click.echo(f"Wrote plan SVG to {paths.plot_path}")
+    write_logical_component_graph_svg(app_config, paths.logical_graph_path)
+    click.echo(f"Wrote logical graph SVG to {paths.logical_graph_path}")
+    write_topology_graph_svg(run.snapshot, paths.topology_graph_path)
+    click.echo(f"Wrote topology graph SVG to {paths.topology_graph_path}")
 
 
 def _format_exception_message(exc: Exception) -> str:

@@ -116,7 +116,7 @@ def test_fixture_baseline_up_to_date(fixture: str, scenario: str) -> None:
     ids=[f"{f}/{s}" for f, s in _discover_fixture_scenarios()],
 )
 def test_fixture_plot_up_to_date(fixture: str, scenario: str) -> None:
-    """Assert each fixture includes a static SVG plot artifact."""
+    """Assert each fixture includes static SVG artifacts."""
     paths = resolve_ems_fixture_paths(FIXTURE_BASE, fixture, scenario)
     if not _is_complete_bundle(paths):
         pytest.skip("EMS fixture scenario not recorded.")
@@ -131,6 +131,28 @@ def test_fixture_plot_up_to_date(fixture: str, scenario: str) -> None:
 
     content_start = paths.plot_path.read_text(encoding="utf-8", errors="ignore")[:200]
     assert "<?xml" in content_start or "<svg" in content_start
+
+    if not paths.logical_graph_path.exists():
+        pytest.fail(
+            f"Fixture {fixture}/{scenario!r} missing logical-graph.svg. "
+            f"Re-record with: {record_hint}"
+        )
+    logical_content_start = paths.logical_graph_path.read_text(
+        encoding="utf-8",
+        errors="ignore",
+    )[:200]
+    assert "<?xml" in logical_content_start or "<svg" in logical_content_start
+
+    if not paths.topology_graph_path.exists():
+        pytest.fail(
+            f"Fixture {fixture}/{scenario!r} missing topology-graph.svg. "
+            f"Re-record with: {record_hint}"
+        )
+    topology_content_start = paths.topology_graph_path.read_text(
+        encoding="utf-8",
+        errors="ignore",
+    )[:200]
+    assert "<?xml" in topology_content_start or "<svg" in topology_content_start
 
 
 def test_write_plan_svg_renders_fixture_plan(tmp_path: Path) -> None:

@@ -66,6 +66,16 @@ class EnergyGraph:
             self.add_element(element)
 
     @property
+    def nodes(self) -> tuple[Node, ...]:
+        return tuple(self._nodes[node_id] for node_id in sorted(self._nodes))
+
+    @property
+    def connections(self) -> tuple[Connection, ...]:
+        return tuple(
+            self._connections[connection_id] for connection_id in sorted(self._connections)
+        )
+
+    @property
     def fragments(self) -> list[Fragment]:
         # Keep stable ordering for debugging.
         fragments: list[Fragment] = []
