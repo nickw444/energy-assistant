@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import html
-import math
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -58,14 +57,9 @@ def _plan_display_timezone(
     return host if host is not None else UTC
 
 
-def _hourly_major_step_hours(span: timedelta) -> int:
-    """Pick a tick every n hours (on the wall clock), with at most ~20 major ticks."""
-    span_h = max(span.total_seconds() / 3600.0, 1e-6)
-    target = max(1, int(math.ceil(span_h / 20.0)))
-    for step in (1, 2, 3, 4, 6, 8, 12, 24, 48, 72, 96, 120, 168, 720, 24 * 30, 24 * 90, 24 * 365):
-        if step >= target:
-            return step
-    return 24 * 365
+def _plan_xaxis_major_step_hours() -> int:
+    """Fixed step between major x ticks: one tick every hour on the wall clock for all plans."""
+    return 1
 
 
 def _date_tick0_floor(start: datetime, local_tz: tzinfo) -> datetime:
@@ -97,8 +91,8 @@ def _on_the_hour_ticks(
 
 
 def _plan_xaxis_plotly_config(start: datetime, end: datetime, local_tz: tzinfo) -> dict[str, Any]:
-    """Plotly x-axis: localized labels, vertical grid on the hour every n hours."""
-    step_h = _hourly_major_step_hours(end - start)
+    """Plotly x-axis: localized labels, vertical grid every wall-clock hour."""
+    step_h = _plan_xaxis_major_step_hours()
     instants = _on_the_hour_ticks(start, end, local_tz, step_h)
     tickvals = [t.timestamp() * 1000.0 for t in instants]
     ticktext: list[str] = []
@@ -1213,7 +1207,7 @@ def write_plan_svg(
         ax_power.set_ylabel("Power (kW)")
         ax_power.grid(True, color=(0.5, 0.5, 0.5, 0.2), linewidth=0.8)
         ax_power.axhline(0, color=(0.5, 0.5, 0.5, 0.5), linewidth=0.8)
-        step_h = _hourly_major_step_hours(times[-1] - times[0])
+        step_h = _plan_xaxis_major_step_hours()
         x_tick_instants = _on_the_hour_ticks(times[0], times[-1], local_tz, step_h)
         x_tick_numbers: list[float] = [cast(float, mdates.date2num(t)) for t in x_tick_instants]
 
