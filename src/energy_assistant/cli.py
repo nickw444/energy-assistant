@@ -19,7 +19,6 @@ from energy_assistant.api.server import create_app
 from energy_assistant.config import load_app_config
 from energy_assistant.ems.fixtures.harness import (
     EmsFixturePaths,
-    compute_plan_hash,
     render_fixture_json,
     resolve_ems_fixture_paths,
     serialize_plan,
@@ -505,12 +504,8 @@ def ems_record_scenario(
             paths.plan_path.write_text(render_fixture_json(plan_payload))
             click.echo(f"Wrote EMS output baseline to {paths.plan_path}")
 
-            plan_hash = compute_plan_hash(plan_payload)
             write_plan_svg(plan, paths.plot_path)
             click.echo(f"Wrote plan SVG to {paths.plot_path}")
-
-            paths.hash_path.write_text(plan_hash + "\n")
-            click.echo(f"Wrote plan hash to {paths.hash_path}")
     except Exception as exc:
         raise click.ClickException(traceback.format_exc()) from exc
 
@@ -635,16 +630,8 @@ def _refresh_baseline_bundle(
     paths.plan_path.write_text(render_fixture_json(plan_payload))
     click.echo(f"Wrote EMS output baseline to {paths.plan_path}")
 
-    new_hash = compute_plan_hash(plan_payload)
-    old_hash = paths.hash_path.read_text().strip() if paths.hash_path.exists() else None
-    if new_hash != old_hash or not paths.plot_path.exists():
-        write_plan_svg(plan, paths.plot_path)
-        click.echo(f"Wrote plan SVG to {paths.plot_path}")
-
-        paths.hash_path.write_text(new_hash + "\n")
-        click.echo(f"Wrote plan hash to {paths.hash_path}")
-    else:
-        click.echo("Plan unchanged, skipping SVG regeneration.")
+    write_plan_svg(plan, paths.plot_path)
+    click.echo(f"Wrote plan SVG to {paths.plot_path}")
 
 
 def _format_exception_message(exc: Exception) -> str:

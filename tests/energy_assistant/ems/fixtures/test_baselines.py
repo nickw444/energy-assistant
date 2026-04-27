@@ -12,7 +12,6 @@ import pytest
 from energy_assistant.config import load_app_config
 from energy_assistant.ems.fixtures.harness import (
     EmsFixturePaths,
-    compute_plan_hash,
     resolve_ems_fixture_paths,
     serialize_plan,
 )
@@ -117,30 +116,12 @@ def test_fixture_baseline_up_to_date(fixture: str, scenario: str) -> None:
     ids=[f"{f}/{s}" for f, s in _discover_fixture_scenarios()],
 )
 def test_fixture_plot_up_to_date(fixture: str, scenario: str) -> None:
-    """Assert the stored output.svg matches its expected hash."""
+    """Assert each fixture includes a static SVG plot artifact."""
     paths = resolve_ems_fixture_paths(FIXTURE_BASE, fixture, scenario)
     if not _is_complete_bundle(paths):
         pytest.skip("EMS fixture scenario not recorded.")
 
     record_hint = f"energy-assistant ems refresh-baseline --fixture {fixture} --name {scenario}"
-
-    if paths.hash_path.exists() and not paths.plot_path.exists():
-        pytest.fail(
-            f"Fixture {fixture}/{scenario!r} has output.hash without output.svg. "
-            f"Re-record with: {record_hint}"
-        )
-
-    if paths.plot_path.exists() and not paths.hash_path.exists():
-        pytest.fail(
-            f"Fixture {fixture}/{scenario!r} has output.svg without output.hash. "
-            f"Re-record with: {record_hint}"
-        )
-
-    if not paths.hash_path.exists():
-        pytest.fail(
-            f"Fixture {fixture}/{scenario!r} missing output.hash. "
-            f"Re-record with: {record_hint}"
-        )
 
     if not paths.plot_path.exists():
         pytest.fail(
@@ -148,15 +129,8 @@ def test_fixture_plot_up_to_date(fixture: str, scenario: str) -> None:
             f"Re-record with: {record_hint}"
         )
 
-    stored_hash = paths.hash_path.read_text().strip()
-    expected = json.loads(paths.plan_path.read_text())
-    actual_hash = compute_plan_hash(expected)
-
-    assert stored_hash == actual_hash, (
-        f"Fixture {fixture}/{scenario!r} output.svg is out of date "
-        f"(hash mismatch: stored={stored_hash}, expected={actual_hash}). "
-        "Re-record with: " + record_hint
-    )
+    content_start = paths.plot_path.read_text(encoding="utf-8", errors="ignore")[:200]
+    assert "<?xml" in content_start or "<svg" in content_start
 
 
 def test_write_plan_svg_renders_fixture_plan(tmp_path: Path) -> None:
