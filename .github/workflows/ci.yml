@@ -48,7 +48,7 @@ jobs:
         run: uv sync --dev --frozen
       - name: Tests
         run: uv run pytest
-  refresh-fixture-plots:
+  refresh-fixture-artifacts:
     runs-on: macos-latest
     if: >-
       github.event_name == 'pull_request' &&
@@ -69,7 +69,9 @@ jobs:
         run: python -m pip install uv
       - name: Sync dependencies
         run: uv sync --dev --frozen
-      - name: Refresh EMS fixture plots
+      - name: Ensure Graphviz is available
+        run: dot -V
+      - name: Refresh EMS fixture artifacts
         run: uv run python scripts/refresh_ems_fixture_plots.py
       - name: Commit and push updates
         run: |
@@ -80,5 +82,5 @@ jobs:
           git add tests/fixtures/ems
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git commit -m "chore: refresh EMS fixture plots"
+          git commit -m "chore: refresh EMS fixture artifacts"
           git push origin HEAD:${{ github.head_ref }}

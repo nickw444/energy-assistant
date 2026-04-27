@@ -29,6 +29,11 @@ from energy_assistant.ems.inputs.application import EmsInputApplicator
 from energy_assistant.ems.models import GridComponentPlan
 from energy_assistant.ems.planner import EmsMilpPlanner
 from energy_assistant.ems.system.factory import EmsSystemFactory
+from energy_assistant.ems.topology.graph import EnergyGraph
+from energy_assistant.ems.visualization import (
+    write_logical_component_graph_svg,
+    write_topological_energy_graph_svg,
+)
 from energy_assistant.inputs.fixtures import (
     load_fixture_input_provider,
     save_resolved_inputs_fixture,
@@ -506,6 +511,7 @@ def ems_record_scenario(
 
             write_plan_svg(plan, paths.plot_path)
             click.echo(f"Wrote plan SVG to {paths.plot_path}")
+            _write_fixture_graphs(app_config, run.snapshot.graph, paths)
     except Exception as exc:
         raise click.ClickException(traceback.format_exc()) from exc
 
@@ -632,6 +638,18 @@ def _refresh_baseline_bundle(
 
     write_plan_svg(plan, paths.plot_path)
     click.echo(f"Wrote plan SVG to {paths.plot_path}")
+    _write_fixture_graphs(app_config, run.snapshot.graph, paths)
+
+
+def _write_fixture_graphs(
+    app_config: AppConfig,
+    graph: EnergyGraph,
+    paths: EmsFixturePaths,
+) -> None:
+    write_logical_component_graph_svg(app_config, paths.logical_component_graph_path)
+    click.echo(f"Wrote logical component graph SVG to {paths.logical_component_graph_path}")
+    write_topological_energy_graph_svg(graph, paths.topological_energy_graph_path)
+    click.echo(f"Wrote topological energy graph SVG to {paths.topological_energy_graph_path}")
 
 
 def _format_exception_message(exc: Exception) -> str:

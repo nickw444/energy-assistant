@@ -21,6 +21,8 @@ class EmsFixturePaths:
     config_path: Path
     plan_path: Path
     plot_path: Path
+    logical_component_graph_path: Path
+    topological_energy_graph_path: Path
 
 
 def resolve_ems_fixture_paths(
@@ -43,6 +45,8 @@ def resolve_ems_fixture_paths(
         config_path=config_path,
         plan_path=scenario_dir / "output.json",
         plot_path=scenario_dir / "output.svg",
+        logical_component_graph_path=scenario_dir / "logical_component_graph.svg",
+        topological_energy_graph_path=scenario_dir / "topological_energy_graph.svg",
     )
 
 
