@@ -46,7 +46,7 @@ from energy_assistant.plotting import (
     ScenarioPlot,
     plot_plan_html,
     plot_scenarios_html,
-    write_plan_image,
+    write_plan_svg,
 )
 from energy_assistant.worker import Worker
 
@@ -506,8 +506,8 @@ def ems_record_scenario(
             click.echo(f"Wrote EMS output baseline to {paths.plan_path}")
 
             plan_hash = compute_plan_hash(plan_payload)
-            write_plan_image(plan, paths.plot_path)
-            click.echo(f"Wrote plan image to {paths.plot_path}")
+            write_plan_svg(plan, paths.plot_path)
+            click.echo(f"Wrote plan SVG to {paths.plot_path}")
 
             paths.hash_path.write_text(plan_hash + "\n")
             click.echo(f"Wrote plan hash to {paths.hash_path}")
@@ -637,14 +637,14 @@ def _refresh_baseline_bundle(
 
     new_hash = compute_plan_hash(plan_payload)
     old_hash = paths.hash_path.read_text().strip() if paths.hash_path.exists() else None
-    if new_hash != old_hash:
-        write_plan_image(plan, paths.plot_path)
-        click.echo(f"Wrote plan image to {paths.plot_path}")
+    if new_hash != old_hash or not paths.plot_path.exists():
+        write_plan_svg(plan, paths.plot_path)
+        click.echo(f"Wrote plan SVG to {paths.plot_path}")
 
         paths.hash_path.write_text(new_hash + "\n")
         click.echo(f"Wrote plan hash to {paths.hash_path}")
     else:
-        click.echo("Plan unchanged, skipping image regeneration.")
+        click.echo("Plan unchanged, skipping SVG regeneration.")
 
 
 def _format_exception_message(exc: Exception) -> str:

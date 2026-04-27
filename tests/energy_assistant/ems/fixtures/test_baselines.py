@@ -19,9 +19,11 @@ from energy_assistant.ems.fixtures.harness import (
 from energy_assistant.ems.horizon import HorizonFactory
 from energy_assistant.ems.inputs.alignment import PowerForecastAligner, PriceForecastAligner
 from energy_assistant.ems.inputs.application import EmsInputApplicator
+from energy_assistant.ems.models import EmsPlanOutput
 from energy_assistant.ems.planner import EmsMilpPlanner
 from energy_assistant.ems.system.factory import EmsSystemFactory
 from energy_assistant.inputs.fixtures import load_fixture_input_provider
+from energy_assistant.plotting import write_plan_svg
 
 FIXTURE_BASE = Path("tests/fixtures/ems")
 
@@ -115,7 +117,7 @@ def test_fixture_baseline_up_to_date(fixture: str, scenario: str) -> None:
     ids=[f"{f}/{s}" for f, s in _discover_fixture_scenarios()],
 )
 def test_fixture_plot_up_to_date(fixture: str, scenario: str) -> None:
-    """Assert the stored output.jpeg matches its expected hash."""
+    """Assert the stored output.svg matches its expected hash."""
     paths = resolve_ems_fixture_paths(FIXTURE_BASE, fixture, scenario)
     if not _is_complete_bundle(paths):
         pytest.skip("EMS fixture scenario not recorded.")
@@ -124,13 +126,13 @@ def test_fixture_plot_up_to_date(fixture: str, scenario: str) -> None:
 
     if paths.hash_path.exists() and not paths.plot_path.exists():
         pytest.fail(
-            f"Fixture {fixture}/{scenario!r} has output.hash without output.jpeg. "
+            f"Fixture {fixture}/{scenario!r} has output.hash without output.svg. "
             f"Re-record with: {record_hint}"
         )
 
     if paths.plot_path.exists() and not paths.hash_path.exists():
         pytest.fail(
-            f"Fixture {fixture}/{scenario!r} has output.jpeg without output.hash. "
+            f"Fixture {fixture}/{scenario!r} has output.svg without output.hash. "
             f"Re-record with: {record_hint}"
         )
 
@@ -142,7 +144,7 @@ def test_fixture_plot_up_to_date(fixture: str, scenario: str) -> None:
 
     if not paths.plot_path.exists():
         pytest.fail(
-            f"Fixture {fixture}/{scenario!r} missing output.jpeg. "
+            f"Fixture {fixture}/{scenario!r} missing output.svg. "
             f"Re-record with: {record_hint}"
         )
 
@@ -151,7 +153,19 @@ def test_fixture_plot_up_to_date(fixture: str, scenario: str) -> None:
     actual_hash = compute_plan_hash(expected)
 
     assert stored_hash == actual_hash, (
-        f"Fixture {fixture}/{scenario!r} output.jpeg is out of date "
+        f"Fixture {fixture}/{scenario!r} output.svg is out of date "
         f"(hash mismatch: stored={stored_hash}, expected={actual_hash}). "
         "Re-record with: " + record_hint
     )
+
+
+def test_write_plan_svg_renders_fixture_plan(tmp_path: Path) -> None:
+    plan = EmsPlanOutput.model_validate_json(
+        (FIXTURE_BASE / "nwhass" / "short-horizon-low-pv" / "output.json").read_text()
+    )
+    output = tmp_path / "output.svg"
+
+    write_plan_svg(plan, output)
+
+    assert output.read_text().lstrip().startswith("<?xml")
+    assert output.stat().st_size < 250_000

@@ -18,7 +18,7 @@ def test_resolve_ems_fixture_paths_fixture_only(tmp_path: Path) -> None:
     assert paths.fixture_path == fixture_dir / "input.json"
     assert paths.config_path == fixture_dir / "config.yaml"
     assert paths.plan_path == fixture_dir / "output.json"
-    assert paths.plot_path == fixture_dir / "output.jpeg"
+    assert paths.plot_path == fixture_dir / "output.svg"
     assert paths.hash_path == fixture_dir / "output.hash"
 
 
@@ -35,7 +35,7 @@ def test_resolve_ems_fixture_paths_fixture_with_scenario(tmp_path: Path) -> None
     assert paths.fixture_path == scenario_dir / "input.json"
     assert paths.config_path == fixture_dir / "config.yaml"
     assert paths.plan_path == scenario_dir / "output.json"
-    assert paths.plot_path == scenario_dir / "output.jpeg"
+    assert paths.plot_path == scenario_dir / "output.svg"
     assert paths.hash_path == scenario_dir / "output.hash"
 
 

@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import json
-import subprocess
-import sys
 from pathlib import Path
 
 from energy_assistant.ems.fixtures.harness import (
@@ -10,6 +8,8 @@ from energy_assistant.ems.fixtures.harness import (
     compute_plan_hash,
     resolve_ems_fixture_paths,
 )
+from energy_assistant.ems.models import EmsPlanOutput
+from energy_assistant.plotting import write_plan_svg
 
 FIXTURE_BASE = Path("tests/fixtures/ems")
 
@@ -47,21 +47,9 @@ def _expected_hash(paths: EmsFixturePaths) -> str:
     return compute_plan_hash(payload)
 
 
-def _refresh_scenario(fixture: str, scenario: str | None, *, force_image: bool) -> None:
-    cmd = [
-        sys.executable,
-        "-m",
-        "energy_assistant.cli",
-        "ems",
-        "refresh-baseline",
-        "--fixture",
-        fixture,
-    ]
-    if scenario is not None:
-        cmd.extend(["--name", scenario])
-    if force_image:
-        cmd.append("--force-image")
-    subprocess.run(cmd, check=True)
+def _refresh_scenario(paths: EmsFixturePaths) -> None:
+    plan = EmsPlanOutput.model_validate_json(paths.plan_path.read_text())
+    write_plan_svg(plan, paths.plot_path)
 
 
 def main() -> int:
@@ -77,17 +65,20 @@ def main() -> int:
             continue
 
         missing_plot = not paths.plot_path.exists()
+        legacy_plot = paths.scenario_dir / "output.jpeg"
         missing_hash = not paths.hash_path.exists()
         expected_hash = _expected_hash(paths)
         stored_hash = paths.hash_path.read_text().strip() if paths.hash_path.exists() else None
         hash_mismatch = stored_hash is not None and stored_hash != expected_hash
 
-        if not (missing_plot or missing_hash or hash_mismatch):
+        if not (missing_plot or missing_hash or hash_mismatch or legacy_plot.exists()):
             continue
 
         reasons = []
         if missing_plot:
-            reasons.append("missing image")
+            reasons.append("missing plot")
+        if legacy_plot.exists():
+            reasons.append("legacy JPEG present")
         if missing_hash:
             reasons.append("missing hash")
         if hash_mismatch:
@@ -95,13 +86,15 @@ def main() -> int:
 
         label = fixture if scenario is None else f"{fixture}/{scenario}"
         print(f"Refreshing {label} ({', '.join(reasons)}).")
-        _refresh_scenario(fixture, scenario, force_image=missing_plot)
+        _refresh_scenario(paths)
+        if legacy_plot.exists():
+            legacy_plot.unlink()
         refreshed.append(label)
 
     if refreshed:
         print(f"Refreshed {len(refreshed)} scenario(s): {', '.join(refreshed)}.")
     else:
-        print("All EMS fixture images are up to date.")
+        print("All EMS fixture plots are up to date.")
     return 0
 
 
