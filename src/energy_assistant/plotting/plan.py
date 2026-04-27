@@ -1140,6 +1140,10 @@ def write_plan_svg(
         ax_power.set_ylabel("Power (kW)")
         ax_power.grid(True, color=(0.5, 0.5, 0.5, 0.2), linewidth=0.8)
         ax_power.axhline(0, color=(0.5, 0.5, 0.5, 0.5), linewidth=0.8)
+        major_tick_hour_interval = major_tick_hour_interval_for_range(times[0], times[-1])
+        ax_power.xaxis.set_major_locator(
+            mdates.HourLocator(interval=major_tick_hour_interval, tz=local_tz)
+        )
         ax_power.xaxis.set_major_formatter(mdates.DateFormatter("%I:%M %p\n%d %b", tz=local_tz))
 
         fig.suptitle(
@@ -1221,6 +1225,22 @@ def _extend_step_values(times: Sequence[float], values: list[float]) -> list[flo
     if len(times) != len(values) + 1:
         raise ValueError("Step plot requires interval edge times and one value per interval.")
     return [*values, values[-1]]
+
+
+def major_tick_hour_interval_for_range(
+    start: datetime,
+    end: datetime,
+    *,
+    max_ticks: int = 10,
+) -> int:
+    """Choose a stable hour-based major tick interval for static SVG output."""
+    duration_hours = max(0.0, (end - start).total_seconds() / 3600.0)
+    if duration_hours <= 0:
+        return 1
+    for interval in [1, 2, 3, 4, 6, 8, 12, 24]:
+        if duration_hours / interval <= max_ticks:
+            return interval
+    return 24
 
 
 def _date_numbers(times: Sequence[datetime], converter: Any) -> list[float]:
