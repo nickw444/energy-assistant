@@ -4,15 +4,18 @@ Energy Assistant runs a FastAPI service plus a background planner. Everything is
 single YAML file.
 
 ## Requirements
+
 - Python 3.13.2+
 - A Home Assistant instance and a long-lived access token
 - Entity IDs for the sensors you want to use
 
 ## Install
+
 1. Install `uv`: `pip install uv`
 2. Install dependencies: `uv sync --dev`
 
 ## Configure
+
 1. Create `config.yaml` in the repo root (or pass `--config` to point elsewhere).
 2. Fill in the configuration below with your Home Assistant URL, token, and entity IDs.
 
@@ -278,11 +281,13 @@ plant:
 ```
 
 ## Run
+
 1. Start the API + worker: `uv run energy-assistant --config config.yaml`
 2. Trigger a plan run: `curl -X POST http://localhost:6070/plan/run`
 3. Fetch the latest plan: `curl http://localhost:6070/plan/latest`
 
 Notes:
+
 - The worker runs immediately at startup, then on a roughly one-minute fallback schedule, and also after watched price changes.
 - `months` must use 3-letter abbreviations (`jan`..`dec`).
 - `homeassistant.base_url` should include `http://` or `https://`.
@@ -295,6 +300,7 @@ Notes:
 - `data_dir` is created automatically if it does not exist.
 
 ## Home Assistant Helpers
+
 The plan is more stable when realtime power sensors are smoothed and when load
 excludes controlled loads (EVs, etc). Below is an example set of template and
 filter sensors that matches the naming used in the quickstart config above.
@@ -396,6 +402,7 @@ sensor:
 ```
 
 ## Docker
+
 1. Build the image: `docker build -t energy-assistant .`
 2. Set `server.host: 0.0.0.0` and `server.data_dir: /data` in `config.yaml`.
 3. Run the container:
@@ -414,6 +421,7 @@ docker compose -f docker-compose.example.yml up -d
 ```
 
 ## Optional Home Assistant integration
+
 A Home Assistant custom integration (early POC) lives in `custom_components/energy_assistant` and can
 surface plans back into HA. It also exposes a button entity that triggers `/plan/run`. It is optional
 and separate from the core service.
