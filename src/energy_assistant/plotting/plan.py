@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import html
+import math
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta, tzinfo
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from energy_assistant.ems.models import (
     BaseLoadComponentPlan,
@@ -45,6 +46,78 @@ COLORS = {
     "curtailment_fill": "rgba(255, 193, 7, 0.12)",
 }
 
+
+def _plan_display_timezone(
+    *refs: datetime | None,
+) -> tzinfo:
+    """Axis time zone from series instants only (not plan ``generated_at``, often UTC)."""
+    tzs = {t.tzinfo for t in refs if t is not None and t.tzinfo is not None}
+    if len(tzs) == 1:
+        return next(iter(tzs))
+    host = datetime.now().astimezone().tzinfo
+    return host if host is not None else UTC
+
+
+def _hourly_major_step_hours(span: timedelta) -> int:
+    """Major x tick step (hours on the wall). Wider when the span is long (about 20 ticks max)."""
+    span_h = max(span.total_seconds() / 3600.0, 1e-6)
+    target = max(1, int(math.ceil(span_h / 20.0)))
+    for step in (1, 2, 3, 4, 6, 8, 12, 24, 48, 72, 96, 120, 168, 720, 24 * 30, 24 * 90, 24 * 365):
+        if step >= target:
+            return step
+    return 24 * 365
+
+
+def _date_tick0_floor(start: datetime, local_tz: tzinfo) -> datetime:
+    """First on-the-hour instant at or before ``start`` in ``local_tz``."""
+    t_aware = start if start.tzinfo is not None else start.replace(tzinfo=local_tz)
+    local = t_aware.astimezone(local_tz)
+    floored = local.replace(minute=0, second=0, microsecond=0)
+    if floored > local:
+        floored -= timedelta(hours=1)
+    if start.tzinfo is not None:
+        return floored.astimezone(start.tzinfo)
+    return floored
+
+
+def _on_the_hour_ticks(
+    start: datetime, end: datetime, local_tz: tzinfo, step_hours: int
+) -> list[datetime]:
+    """Tick instants on local clock hour boundaries, every ``step_hours`` (1, 2, 3, 24, …)."""
+    step = timedelta(hours=step_hours)
+    t = _date_tick0_floor(start, local_tz)
+    while t < start:
+        t += step
+    out: list[datetime] = []
+    end_eps = end + timedelta(microseconds=1)
+    while t <= end_eps:
+        out.append(t)
+        t += step
+    return out
+
+
+def _plan_xaxis_plotly_config(start: datetime, end: datetime, local_tz: tzinfo) -> dict[str, Any]:
+    """Plotly x-axis: localized labels, vertical grid aligned to local hours at chosen step."""
+    step_h = _hourly_major_step_hours(end - start)
+    instants = _on_the_hour_ticks(start, end, local_tz, step_h)
+    tickvals = [t.timestamp() * 1000.0 for t in instants]
+    ticktext: list[str] = []
+    for t in instants:
+        w = t.astimezone(local_tz)
+        ticktext.append(w.strftime("%I:%M %p\n%d %b"))
+    return {
+        "title": None,
+        "type": "date",
+        "showgrid": True,
+        "gridcolor": "rgba(128, 128, 128, 0.2)",
+        "tickmode": "array",
+        "tickvals": tickvals,
+        "ticktext": ticktext,
+        "hoverformat": "%Y-%m-%d %H:%M",
+        "domain": [0.0, 0.88],
+    }
+
+
 @dataclass(frozen=True, slots=True)
 class ScenarioPlot:
     name: str
@@ -72,7 +145,6 @@ def _build_plan_figure(
     except ImportError as exc:
         raise ImportError("plotly is required for plotting: uv add plotly") from exc
 
-    local_tz = datetime.now().astimezone().tzinfo or UTC
     grid = _single_component(plan, "grid", GridComponentPlan)
     if grid is None:
         raise ValueError("Plan is missing required 'grid' component.")
@@ -81,6 +153,10 @@ def _build_plan_figure(
 
     interval_points = grid.net_kw
     interval_end_times = _interval_end_times(plan, interval_points)
+    local_tz = _plan_display_timezone(
+        *[p.time for p in interval_points],
+        interval_end_times[-1] if interval_end_times else None,
+    )
     times = [_normalize_time(point.time, local_tz=local_tz) for point in interval_points]
     times.append(_normalize_time(interval_end_times[-1], local_tz=local_tz))
     time_labels = times[:-1]
@@ -493,14 +569,7 @@ def _build_plan_figure(
             "xanchor": "center",
             "font": {"size": 16},
         },
-        xaxis={
-            "title": None,
-            "showgrid": True,
-            "gridcolor": "rgba(128, 128, 128, 0.2)",
-            "tickformat": "%I:%M %p\n%d %b",
-            "hoverformat": "%Y-%m-%d %H:%M",
-            "domain": [0.0, 0.88],
-        },
+        xaxis=_plan_xaxis_plotly_config(times[0], times[-1], local_tz),
         yaxis={
             "title": "Power (kW)",
             "showgrid": True,
@@ -869,12 +938,12 @@ def write_plan_svg(
         import matplotlib.dates as mdates
         import matplotlib.pyplot as plt
         from matplotlib.axes import Axes
+        from matplotlib.ticker import FixedLocator, FuncFormatter
     except ImportError as exc:
         raise ImportError(
             "matplotlib is required for static SVG plotting: uv add matplotlib"
         ) from exc
 
-    local_tz = datetime.now().astimezone().tzinfo or UTC
     grid = _single_component(plan, "grid", GridComponentPlan)
     if grid is None:
         raise ValueError("Plan is missing required 'grid' component.")
@@ -883,6 +952,10 @@ def write_plan_svg(
 
     interval_points = grid.net_kw
     interval_end_times = _interval_end_times(plan, interval_points)
+    local_tz = _plan_display_timezone(
+        *[p.time for p in interval_points],
+        interval_end_times[-1] if interval_end_times else None,
+    )
     times = [_normalize_time(point.time, local_tz=local_tz) for point in interval_points]
     times.append(_normalize_time(interval_end_times[-1], local_tz=local_tz))
 
@@ -1140,7 +1213,15 @@ def write_plan_svg(
         ax_power.set_ylabel("Power (kW)")
         ax_power.grid(True, color=(0.5, 0.5, 0.5, 0.2), linewidth=0.8)
         ax_power.axhline(0, color=(0.5, 0.5, 0.5, 0.5), linewidth=0.8)
-        ax_power.xaxis.set_major_formatter(mdates.DateFormatter("%I:%M %p\n%d %b", tz=local_tz))
+        step_h = _hourly_major_step_hours(times[-1] - times[0])
+        x_tick_instants = _on_the_hour_ticks(times[0], times[-1], local_tz, step_h)
+        x_tick_numbers: list[float] = [cast(float, mdates.date2num(t)) for t in x_tick_instants]
+
+        def _format_xaxis_tick(n: float, _pos: int | None) -> str:
+            return mdates.num2date(n, tz=local_tz).strftime("%I:%M %p\n%d %b")
+
+        ax_power.xaxis.set_major_locator(FixedLocator(x_tick_numbers))
+        ax_power.xaxis.set_major_formatter(FuncFormatter(_format_xaxis_tick))
 
         fig.suptitle(
             "EMS Plan | "
