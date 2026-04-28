@@ -19,9 +19,13 @@ payloads. The exported plan remains a flat `components` map keyed by plant compo
 
 EMS tests live under `tests/energy_assistant/ems/`. Fixture scenario assets live under
 `tests/fixtures/ems/<fixture>/<scenario>/` and contain `config.yaml`, `input.json`, `output.json`,
-and `output.svg`.
+`output.svg`, plus a `vis/` directory containing `logical_component_graph.svg` and
+`topological_energy_graph.svg`.
 
 - Record a scenario: `uv run energy-assistant ems record-scenario --fixture <fixture> --name <scenario>`
 - Replay a scenario: `uv run energy-assistant ems solve --fixture <fixture> --scenario <scenario>`
 - Refresh baselines: `uv run energy-assistant ems refresh-baseline [--fixture <fixture>] [--name <scenario>]`
 - Render a report: `uv run energy-assistant ems scenario-report [--fixture <fixture>]`
+
+Fixture SVG artifacts use Graphviz for the component/topology graphs, so the `dot` executable must
+be available when refreshing or validating fixture artifacts.

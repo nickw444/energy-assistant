@@ -133,6 +133,32 @@ def test_fixture_plot_up_to_date(fixture: str, scenario: str) -> None:
     assert "<?xml" in content_start or "<svg" in content_start
 
 
+@pytest.mark.parametrize(
+    ("fixture", "scenario"),
+    _discover_fixture_scenarios(),
+    ids=[f"{f}/{s}" for f, s in _discover_fixture_scenarios()],
+)
+def test_fixture_graph_artifacts_exist(fixture: str, scenario: str) -> None:
+    """Assert each fixture includes logical and topological graph SVG artifacts."""
+    paths = resolve_ems_fixture_paths(FIXTURE_BASE, fixture, scenario)
+    if not _is_complete_bundle(paths):
+        pytest.skip("EMS fixture scenario not recorded.")
+
+    record_hint = f"energy-assistant ems refresh-baseline --fixture {fixture} --name {scenario}"
+    graph_paths = [
+        paths.logical_component_graph_path,
+        paths.topological_energy_graph_path,
+    ]
+    for graph_path in graph_paths:
+        if not graph_path.exists():
+            pytest.fail(
+                f"Fixture {fixture}/{scenario!r} missing {graph_path.name}. "
+                f"Re-record with: {record_hint}"
+            )
+        content_start = graph_path.read_text(encoding="utf-8", errors="ignore")[:200]
+        assert "<?xml" in content_start or "<svg" in content_start
+
+
 def test_write_plan_svg_renders_fixture_plan(tmp_path: Path) -> None:
     plan = EmsPlanOutput.model_validate_json(
         (FIXTURE_BASE / "nwhass" / "short-horizon-low-pv" / "output.json").read_text()
