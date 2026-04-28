@@ -52,7 +52,8 @@ def test_battery_stored_energy_value_defaults_to_median() -> None:
         realtime_power=InputReference(source="battery_power"),
     )
 
-    assert battery.stored_energy_value_per_kwh == "median"
+    assert battery.stored_energy_value.source.key == "grid_price_import"
+    assert battery.stored_energy_value.statistic == "median"
 
 
 def test_battery_legacy_terminal_soc_migrates_to_stored_energy_value() -> None:
@@ -71,7 +72,8 @@ def test_battery_legacy_terminal_soc_migrates_to_stored_energy_value() -> None:
     }
     battery = BatteryComponentConfig.model_validate(payload)
 
-    assert battery.stored_energy_value_per_kwh == "median"
+    assert battery.stored_energy_value.source.key == "grid_price_import"
+    assert battery.stored_energy_value.statistic == "median"
 
 
 def test_battery_legacy_soc_value_migrates_to_stored_energy_value() -> None:
@@ -90,4 +92,5 @@ def test_battery_legacy_soc_value_migrates_to_stored_energy_value() -> None:
     }
     battery = BatteryComponentConfig.model_validate(payload)
 
-    assert battery.stored_energy_value_per_kwh == pytest.approx(0.06)
+    assert battery.stored_energy_value.source.key == "grid_price_import"
+    assert battery.stored_energy_value.statistic == "median"

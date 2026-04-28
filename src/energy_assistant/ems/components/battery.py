@@ -111,8 +111,11 @@ class BatteryComponent(EmsComponent[BatterySolveState, BatteryComponentPlan]):
             soc_min_kwh=soc_min_kwh,
             soc_max_kwh=soc_max_kwh,
             initial_soc_kwh=initial_soc_kwh,
-            stored_energy_value_per_kwh=self._config.stored_energy_value_per_kwh,
-            price_import_raw=None,
+            stored_energy_value_per_kwh=self._config.stored_energy_value.statistic,
+            price_import_raw=inputs.forecast(
+                self._config.stored_energy_value.source.key,
+                kind=InputValueKind.PRICE,
+            ),
         )
 
         connection = Connection(
@@ -151,23 +154,13 @@ class BatteryComponent(EmsComponent[BatterySolveState, BatteryComponentPlan]):
         solve_states: SolveStateStore,
     ) -> list[GraphElement]:
         _ = graph
-        grids = build_ctx.components_of_type(GridComponent)
-        same_switchboard_grids = [
-            grid for grid in grids if grid.switchboard is self.inverter.switchboard
-        ]
+        battery_state = solve_states.get(self)
         grid_connections = [
             connection
-            for grid in same_switchboard_grids
+            for grid in build_ctx.components_of_type(GridComponent)
+            if grid.switchboard is self.inverter.switchboard
             for connection in build_ctx.connections(grid.id)
         ]
-        battery_state = solve_states.get(self)
-
-        grid_price_import_raw = [0.0] * int(battery_state.storage.horizon.num_intervals)
-        if same_switchboard_grids:
-            grid_solve_state = solve_states.get(same_switchboard_grids[0])
-            grid_price_import_raw = list(grid_solve_state.price_import_raw)
-        battery_state.storage.bind_terminal_import_prices(grid_price_import_raw)
-
         if not grid_connections:
             return []
 

@@ -41,6 +41,7 @@ from energy_assistant.models.plant import (
     InverterComponentConfig,
     PriceBindingConfig,
     PvComponentConfig,
+    StoredEnergyValueConfig,
 )
 
 FIXTURE_DIR = Path("tests/fixtures/ems/nwhass/short-horizon-low-pv")
@@ -160,6 +161,7 @@ def test_battery_component_omits_directional_limit_when_limits_are_unset() -> No
         name="Battery",
         capacity_kwh=10.0,
         storage_efficiency_pct=95.0,
+        stored_energy_value=StoredEnergyValueConfig(source=InputReference(source="grid_import")),
         min_soc_pct=10.0,
         max_soc_pct=95.0,
         reserve_soc_pct=20.0,
@@ -202,6 +204,18 @@ def test_battery_component_omits_directional_limit_when_limits_are_unset() -> No
                     key="battery_soc",
                     kind=InputValueKind.PERCENTAGE,
                     value=50.0,
+                ),
+                "battery_power": ResolvedScalarInput(
+                    key="battery_power",
+                    kind=InputValueKind.POWER,
+                    value=0.0,
+                ),
+            },
+            forecasts={
+                "grid_import": AppliedForecastInput(
+                    key="grid_import",
+                    kind=InputValueKind.PRICE,
+                    series=[0.2, 0.2],
                 )
             }
         ),
@@ -239,6 +253,7 @@ def test_battery_reserve_fragment_uses_only_same_switchboard_grids() -> None:
         name="Battery",
         capacity_kwh=10.0,
         storage_efficiency_pct=95.0,
+        stored_energy_value=StoredEnergyValueConfig(source=InputReference(source="grid_import")),
         min_soc_pct=10.0,
         max_soc_pct=95.0,
         reserve_soc_pct=20.0,

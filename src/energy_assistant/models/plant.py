@@ -127,6 +127,13 @@ class PriceBindingConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
+class StoredEnergyValueConfig(BaseModel):
+    source: InputReference
+    statistic: Literal["median"] = "median"
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+
 class SwitchboardComponentConfig(BaseModel):
     type: Literal["switchboard"]
     name: str | None = None
@@ -234,7 +241,11 @@ class BatteryComponentConfig(BaseModel):
     storage_efficiency_pct: float = Field(gt=0, le=100)
     charge_cost_per_kwh: float = Field(default=0.0, ge=0)
     discharge_cost_per_kwh: float = Field(default=0.0, ge=0)
-    stored_energy_value_per_kwh: float | Literal["median"] = "median"
+    stored_energy_value: StoredEnergyValueConfig = Field(
+        default_factory=lambda: StoredEnergyValueConfig(
+            source=InputReference(source="grid_price_import")
+        )
+    )
     min_soc_pct: float = Field(ge=0, le=100)
     max_soc_pct: float = Field(ge=0, le=100)
     reserve_soc_pct: float = Field(ge=0, le=100)
@@ -258,17 +269,6 @@ class BatteryComponentConfig(BaseModel):
             raise ValueError("reserve_soc_pct must be <= max_soc_pct")
         return self
 
-    @field_validator("stored_energy_value_per_kwh")
-    @classmethod
-    def _validate_stored_energy_value_per_kwh(
-        cls, value: float | Literal["median"]
-    ) -> float | Literal["median"]:
-        if value == "median":
-            return value
-        if value < 0:
-            raise ValueError("stored_energy_value_per_kwh must be >= 0")
-        return value
-
     @model_validator(mode="before")
     @classmethod
     def _migrate_legacy_terminal_soc_fields(cls, value: object) -> object:
@@ -278,23 +278,21 @@ class BatteryComponentConfig(BaseModel):
         payload: dict[str, Any] = {
             str(k): v for k, v in cast(dict[object, object], value).items()
         }
-        if "stored_energy_value_per_kwh" not in payload:
-            if "soc_value_per_kwh" in payload:
-                payload["stored_energy_value_per_kwh"] = payload["soc_value_per_kwh"]
-            elif isinstance(payload.get("terminal_soc"), dict):
-                terminal_soc = cast(dict[str, Any], payload["terminal_soc"])
-                penalty = terminal_soc.get("penalty_per_kwh")
-                if isinstance(penalty, (int, float)):
-                    payload["stored_energy_value_per_kwh"] = float(penalty)
-                else:
-                    payload["stored_energy_value_per_kwh"] = "median"
+        if "stored_energy_value" not in payload:
+            source_value = payload.get("stored_energy_value_source", "grid_price_import")
+            payload["stored_energy_value"] = {
+                "source": source_value,
+                "statistic": "median",
+            }
 
         payload.pop("soc_value_per_kwh", None)
         payload.pop("terminal_soc", None)
+        payload.pop("stored_energy_value_per_kwh", None)
+        payload.pop("stored_energy_value_source", None)
         return payload
 
     def input_requirements(self) -> tuple[InputRequirement, ...]:
-        return (
+        requirements: list[InputRequirement] = [
             InputRequirement(
                 self.state_of_charge_pct,
                 ScalarInputConfig,
@@ -305,7 +303,15 @@ class BatteryComponentConfig(BaseModel):
                 ScalarInputConfig,
                 InputValueKind.POWER,
             ),
+        ]
+        requirements.append(
+            InputRequirement(
+                self.stored_energy_value.source,
+                ForecastInputConfig,
+                InputValueKind.PRICE,
+            )
         )
+        return tuple(requirements)
 
 
 class PvComponentConfig(BaseModel):

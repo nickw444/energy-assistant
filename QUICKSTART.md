@@ -234,14 +234,17 @@ plant:
     storage_efficiency_pct: 95
     charge_cost_per_kwh: 0.02
     discharge_cost_per_kwh: 0.02
-    stored_energy_value_per_kwh: median
     min_soc_pct: 10
     max_soc_pct: 100
     reserve_soc_pct: 20
     # Values battery energy left at the terminal step.
     # "median" derives a dynamic $/kWh value from the horizon import forecast median.
     # This keeps terminal energy economically meaningful without terminal SoC constraints.
-    stored_energy_value_per_kwh: median
+    stored_energy_value:
+      # Source forecast used to value terminal stored energy.
+      source: inputs.grid_price_import
+      # Statistic over the solve horizon import forecast.
+      statistic: median
     max_charge_kw: 5.0
     max_discharge_kw: 5.0
     state_of_charge_pct: inputs.battery_soc

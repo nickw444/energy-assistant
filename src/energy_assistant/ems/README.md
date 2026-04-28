@@ -16,8 +16,9 @@ a solve, components emit physical graph elements, optional late-bound fragments,
 payloads. The exported plan remains a flat `components` map keyed by plant component id.
 
 Battery terminal behavior is modeled as a single objective term that values end-of-horizon stored
-energy. The value coefficient comes from `stored_energy_value_per_kwh`; with the default `"median"`
-setting it is computed from the median import forecast over the active horizon.
+energy. The coefficient is resolved from `battery.stored_energy_value.source` and
+`battery.stored_energy_value.statistic`; currently `median` is supported and computed over the
+resolved source forecast across the active horizon.
 
 ## Fixture Workflows
 
