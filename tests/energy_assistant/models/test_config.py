@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from typing import Any
-
 import pytest
 from pydantic import ValidationError
 
 from energy_assistant.models.config import EmsConfig
-from energy_assistant.models.plant import BatteryComponentConfig, InputReference
+from energy_assistant.models.plant import (
+    BatteryComponentConfig,
+    InputReference,
+    StoredEnergyValueConfig,
+)
 
 
 def test_high_res_requires_both_fields() -> None:
@@ -38,13 +40,17 @@ def test_high_res_horizon_must_not_exceed_total_horizon() -> None:
         )
 
 
-def test_battery_stored_energy_value_defaults_to_median() -> None:
+def test_battery_accepts_explicit_stored_energy_value_config() -> None:
     battery = BatteryComponentConfig(
         type="battery",
         connection="primary",
         name="Battery Primary",
         capacity_kwh=13.5,
         storage_efficiency_pct=95.0,
+        stored_energy_value=StoredEnergyValueConfig(
+            source=InputReference(source="grid_price_import"),
+            statistic="median",
+        ),
         min_soc_pct=10.0,
         max_soc_pct=100.0,
         reserve_soc_pct=20.0,
@@ -56,41 +62,59 @@ def test_battery_stored_energy_value_defaults_to_median() -> None:
     assert battery.stored_energy_value.statistic == "median"
 
 
-def test_battery_legacy_terminal_soc_migrates_to_stored_energy_value() -> None:
-    payload: dict[str, Any] = {
-        "type": "battery",
-        "connection": "primary",
-        "name": "Battery Primary",
-        "capacity_kwh": 13.5,
-        "storage_efficiency_pct": 95.0,
-        "min_soc_pct": 10.0,
-        "max_soc_pct": 100.0,
-        "reserve_soc_pct": 20.0,
-        "terminal_soc": {"mode": "adaptive", "penalty_per_kwh": "mean"},
-        "state_of_charge_pct": {"source": "battery_soc"},
-        "realtime_power": {"source": "battery_power"},
-    }
-    battery = BatteryComponentConfig.model_validate(payload)
-
-    assert battery.stored_energy_value.source.key == "grid_price_import"
-    assert battery.stored_energy_value.statistic == "median"
+def test_battery_requires_explicit_stored_energy_value_when_missing() -> None:
+    with pytest.raises(ValidationError, match="stored_energy_value"):
+        BatteryComponentConfig.model_validate(
+            {
+                "type": "battery",
+                "connection": "primary",
+                "name": "Battery Primary",
+                "capacity_kwh": 13.5,
+                "storage_efficiency_pct": 95.0,
+                "min_soc_pct": 10.0,
+                "max_soc_pct": 100.0,
+                "reserve_soc_pct": 20.0,
+                "state_of_charge_pct": {"source": "battery_soc"},
+                "realtime_power": {"source": "battery_power"},
+            }
+        )
 
 
-def test_battery_legacy_soc_value_migrates_to_stored_energy_value() -> None:
-    payload: dict[str, Any] = {
-        "type": "battery",
-        "connection": "primary",
-        "name": "Battery Primary",
-        "capacity_kwh": 13.5,
-        "storage_efficiency_pct": 95.0,
-        "min_soc_pct": 10.0,
-        "max_soc_pct": 100.0,
-        "reserve_soc_pct": 20.0,
-        "soc_value_per_kwh": 0.06,
-        "state_of_charge_pct": {"source": "battery_soc"},
-        "realtime_power": {"source": "battery_power"},
-    }
-    battery = BatteryComponentConfig.model_validate(payload)
+def test_battery_rejects_legacy_terminal_soc_field() -> None:
+    with pytest.raises(ValidationError, match="terminal_soc"):
+        BatteryComponentConfig.model_validate(
+            {
+                "type": "battery",
+                "connection": "primary",
+                "name": "Battery Primary",
+                "capacity_kwh": 13.5,
+                "storage_efficiency_pct": 95.0,
+                "stored_energy_value": {"source": "grid_price_import", "statistic": "median"},
+                "min_soc_pct": 10.0,
+                "max_soc_pct": 100.0,
+                "reserve_soc_pct": 20.0,
+                "terminal_soc": {"mode": "adaptive", "penalty_per_kwh": "mean"},
+                "state_of_charge_pct": {"source": "battery_soc"},
+                "realtime_power": {"source": "battery_power"},
+            }
+        )
 
-    assert battery.stored_energy_value.source.key == "grid_price_import"
-    assert battery.stored_energy_value.statistic == "median"
+
+def test_battery_rejects_legacy_soc_value_per_kwh_field() -> None:
+    with pytest.raises(ValidationError, match="soc_value_per_kwh"):
+        BatteryComponentConfig.model_validate(
+            {
+                "type": "battery",
+                "connection": "primary",
+                "name": "Battery Primary",
+                "capacity_kwh": 13.5,
+                "storage_efficiency_pct": 95.0,
+                "stored_energy_value": {"source": "grid_price_import", "statistic": "median"},
+                "min_soc_pct": 10.0,
+                "max_soc_pct": 100.0,
+                "reserve_soc_pct": 20.0,
+                "soc_value_per_kwh": 0.06,
+                "state_of_charge_pct": {"source": "battery_soc"},
+                "realtime_power": {"source": "battery_power"},
+            }
+        )

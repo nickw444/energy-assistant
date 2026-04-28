@@ -3,7 +3,7 @@ from __future__ import annotations
 import calendar
 import re
 from dataclasses import dataclass
-from typing import Annotated, Any, Literal, Self, cast
+from typing import Annotated, Literal, Self, cast
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -241,11 +241,7 @@ class BatteryComponentConfig(BaseModel):
     storage_efficiency_pct: float = Field(gt=0, le=100)
     charge_cost_per_kwh: float = Field(default=0.0, ge=0)
     discharge_cost_per_kwh: float = Field(default=0.0, ge=0)
-    stored_energy_value: StoredEnergyValueConfig = Field(
-        default_factory=lambda: StoredEnergyValueConfig(
-            source=InputReference(source="grid_price_import")
-        )
-    )
+    stored_energy_value: StoredEnergyValueConfig
     min_soc_pct: float = Field(ge=0, le=100)
     max_soc_pct: float = Field(ge=0, le=100)
     reserve_soc_pct: float = Field(ge=0, le=100)
@@ -268,28 +264,6 @@ class BatteryComponentConfig(BaseModel):
         if self.reserve_soc_pct > self.max_soc_pct:
             raise ValueError("reserve_soc_pct must be <= max_soc_pct")
         return self
-
-    @model_validator(mode="before")
-    @classmethod
-    def _migrate_legacy_terminal_soc_fields(cls, value: object) -> object:
-        if not isinstance(value, dict):
-            return value
-
-        payload: dict[str, Any] = {
-            str(k): v for k, v in cast(dict[object, object], value).items()
-        }
-        if "stored_energy_value" not in payload:
-            source_value = payload.get("stored_energy_value_source", "grid_price_import")
-            payload["stored_energy_value"] = {
-                "source": source_value,
-                "statistic": "median",
-            }
-
-        payload.pop("soc_value_per_kwh", None)
-        payload.pop("terminal_soc", None)
-        payload.pop("stored_energy_value_per_kwh", None)
-        payload.pop("stored_energy_value_source", None)
-        return payload
 
     def input_requirements(self) -> tuple[InputRequirement, ...]:
         requirements: list[InputRequirement] = [
