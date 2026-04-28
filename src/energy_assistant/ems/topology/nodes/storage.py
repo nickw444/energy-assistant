@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Literal
-
 import pulp
 
 from energy_assistant.ems.horizon import Horizon
@@ -24,8 +22,7 @@ class StorageNode(Node):
         soc_min_kwh: float,
         soc_max_kwh: float,
         initial_soc_kwh: float,
-        stored_energy_value_per_kwh: float | Literal["median"] | None = None,
-        price_import_raw: list[float] | None = None,
+        stored_energy_value_per_kwh: float | None = None,
     ) -> None:
         super().__init__(
             horizon=horizon,
@@ -37,9 +34,7 @@ class StorageNode(Node):
         self.soc_min_kwh = soc_min_kwh
         self.soc_max_kwh = soc_max_kwh
         self.initial_soc_kwh = initial_soc_kwh
-        self.stored_energy_value_per_kwh: float | Literal["median"] | None
         self.stored_energy_value_per_kwh = stored_energy_value_per_kwh
-        self.price_import_raw = None if price_import_raw is None else list(price_import_raw)
 
         soc_indices = range(int(horizon.num_intervals) + 1)
         self.E_by_i: dict[int, pulp.LpVariable] = pulp.LpVariable.dicts(
@@ -89,11 +84,7 @@ class StorageNode(Node):
         return self.E_by_i[self.terminal_index]
 
     def _terminal_soc_value_objective(self) -> pulp.LpAffineExpression | None:
-        value_per_kwh = _stored_energy_value_per_kwh(
-            value_cfg=self.stored_energy_value_per_kwh,
-            price_import=self.price_import_raw,
-            num_intervals=int(self.horizon.num_intervals),
-        )
+        value_per_kwh = max(0.0, self.stored_energy_value_per_kwh or 0.0)
         if value_per_kwh <= 0:
             return None
         return -value_per_kwh * self.terminal_soc
@@ -128,41 +119,3 @@ class StorageNode(Node):
 
         return pulp.lpSum(objective_parts) if objective_parts else pulp.LpAffineExpression()
 
-    def bind_terminal_import_prices(self, price_import: list[float]) -> None:
-        """Set grid import prices for dynamic stored-energy terminal valuation."""
-
-        self.price_import_raw = list(price_import)
-
-
-def _median(values: list[float]) -> float:
-    if not values:
-        return 0.0
-    vals = sorted(values)
-    mid = len(vals) // 2
-    if len(vals) % 2 == 1:
-        return vals[mid]
-    return (vals[mid - 1] + vals[mid]) / 2.0
-
-
-def _stored_energy_value_per_kwh(
-    *,
-    value_cfg: float | Literal["median"] | None,
-    price_import: list[float] | None,
-    num_intervals: int,
-) -> float:
-    if value_cfg is None:
-        return 0.0
-
-    if value_cfg == "median":
-        if price_import is None:
-            raise ValueError(
-                "storage terminal stored_energy_value_per_kwh='median' requires price_import_raw"
-            )
-        if len(price_import) != num_intervals:
-            raise ValueError(
-                "storage terminal price_import_raw length "
-                f"{len(price_import)} != num_intervals={num_intervals}"
-            )
-        return max(0.0, _median(price_import))
-
-    return max(0.0, float(value_cfg))

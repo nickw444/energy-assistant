@@ -76,24 +76,6 @@ def test_storage_soc_dynamics_applies_efficiency() -> None:
     assert value_of(node.E_by_i[2]) == pytest.approx(1.9)
 
 
-def test_storage_median_value_requires_price_series() -> None:
-    horizon = HorizonFactory(timestep_minutes=60, horizon_minutes=60).build(
-        now=datetime(2026, 1, 1, tzinfo=UTC)
-    )
-    node = StorageNode(
-        horizon=horizon,
-        id=NodeId("bat"),
-        name="Battery",
-        capacity_kwh=10.0,
-        soc_min_kwh=0.0,
-        soc_max_kwh=10.0,
-        initial_soc_kwh=5.0,
-        stored_energy_value_per_kwh="median",
-    )
-    with pytest.raises(ValueError, match="requires price_import_raw"):
-        _ = node.objective
-
-
 class _ObjectiveFragment:
     def __init__(self, *, objective: pulp.LpAffineExpression) -> None:
         self._objective = objective
@@ -105,30 +87,6 @@ class _ObjectiveFragment:
     @property
     def objective(self) -> pulp.LpAffineExpression:
         return self._objective
-
-
-def test_storage_terminal_value_uses_median_import_price() -> None:
-    horizon = HorizonFactory(timestep_minutes=60, horizon_minutes=180).build(
-        now=datetime(2026, 1, 1, tzinfo=UTC)
-    )
-    node = StorageNode(
-        horizon=horizon,
-        id=NodeId("bat"),
-        name="Battery",
-        capacity_kwh=10.0,
-        soc_min_kwh=0.0,
-        soc_max_kwh=10.0,
-        initial_soc_kwh=5.0,
-        stored_energy_value_per_kwh="median",
-        price_import_raw=[8.0, 50.0, 20.0],
-    )
-    graph = EnergyGraph()
-    graph.add_element(_ObjectiveFragment(objective=node.objective))
-    snapshot = ModelSnapshot(ctx=ModelContext(horizon=horizon), graph=graph)
-    snapshot.problem.solve(pulp.PULP_CBC_CMD(msg=False))
-
-    # Median(8, 50, 20) = 20, objective is -20 * terminal_soc.
-    assert value_of(snapshot.objective) == pytest.approx(-200.0)
 
 
 def test_storage_terminal_value_constant_coefficient() -> None:

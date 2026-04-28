@@ -53,6 +53,31 @@ class BatteryComponent(EmsComponent[BatterySolveState, BatteryComponentPlan]):
         self.node_id = NodeId(component_id)
 
 
+    @staticmethod
+    def _median(values: list[float]) -> float:
+        if not values:
+            return 0.0
+        vals = sorted(values)
+        mid = len(vals) // 2
+        if len(vals) % 2 == 1:
+            return vals[mid]
+        return (vals[mid - 1] + vals[mid]) / 2.0
+
+    def _resolve_stored_energy_value_per_kwh(
+        self, *, horizon: Horizon, inputs: AppliedInputRegistry
+    ) -> float:
+        source = self._config.stored_energy_value.source.key
+        statistic = self._config.stored_energy_value.statistic
+        series = inputs.forecast(source, kind=InputValueKind.PRICE)
+        if len(series) != int(horizon.num_intervals):
+            raise ValueError(
+                f"Battery stored_energy_value source {source!r} series length "
+                f"{len(series)} != num_intervals={int(horizon.num_intervals)}"
+            )
+        if statistic == "median":
+            return max(0.0, self._median(series))
+        raise ValueError(f"Unsupported stored_energy_value statistic: {statistic}")
+
     def _initial_soc_kwh_from_inputs(
         self,
         *,
@@ -102,6 +127,10 @@ class BatteryComponent(EmsComponent[BatterySolveState, BatteryComponentPlan]):
         soc_min_kwh = capacity_kwh * self._config.min_soc_pct / 100.0
         soc_max_kwh = capacity_kwh * self._config.max_soc_pct / 100.0
         eta = self._config.storage_efficiency_pct / 100.0
+        stored_energy_value_per_kwh = self._resolve_stored_energy_value_per_kwh(
+            horizon=horizon,
+            inputs=inputs,
+        )
 
         storage = StorageNode(
             horizon=horizon,
@@ -111,11 +140,7 @@ class BatteryComponent(EmsComponent[BatterySolveState, BatteryComponentPlan]):
             soc_min_kwh=soc_min_kwh,
             soc_max_kwh=soc_max_kwh,
             initial_soc_kwh=initial_soc_kwh,
-            stored_energy_value_per_kwh=self._config.stored_energy_value.statistic,
-            price_import_raw=inputs.forecast(
-                self._config.stored_energy_value.source.key,
-                kind=InputValueKind.PRICE,
-            ),
+            stored_energy_value_per_kwh=stored_energy_value_per_kwh,
         )
 
         connection = Connection(
