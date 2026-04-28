@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from energy_assistant.ems.system.state import EmsSystemSolveState, SolveStateStore
+from energy_assistant.ems.system.state import SolveStateStore
 
 
 class _Component:
@@ -27,5 +27,3 @@ def test_solve_state_store_missing_key_message() -> None:
         store.get(component)
 
 
-def test_backwards_compatible_alias_points_to_store() -> None:
-    assert EmsSystemSolveState is SolveStateStore
