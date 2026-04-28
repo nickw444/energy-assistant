@@ -639,6 +639,7 @@ def _refresh_baseline_bundle(
     write_plan_svg(plan, paths.plot_path)
     click.echo(f"Wrote plan SVG to {paths.plot_path}")
     _write_fixture_graphs(app_config, run.snapshot.graph, paths)
+    _remove_legacy_fixture_svg_paths(paths)
 
 
 def _write_fixture_graphs(
@@ -650,6 +651,17 @@ def _write_fixture_graphs(
     click.echo(f"Wrote logical component graph SVG to {paths.logical_component_graph_path}")
     write_topological_energy_graph_svg(graph, paths.topological_energy_graph_path)
     click.echo(f"Wrote topological energy graph SVG to {paths.topological_energy_graph_path}")
+
+
+def _remove_legacy_fixture_svg_paths(paths: EmsFixturePaths) -> None:
+    legacy_paths = [
+        paths.scenario_dir / "logical_component_graph.svg",
+        paths.scenario_dir / "topological_energy_graph.svg",
+    ]
+    for legacy_path in legacy_paths:
+        if legacy_path.exists():
+            legacy_path.unlink()
+            click.echo(f"Removed legacy fixture SVG at {legacy_path}")
 
 
 def _format_exception_message(exc: Exception) -> str:

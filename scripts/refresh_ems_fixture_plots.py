@@ -100,12 +100,18 @@ def main() -> int:
         missing_logical_graph = not paths.logical_component_graph_path.exists()
         missing_topological_graph = not paths.topological_energy_graph_path.exists()
         legacy_plot = paths.scenario_dir / "output.jpeg"
+        legacy_svgs = [
+            paths.scenario_dir / "logical_component_graph.svg",
+            paths.scenario_dir / "topological_energy_graph.svg",
+        ]
+        has_legacy_svgs = any(path.exists() for path in legacy_svgs)
 
         if not (
             missing_plot
             or missing_logical_graph
             or missing_topological_graph
             or legacy_plot.exists()
+            or has_legacy_svgs
         ):
             continue
 
@@ -118,15 +124,20 @@ def main() -> int:
             reasons.append("missing topological graph")
         if legacy_plot.exists():
             reasons.append("legacy JPEG present")
+        if has_legacy_svgs:
+            reasons.append("legacy root SVGs present")
 
         label = fixture if scenario is None else f"{fixture}/{scenario}"
         print(f"Refreshing {label} ({', '.join(reasons)}).")
         if missing_plot or legacy_plot.exists():
             _refresh_plot(paths)
-        if missing_logical_graph or missing_topological_graph:
+        if missing_logical_graph or missing_topological_graph or has_legacy_svgs:
             _refresh_graphs(paths)
         if legacy_plot.exists():
             legacy_plot.unlink()
+        for legacy_svg in legacy_svgs:
+            if legacy_svg.exists():
+                legacy_svg.unlink()
         refreshed.append(label)
 
     if refreshed:

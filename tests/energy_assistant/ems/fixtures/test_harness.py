@@ -18,9 +18,13 @@ def test_resolve_ems_fixture_paths_fixture_only(tmp_path: Path) -> None:
     assert paths.fixture_path == fixture_dir / "input.json"
     assert paths.config_path == fixture_dir / "config.yaml"
     assert paths.plan_path == fixture_dir / "output.json"
+    assert paths.vis_dir == fixture_dir / "vis"
     assert paths.plot_path == fixture_dir / "output.svg"
-    assert paths.logical_component_graph_path == fixture_dir / "logical_component_graph.svg"
-    assert paths.topological_energy_graph_path == fixture_dir / "topological_energy_graph.svg"
+    assert paths.logical_component_graph_path == fixture_dir / "vis" / "logical_component_graph.svg"
+    assert (
+        paths.topological_energy_graph_path
+        == fixture_dir / "vis" / "topological_energy_graph.svg"
+    )
 
 
 def test_resolve_ems_fixture_paths_fixture_with_scenario(tmp_path: Path) -> None:
@@ -36,9 +40,13 @@ def test_resolve_ems_fixture_paths_fixture_with_scenario(tmp_path: Path) -> None
     assert paths.fixture_path == scenario_dir / "input.json"
     assert paths.config_path == fixture_dir / "config.yaml"
     assert paths.plan_path == scenario_dir / "output.json"
+    assert paths.vis_dir == scenario_dir / "vis"
     assert paths.plot_path == scenario_dir / "output.svg"
-    assert paths.logical_component_graph_path == scenario_dir / "logical_component_graph.svg"
-    assert paths.topological_energy_graph_path == scenario_dir / "topological_energy_graph.svg"
+    assert paths.logical_component_graph_path == scenario_dir / "vis" / "logical_component_graph.svg"
+    assert (
+        paths.topological_energy_graph_path
+        == scenario_dir / "vis" / "topological_energy_graph.svg"
+    )
 
 
 def test_resolve_ems_fixture_paths_config_at_fixture_level(tmp_path: Path) -> None:
