@@ -42,7 +42,10 @@ def test_resolve_ems_fixture_paths_fixture_with_scenario(tmp_path: Path) -> None
     assert paths.plan_path == scenario_dir / "output.json"
     assert paths.vis_dir == scenario_dir / "vis"
     assert paths.plot_path == scenario_dir / "output.svg"
-    assert paths.logical_component_graph_path == scenario_dir / "vis" / "logical_component_graph.svg"
+    assert (
+        paths.logical_component_graph_path
+        == scenario_dir / "vis" / "logical_component_graph.svg"
+    )
     assert (
         paths.topological_energy_graph_path
         == scenario_dir / "vis" / "topological_energy_graph.svg"

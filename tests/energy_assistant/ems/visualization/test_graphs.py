@@ -9,8 +9,7 @@ from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import EnergyGraph
 from energy_assistant.ems.topology.ids import NodeId
 from energy_assistant.ems.topology.nodes import Node
-from energy_assistant.ems.topology.policies import DirectionalLimit
-from energy_assistant.ems.topology.policies import LinearCost
+from energy_assistant.ems.topology.policies import DirectionalLimit, LinearCost
 from energy_assistant.ems.visualization import (
     write_logical_component_graph_svg,
     write_topological_energy_graph_svg,
