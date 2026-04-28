@@ -15,6 +15,10 @@ fields link plant components by id; the factory resolves those ids into componen
 a solve, components emit physical graph elements, optional late-bound fragments, and typed plan
 payloads. The exported plan remains a flat `components` map keyed by plant component id.
 
+Battery terminal behavior is modeled as a single objective term that values end-of-horizon stored
+energy. The value coefficient comes from `stored_energy_value_per_kwh`; with the default `"median"`
+setting it is computed from the median import forecast over the active horizon.
+
 ## Fixture Workflows
 
 EMS tests live under `tests/energy_assistant/ems/`. Fixture scenario assets live under

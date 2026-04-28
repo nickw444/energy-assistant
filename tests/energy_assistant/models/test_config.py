@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 from pydantic import ValidationError
 
@@ -36,7 +38,7 @@ def test_high_res_horizon_must_not_exceed_total_horizon() -> None:
         )
 
 
-def test_battery_terminal_soc_defaults_to_adaptive() -> None:
+def test_battery_stored_energy_value_defaults_to_median() -> None:
     battery = BatteryComponentConfig(
         type="battery",
         connection="primary",
@@ -50,5 +52,42 @@ def test_battery_terminal_soc_defaults_to_adaptive() -> None:
         realtime_power=InputReference(source="battery_power"),
     )
 
-    assert battery.terminal_soc.mode == "adaptive"
-    assert battery.terminal_soc.penalty_per_kwh == "median"
+    assert battery.stored_energy_value_per_kwh == "median"
+
+
+def test_battery_legacy_terminal_soc_migrates_to_stored_energy_value() -> None:
+    payload: dict[str, Any] = {
+        "type": "battery",
+        "connection": "primary",
+        "name": "Battery Primary",
+        "capacity_kwh": 13.5,
+        "storage_efficiency_pct": 95.0,
+        "min_soc_pct": 10.0,
+        "max_soc_pct": 100.0,
+        "reserve_soc_pct": 20.0,
+        "terminal_soc": {"mode": "adaptive", "penalty_per_kwh": "mean"},
+        "state_of_charge_pct": {"source": "battery_soc"},
+        "realtime_power": {"source": "battery_power"},
+    }
+    battery = BatteryComponentConfig.model_validate(payload)
+
+    assert battery.stored_energy_value_per_kwh == "median"
+
+
+def test_battery_legacy_soc_value_migrates_to_stored_energy_value() -> None:
+    payload: dict[str, Any] = {
+        "type": "battery",
+        "connection": "primary",
+        "name": "Battery Primary",
+        "capacity_kwh": 13.5,
+        "storage_efficiency_pct": 95.0,
+        "min_soc_pct": 10.0,
+        "max_soc_pct": 100.0,
+        "reserve_soc_pct": 20.0,
+        "soc_value_per_kwh": 0.06,
+        "state_of_charge_pct": {"source": "battery_soc"},
+        "realtime_power": {"source": "battery_power"},
+    }
+    battery = BatteryComponentConfig.model_validate(payload)
+
+    assert battery.stored_energy_value_per_kwh == pytest.approx(0.06)

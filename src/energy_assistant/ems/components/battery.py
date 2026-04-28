@@ -101,7 +101,6 @@ class BatteryComponent(EmsComponent[BatterySolveState, BatteryComponentPlan]):
         capacity_kwh = self._config.capacity_kwh
         soc_min_kwh = capacity_kwh * self._config.min_soc_pct / 100.0
         soc_max_kwh = capacity_kwh * self._config.max_soc_pct / 100.0
-        reserve_kwh = capacity_kwh * self._config.reserve_soc_pct / 100.0
         eta = self._config.storage_efficiency_pct / 100.0
 
         storage = StorageNode(
@@ -112,11 +111,8 @@ class BatteryComponent(EmsComponent[BatterySolveState, BatteryComponentPlan]):
             soc_min_kwh=soc_min_kwh,
             soc_max_kwh=soc_max_kwh,
             initial_soc_kwh=initial_soc_kwh,
-            terminal_mode=self._config.terminal_soc.mode,
-            terminal_reserve_kwh=reserve_kwh,
-            terminal_penalty_per_kwh=self._config.terminal_soc.penalty_per_kwh,
+            stored_energy_value_per_kwh=self._config.stored_energy_value_per_kwh,
             price_import_raw=None,
-            terminal_soc_value_per_kwh=self._config.soc_value_per_kwh,
         )
 
         connection = Connection(

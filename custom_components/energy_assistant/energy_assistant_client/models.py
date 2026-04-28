@@ -152,18 +152,10 @@ class PlanAwaitResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class TerminalSocConfig(BaseModel):
-    mode: Literal["hard", "adaptive"] = "adaptive"
-    penalty_per_kwh: float | Literal["mean", "median"] | None = None
-
-    model_config = ConfigDict(extra="forbid")
-
-
 class EmsConfig(BaseModel):
     timestep_minutes: int
     horizon_minutes: int
     high_res_timestep_minutes: int | None = None
     high_res_horizon_minutes: int | None = None
-    terminal_soc: TerminalSocConfig = Field(default_factory=TerminalSocConfig)
 
     model_config = ConfigDict(extra="forbid")
