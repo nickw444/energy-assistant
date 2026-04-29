@@ -30,5 +30,3 @@ class SolveStateStore:
             raise KeyError(f"Missing solve state for component {component.id!r}") from exc
 
 
-# Backwards-compatible name retained for existing imports.
-EmsSystemSolveState = SolveStateStore

@@ -16,7 +16,7 @@ from energy_assistant.ems.models import (
     EmsPlanStatus,
     EmsPlanTimings,
 )
-from energy_assistant.ems.system.state import EmsSystemSolveState
+from energy_assistant.ems.system.state import SolveStateStore
 from energy_assistant.ems.system.system import EmsSystem
 from energy_assistant.inputs.provider import EmsInputProvider
 from energy_assistant.inputs.window import InputWindow
@@ -30,7 +30,7 @@ class EmsBuiltSnapshot:
     build_seconds: float
     snapshot: ModelSnapshot
     system: EmsSystem
-    solve_state: EmsSystemSolveState
+    solve_state: SolveStateStore
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,7 +38,7 @@ class EmsSolvedRun:
     plan: EmsPlanOutput
     snapshot: ModelSnapshot
     system: EmsSystem
-    solve_state: EmsSystemSolveState
+    solve_state: SolveStateStore
 
 
 class EmsMilpPlanner:

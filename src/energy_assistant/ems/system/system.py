@@ -11,7 +11,7 @@ from energy_assistant.ems.inputs.models import AppliedInputRegistry
 from energy_assistant.ems.milp.context import ModelContext
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
 from energy_assistant.ems.models import ComponentPlan
-from energy_assistant.ems.system.state import EmsSystemSolveState, SolveStateStore
+from energy_assistant.ems.system.state import SolveStateStore
 from energy_assistant.ems.topology.graph import EnergyGraph
 
 _COMPONENT_PLAN_ADAPTER: TypeAdapter[ComponentPlan] = TypeAdapter(ComponentPlan)
@@ -68,7 +68,7 @@ class EmsSystem:
         self,
         snapshot: ModelSnapshot,
         *,
-        solve_state: EmsSystemSolveState,
+        solve_state: SolveStateStore,
     ) -> dict[str, ComponentPlan]:
         """Extract and normalize the flat component-plan export after the model is solved."""
         plan_ctx = PlanContext(
