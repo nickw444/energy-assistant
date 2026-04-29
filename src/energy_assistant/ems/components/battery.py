@@ -26,7 +26,7 @@ from energy_assistant.ems.topology.policies import (
     LinearCost,
 )
 from energy_assistant.models.inputs import InputValueKind
-from energy_assistant.models.plant import BatteryComponentConfig
+from energy_assistant.models.plant import BatteryComponentConfig, StoredEnergyValueConfig
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,6 +52,37 @@ class BatteryComponent(EmsComponent[BatterySolveState, BatteryComponentPlan]):
         self.name = self._config.name
         self.node_id = NodeId(component_id)
 
+
+    @staticmethod
+    def _median(values: list[float]) -> float:
+        if not values:
+            return 0.0
+        vals = sorted(values)
+        mid = len(vals) // 2
+        if len(vals) % 2 == 1:
+            return vals[mid]
+        return (vals[mid - 1] + vals[mid]) / 2.0
+
+    def _resolve_stored_energy_value_per_kwh(
+        self, *, horizon: Horizon, inputs: AppliedInputRegistry
+    ) -> float:
+        stored_energy_value = self._config.stored_energy_value
+        if isinstance(stored_energy_value, float):
+            return max(0.0, stored_energy_value)
+        if not isinstance(stored_energy_value, StoredEnergyValueConfig):
+            raise ValueError("Unsupported stored_energy_value configuration")
+
+        source = stored_energy_value.source.key
+        statistic = stored_energy_value.statistic
+        series = inputs.forecast(source, kind=InputValueKind.PRICE)
+        if len(series) != int(horizon.num_intervals):
+            raise ValueError(
+                f"Battery stored_energy_value source {source!r} series length "
+                f"{len(series)} != num_intervals={int(horizon.num_intervals)}"
+            )
+        if statistic == "median":
+            return max(0.0, self._median(series))
+        raise ValueError(f"Unsupported stored_energy_value statistic: {statistic}")
 
     def _initial_soc_kwh_from_inputs(
         self,
@@ -101,8 +132,11 @@ class BatteryComponent(EmsComponent[BatterySolveState, BatteryComponentPlan]):
         capacity_kwh = self._config.capacity_kwh
         soc_min_kwh = capacity_kwh * self._config.min_soc_pct / 100.0
         soc_max_kwh = capacity_kwh * self._config.max_soc_pct / 100.0
-        reserve_kwh = capacity_kwh * self._config.reserve_soc_pct / 100.0
         eta = self._config.storage_efficiency_pct / 100.0
+        stored_energy_value_per_kwh = self._resolve_stored_energy_value_per_kwh(
+            horizon=horizon,
+            inputs=inputs,
+        )
 
         storage = StorageNode(
             horizon=horizon,
@@ -112,11 +146,7 @@ class BatteryComponent(EmsComponent[BatterySolveState, BatteryComponentPlan]):
             soc_min_kwh=soc_min_kwh,
             soc_max_kwh=soc_max_kwh,
             initial_soc_kwh=initial_soc_kwh,
-            terminal_mode=self._config.terminal_soc.mode,
-            terminal_reserve_kwh=reserve_kwh,
-            terminal_penalty_per_kwh=self._config.terminal_soc.penalty_per_kwh,
-            price_import_raw=None,
-            terminal_soc_value_per_kwh=self._config.soc_value_per_kwh,
+            stored_energy_value_per_kwh=stored_energy_value_per_kwh,
         )
 
         connection = Connection(
@@ -155,23 +185,13 @@ class BatteryComponent(EmsComponent[BatterySolveState, BatteryComponentPlan]):
         solve_states: SolveStateStore,
     ) -> list[GraphElement]:
         _ = graph
-        grids = build_ctx.components_of_type(GridComponent)
-        same_switchboard_grids = [
-            grid for grid in grids if grid.switchboard is self.inverter.switchboard
-        ]
+        battery_state = solve_states.get(self)
         grid_connections = [
             connection
-            for grid in same_switchboard_grids
+            for grid in build_ctx.components_of_type(GridComponent)
+            if grid.switchboard is self.inverter.switchboard
             for connection in build_ctx.connections(grid.id)
         ]
-        battery_state = solve_states.get(self)
-
-        grid_price_import_raw = [0.0] * int(battery_state.storage.horizon.num_intervals)
-        if same_switchboard_grids:
-            grid_solve_state = solve_states.get(same_switchboard_grids[0])
-            grid_price_import_raw = list(grid_solve_state.price_import_raw)
-        battery_state.storage.bind_terminal_import_prices(grid_price_import_raw)
-
         if not grid_connections:
             return []
 

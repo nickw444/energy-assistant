@@ -4,15 +4,18 @@ Energy Assistant runs a FastAPI service plus a background planner. Everything is
 single YAML file.
 
 ## Requirements
+
 - Python 3.13.2+
 - A Home Assistant instance and a long-lived access token
 - Entity IDs for the sensors you want to use
 
 ## Install
+
 1. Install `uv`: `pip install uv`
 2. Install dependencies: `uv sync --dev`
 
 ## Configure
+
 1. Create `config.yaml` in the repo root (or pass `--config` to point elsewhere).
 2. Fill in the configuration below with your Home Assistant URL, token, and entity IDs.
 
@@ -234,29 +237,17 @@ plant:
     storage_efficiency_pct: 95
     charge_cost_per_kwh: 0.02
     discharge_cost_per_kwh: 0.02
-    soc_value_per_kwh: 0.06
     min_soc_pct: 10
     max_soc_pct: 100
     reserve_soc_pct: 20
-    # Terminal state-of-charge handling.
-    # Keeps the optimizer from draining the battery at the end of the horizon and
-    # assuming "tomorrow is free." Adaptive mode exists because horizons shorter
-    # or longer than a day can make a hard end-SoC target unrealistic; it relaxes
-    # toward reserve using a fixed 24h reference and prices any shortfall so energy
-    # still has value.
-    terminal_soc:
-      # Mode options:
-      # - hard: enforce end SoC >= start SoC.
-      # - adaptive: relax toward reserve using the 24h reference scaling.
-      mode: adaptive
-      # Penalty applied per kWh of terminal SoC shortfall when adaptive slack is used.
-      # The objective adds `penalty_per_kwh * shortfall_kwh`, scaled by the adaptive
-      # horizon ratio, so missing energy is priced rather than ignored.
-      # Options:
-      # - "median": median import price (default).
-      # - "mean": average import price.
-      # - number: explicit $/kWh penalty.
-      penalty_per_kwh: median
+    # Values battery energy left at the terminal step.
+    # Option A (shown): dynamic value from a forecast source + statistic.
+    # Option B: set a scalar directly, e.g. `stored_energy_value: 0.08`.
+    stored_energy_value:
+      # Source forecast used to value terminal stored energy.
+      source: inputs.grid_price_import
+      # Statistic over the solve horizon import forecast.
+      statistic: median
     max_charge_kw: 5.0
     max_discharge_kw: 5.0
     state_of_charge_pct: inputs.battery_soc
@@ -290,11 +281,13 @@ plant:
 ```
 
 ## Run
+
 1. Start the API + worker: `uv run energy-assistant --config config.yaml`
 2. Trigger a plan run: `curl -X POST http://localhost:6070/plan/run`
 3. Fetch the latest plan: `curl http://localhost:6070/plan/latest`
 
 Notes:
+
 - The worker runs immediately at startup, then on a roughly one-minute fallback schedule, and also after watched price changes.
 - `months` must use 3-letter abbreviations (`jan`..`dec`).
 - `homeassistant.base_url` should include `http://` or `https://`.
@@ -307,6 +300,7 @@ Notes:
 - `data_dir` is created automatically if it does not exist.
 
 ## Home Assistant Helpers
+
 The plan is more stable when realtime power sensors are smoothed and when load
 excludes controlled loads (EVs, etc). Below is an example set of template and
 filter sensors that matches the naming used in the quickstart config above.
@@ -408,6 +402,7 @@ sensor:
 ```
 
 ## Docker
+
 1. Build the image: `docker build -t energy-assistant .`
 2. Set `server.host: 0.0.0.0` and `server.data_dir: /data` in `config.yaml`.
 3. Run the container:
@@ -426,6 +421,7 @@ docker compose -f docker-compose.example.yml up -d
 ```
 
 ## Optional Home Assistant integration
+
 A Home Assistant custom integration (early POC) lives in `custom_components/energy_assistant` and can
 surface plans back into HA. It also exposes a button entity that triggers `/plan/run`. It is optional
 and separate from the core service.

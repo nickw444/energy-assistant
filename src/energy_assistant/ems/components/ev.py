@@ -105,7 +105,7 @@ class EvComponent(EmsComponent[EvSolveState, LoadControlledEvComponentPlan]):
             soc_min_kwh=0.0,
             soc_max_kwh=self._config.energy_kwh,
             initial_soc_kwh=initial_soc_kwh,
-            terminal_mode="none",
+            stored_energy_value_per_kwh=0.0,
         )
 
         charge_control = EvChargeControl(

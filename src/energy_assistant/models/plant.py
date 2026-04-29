@@ -127,22 +127,14 @@ class PriceBindingConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
-class TerminalSocConfig(BaseModel):
-    mode: Literal["hard", "adaptive"] = "adaptive"
-    penalty_per_kwh: float | Literal["mean", "median"] | None = Field(default="median")
+class StoredEnergyValueConfig(BaseModel):
+    source: InputReference
+    statistic: Literal["median"] = "median"
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    @field_validator("penalty_per_kwh")
-    @classmethod
-    def _validate_penalty_per_kwh(
-        cls, value: float | Literal["mean", "median"] | None
-    ) -> float | Literal["mean", "median"] | None:
-        if value is None or value in {"mean", "median"}:
-            return value
-        if isinstance(value, float) and value < 0:
-            raise ValueError("penalty_per_kwh must be >= 0")
-        return value
+
+StoredEnergyValueLiteral = Annotated[float, Field(ge=0)]
 
 
 class SwitchboardComponentConfig(BaseModel):
@@ -252,11 +244,10 @@ class BatteryComponentConfig(BaseModel):
     storage_efficiency_pct: float = Field(gt=0, le=100)
     charge_cost_per_kwh: float = Field(default=0.0, ge=0)
     discharge_cost_per_kwh: float = Field(default=0.0, ge=0)
-    soc_value_per_kwh: float | None = Field(default=None, ge=0)
+    stored_energy_value: StoredEnergyValueConfig | StoredEnergyValueLiteral
     min_soc_pct: float = Field(ge=0, le=100)
     max_soc_pct: float = Field(ge=0, le=100)
     reserve_soc_pct: float = Field(ge=0, le=100)
-    terminal_soc: TerminalSocConfig = Field(default_factory=TerminalSocConfig)
     max_charge_kw: float | None = Field(default=None, ge=0)
     max_discharge_kw: float | None = Field(default=None, ge=0)
     state_of_charge_pct: InputReference
@@ -278,7 +269,7 @@ class BatteryComponentConfig(BaseModel):
         return self
 
     def input_requirements(self) -> tuple[InputRequirement, ...]:
-        return (
+        requirements: list[InputRequirement] = [
             InputRequirement(
                 self.state_of_charge_pct,
                 ScalarInputConfig,
@@ -289,7 +280,16 @@ class BatteryComponentConfig(BaseModel):
                 ScalarInputConfig,
                 InputValueKind.POWER,
             ),
-        )
+        ]
+        if isinstance(self.stored_energy_value, StoredEnergyValueConfig):
+            requirements.append(
+                InputRequirement(
+                    self.stored_energy_value.source,
+                    ForecastInputConfig,
+                    InputValueKind.PRICE,
+                )
+            )
+        return tuple(requirements)
 
 
 class PvComponentConfig(BaseModel):
