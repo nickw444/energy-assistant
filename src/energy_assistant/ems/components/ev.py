@@ -52,69 +52,6 @@ class EvStorageSegment:
     connection: Connection
 
 
-@dataclass(frozen=True, slots=True)
-class EvSoftDeadlineSpec:
-    by_time: str
-    deadline_at: datetime
-    deadline_index: int
-    target_soc_pct: float
-    target_kwh: float
-    shortfall_penalty: float
-
-
-class EvSoftDeadlineFragment:
-    """Soft EV SoC lower bounds enforced with non-negative shortfall slack."""
-
-    def __init__(
-        self,
-        *,
-        storages: tuple[StorageNode, ...],
-        deadlines: tuple[EvSoftDeadlineSpec, ...],
-        name: str,
-    ) -> None:
-        self._storages = storages
-        self._deadlines = deadlines
-        self._name = name
-        self._shortfall_by_index: dict[int, pulp.LpVariable] = {
-            idx: pulp.LpVariable(
-                f"Ev_{self._name}_soft_deadline_shortfall_kwh_{idx}",
-                lowBound=0,
-            )
-            for idx, _ in enumerate(self._deadlines)
-        }
-
-    @property
-    def deadlines(self) -> tuple[EvSoftDeadlineSpec, ...]:
-        return self._deadlines
-
-    def shortfall_value(self, deadline_idx: int) -> float:
-        return value_of(self._shortfall_by_index[deadline_idx])
-
-    @property
-    def constraints(self) -> list[ConstraintSpec]:
-        constraints: list[ConstraintSpec] = []
-        for idx, deadline in enumerate(self._deadlines):
-            soc_at_deadline = pulp.lpSum(
-                storage.E_by_i[deadline.deadline_index] for storage in self._storages
-            )
-            constraints.append(
-                ConstraintSpec(
-                    f"ev_soft_deadline_{self._name}_idx{idx}",
-                    soc_at_deadline + self._shortfall_by_index[idx] >= deadline.target_kwh,
-                )
-            )
-        return constraints
-
-    @property
-    def objective(self) -> pulp.LpAffineExpression:
-        if not self._deadlines:
-            return pulp.LpAffineExpression()
-        return pulp.lpSum(
-            deadline.shortfall_penalty * self._shortfall_by_index[idx]
-            for idx, deadline in enumerate(self._deadlines)
-        )
-
-
 class EvComponent(EmsComponent[EvSolveState, LoadControlledEvComponentPlan]):
     def __init__(
         self,
@@ -561,3 +498,66 @@ class EvChargeControl(Passthrough):
             return pulp.LpAffineExpression()
         switch = self._switch(connection)
         return self._switch_penalty * pulp.lpSum(switch.values())
+
+
+@dataclass(frozen=True, slots=True)
+class EvSoftDeadlineSpec:
+    by_time: str
+    deadline_at: datetime
+    deadline_index: int
+    target_soc_pct: float
+    target_kwh: float
+    shortfall_penalty: float
+
+
+class EvSoftDeadlineFragment:
+    """Soft EV SoC lower bounds enforced with non-negative shortfall slack."""
+
+    def __init__(
+        self,
+        *,
+        storages: tuple[StorageNode, ...],
+        deadlines: tuple[EvSoftDeadlineSpec, ...],
+        name: str,
+    ) -> None:
+        self._storages = storages
+        self._deadlines = deadlines
+        self._name = name
+        self._shortfall_by_index: dict[int, pulp.LpVariable] = {
+            idx: pulp.LpVariable(
+                f"Ev_{self._name}_soft_deadline_shortfall_kwh_{idx}",
+                lowBound=0,
+            )
+            for idx, _ in enumerate(self._deadlines)
+        }
+
+    @property
+    def deadlines(self) -> tuple[EvSoftDeadlineSpec, ...]:
+        return self._deadlines
+
+    def shortfall_value(self, deadline_idx: int) -> float:
+        return value_of(self._shortfall_by_index[deadline_idx])
+
+    @property
+    def constraints(self) -> list[ConstraintSpec]:
+        constraints: list[ConstraintSpec] = []
+        for idx, deadline in enumerate(self._deadlines):
+            soc_at_deadline = pulp.lpSum(
+                storage.E_by_i[deadline.deadline_index] for storage in self._storages
+            )
+            constraints.append(
+                ConstraintSpec(
+                    f"ev_soft_deadline_{self._name}_idx{idx}",
+                    soc_at_deadline + self._shortfall_by_index[idx] >= deadline.target_kwh,
+                )
+            )
+        return constraints
+
+    @property
+    def objective(self) -> pulp.LpAffineExpression:
+        if not self._deadlines:
+            return pulp.LpAffineExpression()
+        return pulp.lpSum(
+            deadline.shortfall_penalty * self._shortfall_by_index[idx]
+            for idx, deadline in enumerate(self._deadlines)
+        )
