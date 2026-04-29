@@ -134,6 +134,9 @@ class StoredEnergyValueConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
+StoredEnergyValueLiteral = Annotated[float, Field(ge=0)]
+
+
 class SwitchboardComponentConfig(BaseModel):
     type: Literal["switchboard"]
     name: str | None = None
@@ -241,7 +244,7 @@ class BatteryComponentConfig(BaseModel):
     storage_efficiency_pct: float = Field(gt=0, le=100)
     charge_cost_per_kwh: float = Field(default=0.0, ge=0)
     discharge_cost_per_kwh: float = Field(default=0.0, ge=0)
-    stored_energy_value: StoredEnergyValueConfig
+    stored_energy_value: StoredEnergyValueConfig | StoredEnergyValueLiteral
     min_soc_pct: float = Field(ge=0, le=100)
     max_soc_pct: float = Field(ge=0, le=100)
     reserve_soc_pct: float = Field(ge=0, le=100)
@@ -278,13 +281,14 @@ class BatteryComponentConfig(BaseModel):
                 InputValueKind.POWER,
             ),
         ]
-        requirements.append(
-            InputRequirement(
-                self.stored_energy_value.source,
-                ForecastInputConfig,
-                InputValueKind.PRICE,
+        if isinstance(self.stored_energy_value, StoredEnergyValueConfig):
+            requirements.append(
+                InputRequirement(
+                    self.stored_energy_value.source,
+                    ForecastInputConfig,
+                    InputValueKind.PRICE,
+                )
             )
-        )
         return tuple(requirements)
 
 

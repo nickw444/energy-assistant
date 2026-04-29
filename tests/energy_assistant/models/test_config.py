@@ -58,8 +58,46 @@ def test_battery_accepts_explicit_stored_energy_value_config() -> None:
         realtime_power=InputReference(source="battery_power"),
     )
 
+    assert isinstance(battery.stored_energy_value, StoredEnergyValueConfig)
     assert battery.stored_energy_value.source.key == "grid_price_import"
     assert battery.stored_energy_value.statistic == "median"
+
+
+def test_battery_accepts_scalar_stored_energy_value() -> None:
+    battery = BatteryComponentConfig(
+        type="battery",
+        connection="primary",
+        name="Battery Primary",
+        capacity_kwh=13.5,
+        storage_efficiency_pct=95.0,
+        stored_energy_value=0.08,
+        min_soc_pct=10.0,
+        max_soc_pct=100.0,
+        reserve_soc_pct=20.0,
+        state_of_charge_pct=InputReference(source="battery_soc"),
+        realtime_power=InputReference(source="battery_power"),
+    )
+
+    assert battery.stored_energy_value == pytest.approx(0.08)
+
+
+def test_battery_rejects_negative_scalar_stored_energy_value() -> None:
+    with pytest.raises(ValidationError, match="greater than or equal to 0"):
+        BatteryComponentConfig.model_validate(
+            {
+                "type": "battery",
+                "connection": "primary",
+                "name": "Battery Primary",
+                "capacity_kwh": 13.5,
+                "storage_efficiency_pct": 95.0,
+                "stored_energy_value": -0.01,
+                "min_soc_pct": 10.0,
+                "max_soc_pct": 100.0,
+                "reserve_soc_pct": 20.0,
+                "state_of_charge_pct": {"source": "battery_soc"},
+                "realtime_power": {"source": "battery_power"},
+            }
+        )
 
 
 def test_battery_requires_explicit_stored_energy_value_when_missing() -> None:

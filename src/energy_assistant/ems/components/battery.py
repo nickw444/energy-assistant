@@ -26,7 +26,7 @@ from energy_assistant.ems.topology.policies import (
     LinearCost,
 )
 from energy_assistant.models.inputs import InputValueKind
-from energy_assistant.models.plant import BatteryComponentConfig
+from energy_assistant.models.plant import BatteryComponentConfig, StoredEnergyValueConfig
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,8 +66,14 @@ class BatteryComponent(EmsComponent[BatterySolveState, BatteryComponentPlan]):
     def _resolve_stored_energy_value_per_kwh(
         self, *, horizon: Horizon, inputs: AppliedInputRegistry
     ) -> float:
-        source = self._config.stored_energy_value.source.key
-        statistic = self._config.stored_energy_value.statistic
+        stored_energy_value = self._config.stored_energy_value
+        if isinstance(stored_energy_value, float):
+            return max(0.0, stored_energy_value)
+        if not isinstance(stored_energy_value, StoredEnergyValueConfig):
+            raise ValueError("Unsupported stored_energy_value configuration")
+
+        source = stored_energy_value.source.key
+        statistic = stored_energy_value.statistic
         series = inputs.forecast(source, kind=InputValueKind.PRICE)
         if len(series) != int(horizon.num_intervals):
             raise ValueError(

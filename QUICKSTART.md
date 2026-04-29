@@ -241,8 +241,8 @@ plant:
     max_soc_pct: 100
     reserve_soc_pct: 20
     # Values battery energy left at the terminal step.
-    # "median" derives a dynamic $/kWh value from the horizon import forecast median.
-    # This keeps terminal energy economically meaningful without terminal SoC constraints.
+    # Option A (shown): dynamic value from a forecast source + statistic.
+    # Option B: set a scalar directly, e.g. `stored_energy_value: 0.08`.
     stored_energy_value:
       # Source forecast used to value terminal stored energy.
       source: inputs.grid_price_import
