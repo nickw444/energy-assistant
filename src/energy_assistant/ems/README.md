@@ -20,6 +20,12 @@ energy. The coefficient is resolved from `battery.stored_energy_value.source` an
 `battery.stored_energy_value.statistic`; currently `median` is supported and computed over the
 resolved source forecast across the active horizon.
 
+EV SoC incentives decompose the full EV battery into first-class storage nodes, one per configured
+target band plus any remaining zero-value tail. Initial SoC is allocated into the corresponding
+lower battery bands, a shared EV charger bus applies the physical charger limits before distributing
+energy into those segments, and each segment uses its configured incentive as terminal stored-energy
+value.
+
 ## Fixture Workflows
 
 EMS tests live under `tests/energy_assistant/ems/`. Fixture scenario assets live under

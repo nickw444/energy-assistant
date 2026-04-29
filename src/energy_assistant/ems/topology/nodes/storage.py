@@ -84,8 +84,8 @@ class StorageNode(Node):
         return self.E_by_i[self.terminal_index]
 
     def _terminal_soc_value_objective(self) -> pulp.LpAffineExpression | None:
-        value_per_kwh = max(0.0, self.stored_energy_value_per_kwh or 0.0)
-        if value_per_kwh <= 0:
+        value_per_kwh = self.stored_energy_value_per_kwh or 0.0
+        if value_per_kwh == 0:
             return None
         return -value_per_kwh * self.terminal_soc
 
@@ -118,4 +118,3 @@ class StorageNode(Node):
             objective_parts.append(terminal_value)
 
         return pulp.lpSum(objective_parts) if objective_parts else pulp.LpAffineExpression()
-

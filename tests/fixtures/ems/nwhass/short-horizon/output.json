@@ -1338,7 +1338,7 @@
     }
   },
   "generated_at": "2026-01-15T01:47:55.132822Z",
-  "objective_value": -3.072,
+  "objective_value": -9.218,
   "status": "Optimal",
   "timings": {
     "build_seconds": 0.0,
