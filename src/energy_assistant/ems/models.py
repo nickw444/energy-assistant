@@ -112,7 +112,7 @@ class LoadControlledEvComponentPlan(BaseModel):
     soc_pct: list[EmsSeriesPoint]
     connected: list[EmsSeriesPoint]
     charge_allowed: list[EmsSeriesPoint]
-    soft_deadlines: list[EvSoftDeadlinePlan] = Field(default_factory=list)
+    soft_deadlines: list[EvSoftDeadlinePlan] = Field(default_factory=lambda: [])
 
     model_config = ConfigDict(extra="forbid")
 

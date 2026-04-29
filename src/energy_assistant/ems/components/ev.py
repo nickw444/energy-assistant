@@ -205,15 +205,9 @@ class EvComponent(EmsComponent[EvSolveState, LoadControlledEvComponentPlan]):
             },
         )
         storages = tuple(segment.node for segment in segments)
-        soft_deadlines = self._resolve_soft_deadlines(horizon=horizon)
-        soft_deadline_fragment = (
-            EvSoftDeadlineFragment(
-                storages=storages,
-                deadlines=soft_deadlines,
-                name=self.id,
-            )
-            if soft_deadlines
-            else None
+        soft_deadline_fragment = self._build_soft_deadline_fragment(
+            horizon=horizon,
+            storages=storages,
         )
         elements: list[GraphElement] = [
             charger,
@@ -340,6 +334,21 @@ class EvComponent(EmsComponent[EvSolveState, LoadControlledEvComponentPlan]):
                 )
             )
         return tuple(deadlines)
+
+    def _build_soft_deadline_fragment(
+        self,
+        *,
+        horizon: Horizon,
+        storages: tuple[StorageNode, ...],
+    ) -> EvSoftDeadlineFragment | None:
+        soft_deadlines = self._resolve_soft_deadlines(horizon=horizon)
+        if not soft_deadlines:
+            return None
+        return EvSoftDeadlineFragment(
+            storages=storages,
+            deadlines=soft_deadlines,
+            name=self.id,
+        )
 
     def _next_deadline_datetime(self, *, start: datetime, by_time: str) -> datetime:
         hour_text, minute_text = by_time.split(":")

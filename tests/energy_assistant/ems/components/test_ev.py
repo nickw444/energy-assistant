@@ -302,12 +302,12 @@ def test_ev_soft_deadline_encourages_early_charge_when_penalty_high() -> None:
         grid_export_bias_pct=0.0,
         time_window_matcher=TimeWindowMatcher(),
     )
-    graph.add_element(
-        component._build_soft_deadline_fragment(  # pyright: ignore[reportPrivateUsage]
-            horizon=horizon,
-            storages=(segment.node,),
-        )
+    soft_fragment = component._build_soft_deadline_fragment(  # pyright: ignore[reportPrivateUsage]
+        horizon=horizon,
+        storages=(segment.node,),
     )
+    assert soft_fragment is not None
+    graph.add_element(soft_fragment)
     snapshot = ModelSnapshot(ctx=ModelContext(horizon=horizon), graph=graph)
     snapshot.problem.solve(pulp.PULP_CBC_CMD(msg=False))
 
@@ -362,12 +362,12 @@ def test_ev_soft_deadline_allows_shortfall_when_unreachable() -> None:
         grid_export_bias_pct=0.0,
         time_window_matcher=TimeWindowMatcher(),
     )
-    graph.add_element(
-        component._build_soft_deadline_fragment(  # pyright: ignore[reportPrivateUsage]
-            horizon=horizon,
-            storages=(segment.node,),
-        )
+    soft_fragment = component._build_soft_deadline_fragment(  # pyright: ignore[reportPrivateUsage]
+        horizon=horizon,
+        storages=(segment.node,),
     )
+    assert soft_fragment is not None
+    graph.add_element(soft_fragment)
     snapshot = ModelSnapshot(ctx=ModelContext(horizon=horizon), graph=graph)
     snapshot.problem.solve(pulp.PULP_CBC_CMD(msg=False))
 

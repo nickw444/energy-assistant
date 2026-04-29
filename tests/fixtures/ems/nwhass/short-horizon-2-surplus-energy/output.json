@@ -1495,6 +1495,9 @@
         {"time": "2026-01-17T04:30:00+11:00", "value": 63.37630589743589},
         {"time": "2026-01-17T05:00:00+11:00", "value": 63.37630589743589}
       ],
+      "soft_deadlines": [
+        {"achieved_kwh": 49.434, "achieved_soc_pct": 63.376, "by_time": "06:00", "deadline_at": "2026-01-17T06:00:00+11:00", "shortfall_kwh": 0.0, "target_kwh": 31.2, "target_soc_pct": 40.0}
+      ],
       "type": "load_controlled_ev"
     }
   },
