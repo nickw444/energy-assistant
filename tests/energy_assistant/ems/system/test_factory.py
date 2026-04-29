@@ -81,7 +81,7 @@ def test_factory_rejects_incompatible_connection_target_type() -> None:
                     "min_soc_pct": 0.0,
                     "max_soc_pct": 100.0,
                     "reserve_soc_pct": 10.0,
-                    "state_of_charge_pct": 45.0,
+                    "state_of_charge_pct": {"source": "batt_soc"},
                     "realtime_power": {"source": "batt_rt"},
                 },
             },

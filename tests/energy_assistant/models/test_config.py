@@ -52,39 +52,3 @@ def test_battery_terminal_soc_defaults_to_adaptive() -> None:
 
     assert battery.terminal_soc.mode == "adaptive"
     assert battery.terminal_soc.penalty_per_kwh == "median"
-
-
-def test_battery_allows_scalar_state_of_charge_pct() -> None:
-    battery = BatteryComponentConfig(
-        type="battery",
-        connection="primary",
-        name="Battery Primary",
-        capacity_kwh=13.5,
-        storage_efficiency_pct=95.0,
-        min_soc_pct=10.0,
-        max_soc_pct=100.0,
-        reserve_soc_pct=20.0,
-        state_of_charge_pct=55.0,
-        realtime_power=InputReference(source="battery_power"),
-    )
-
-    assert battery.state_of_charge_pct == 55.0
-    requirements = battery.input_requirements()
-    assert len(requirements) == 1
-    assert requirements[0].reference.key == "battery_power"
-
-
-def test_battery_rejects_scalar_state_of_charge_pct_out_of_range() -> None:
-    with pytest.raises(ValidationError, match="less than or equal to 100"):
-        BatteryComponentConfig(
-            type="battery",
-            connection="primary",
-            name="Battery Primary",
-            capacity_kwh=13.5,
-            storage_efficiency_pct=95.0,
-            min_soc_pct=10.0,
-            max_soc_pct=100.0,
-            reserve_soc_pct=20.0,
-            state_of_charge_pct=120.0,
-            realtime_power=InputReference(source="battery_power"),
-        )

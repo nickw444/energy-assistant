@@ -26,7 +26,7 @@ from energy_assistant.ems.topology.policies import (
     LinearCost,
 )
 from energy_assistant.models.inputs import InputValueKind
-from energy_assistant.models.plant import BatteryComponentConfig, InputReference
+from energy_assistant.models.plant import BatteryComponentConfig
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,14 +58,10 @@ class BatteryComponent(EmsComponent[BatterySolveState, BatteryComponentPlan]):
         *,
         inputs: AppliedInputRegistry,
     ) -> float:
-        state_of_charge = self._config.state_of_charge_pct
-        if isinstance(state_of_charge, InputReference):
-            initial_soc_pct = inputs.scalar_float(
-                state_of_charge.key,
-                kind=InputValueKind.PERCENTAGE,
-            )
-        else:
-            initial_soc_pct = state_of_charge
+        initial_soc_pct = inputs.scalar_float(
+            self._config.state_of_charge_pct.key,
+            kind=InputValueKind.PERCENTAGE,
+        )
         capacity_kwh = self._config.capacity_kwh
         initial_soc_kwh = capacity_kwh * initial_soc_pct / 100.0
         return max(0.0, min(capacity_kwh, initial_soc_kwh))

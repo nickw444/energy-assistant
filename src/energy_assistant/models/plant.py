@@ -259,7 +259,7 @@ class BatteryComponentConfig(BaseModel):
     terminal_soc: TerminalSocConfig = Field(default_factory=TerminalSocConfig)
     max_charge_kw: float | None = Field(default=None, ge=0)
     max_discharge_kw: float | None = Field(default=None, ge=0)
-    state_of_charge_pct: InputReference | Annotated[float, Field(ge=0, le=100)]
+    state_of_charge_pct: InputReference
     realtime_power: InputReference
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
@@ -278,22 +278,18 @@ class BatteryComponentConfig(BaseModel):
         return self
 
     def input_requirements(self) -> tuple[InputRequirement, ...]:
-        requirements: list[InputRequirement] = [
+        return (
+            InputRequirement(
+                self.state_of_charge_pct,
+                ScalarInputConfig,
+                InputValueKind.PERCENTAGE,
+            ),
             InputRequirement(
                 self.realtime_power,
                 ScalarInputConfig,
                 InputValueKind.POWER,
             ),
-        ]
-        if isinstance(self.state_of_charge_pct, InputReference):
-            requirements.append(
-                InputRequirement(
-                    self.state_of_charge_pct,
-                    ScalarInputConfig,
-                    InputValueKind.PERCENTAGE,
-                )
-            )
-        return tuple(requirements)
+        )
 
 
 class PvComponentConfig(BaseModel):
