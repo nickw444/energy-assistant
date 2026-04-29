@@ -15,7 +15,10 @@ from energy_assistant.ems.horizon import HorizonFactory
 from energy_assistant.ems.inputs.alignment import PowerForecastAligner, PriceForecastAligner
 from energy_assistant.ems.inputs.application import EmsInputApplicator
 from energy_assistant.ems.inputs.models import AppliedForecastInput, AppliedInputRegistry
-from energy_assistant.ems.planner import EmsMilpPlanner
+from energy_assistant.ems.planner import (
+    EmsMilpPlanner,
+    _CBC_RANDOM_SEED_OPTIONS,
+)
 from energy_assistant.ems.system.state import SolveStateStore
 from energy_assistant.inputs.registry import ResolvedForecastInput, ResolvedInputRegistry
 from energy_assistant.inputs.window import InputWindow
@@ -289,4 +292,6 @@ def test_planner_uses_injected_runtime_dependencies() -> None:
     assert len(problem.solve_calls) == 1
     solver = problem.solve_calls[0]
     assert isinstance(solver, pulp.PULP_CBC_CMD)
+    assert solver.optionsDict.get("threads") == 1
+    assert solver.options == list(_CBC_RANDOM_SEED_OPTIONS)
     assert plan.status == "Optimal"

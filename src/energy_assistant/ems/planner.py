@@ -23,6 +23,12 @@ from energy_assistant.inputs.window import InputWindow
 
 logger = logging.getLogger(__name__)
 
+_CBC_RANDOM_SEED = 0
+_CBC_RANDOM_SEED_OPTIONS: tuple[str, ...] = (
+    f"randomSeed {_CBC_RANDOM_SEED}",
+    f"randomCbcSeed {_CBC_RANDOM_SEED}",
+)
+
 
 @dataclass(frozen=True, slots=True)
 class EmsBuiltSnapshot:
@@ -73,7 +79,7 @@ class EmsMilpPlanner:
         built = self.build_snapshot(now=now)
 
         solve_start = time.perf_counter()
-        built.snapshot.problem.solve(pulp.PULP_CBC_CMD(msg=solver_msg))
+        built.snapshot.problem.solve(_build_cbc_solver(msg=solver_msg))
         solve_seconds = time.perf_counter() - solve_start
 
         objective_value = _objective_value(built.snapshot.problem)
@@ -179,3 +185,12 @@ def _format_schedule(
     if high_res_interval is None or high_res_horizon is None:
         return f"{timestep_minutes}m/rest"
     return f"{high_res_interval}m/{high_res_horizon}m, {timestep_minutes}m/rest"
+
+
+def _build_cbc_solver(*, msg: bool) -> pulp.PULP_CBC_CMD:
+    """Build CBC with deterministic settings for scenario replay and CI checks."""
+    return pulp.PULP_CBC_CMD(
+        msg=msg,
+        threads=1,
+        options=list(_CBC_RANDOM_SEED_OPTIONS),
+    )
