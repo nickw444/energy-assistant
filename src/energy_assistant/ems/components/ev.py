@@ -20,7 +20,7 @@ from energy_assistant.ems.series import bool_series, interval_series_points, sta
 from energy_assistant.ems.topology.connection import Connection
 from energy_assistant.ems.topology.graph import GraphElement
 from energy_assistant.ems.topology.ids import NodeId
-from energy_assistant.ems.topology.nodes import StorageNode
+from energy_assistant.ems.topology.nodes import Node, StorageNode
 from energy_assistant.ems.topology.policies import (
     DirectionalLimit,
     Passthrough,
@@ -29,7 +29,7 @@ from energy_assistant.ems.topology.policies.connection_policy import (
     ConnectionBinding,
 )
 from energy_assistant.models.inputs import InputValueKind
-from energy_assistant.models.plant import ControlledEvComponentConfig, SocIncentive
+from energy_assistant.models.plant import ControlledEvComponentConfig
 
 _EV_SWITCH_ON_THRESHOLD_KW = 0.1
 
@@ -37,9 +37,16 @@ _EV_SWITCH_ON_THRESHOLD_KW = 0.1
 @dataclass(frozen=True, slots=True)
 class EvSolveState:
     connected: bool
-    storage: StorageNode
-    connection: Connection
+    charger_node_id: NodeId
+    charge_connection: Connection
+    storages: tuple[StorageNode, ...]
     gate_series: list[float]
+
+
+@dataclass(frozen=True, slots=True)
+class EvStorageSegment:
+    node: StorageNode
+    connection: Connection
 
 
 class EvComponent(EmsComponent[EvSolveState, LoadControlledEvComponentPlan]):
@@ -52,11 +59,11 @@ class EvComponent(EmsComponent[EvSolveState, LoadControlledEvComponentPlan]):
         grid_export_bias_pct: float,
         time_window_matcher: TimeWindowMatcher,
     ) -> None:
+        _ = grid_export_bias_pct
         self.id = component_id
         self.switchboard = switchboard
         self._config = load
         self._matcher = time_window_matcher
-        self._grid_price_bias = grid_export_bias_pct / 100.0
 
         self.name = self._config.name
         self.node_id = NodeId(component_id)
@@ -97,17 +104,18 @@ class EvComponent(EmsComponent[EvSolveState, LoadControlledEvComponentPlan]):
             can_connect=can_connect,
         )
 
-        storage = StorageNode(
+        charger_node_id = NodeId(f"{self.id}_charger")
+        segments = self._create_segmented_storage(
             horizon=horizon,
-            id=self.node_id,
-            name=self.name,
-            capacity_kwh=self._config.energy_kwh,
-            soc_min_kwh=0.0,
-            soc_max_kwh=self._config.energy_kwh,
             initial_soc_kwh=initial_soc_kwh,
-            stored_energy_value_per_kwh=0.0,
+            charger_node_id=charger_node_id,
         )
-
+        charger = Node(
+            horizon=horizon,
+            id=charger_node_id,
+            name=f"{self.name} charger",
+            node_role="bus",
+        )
         charge_control = EvChargeControl(
             gate=gate_series,
             connected=connected,
@@ -117,13 +125,11 @@ class EvComponent(EmsComponent[EvSolveState, LoadControlledEvComponentPlan]):
             switch_penalty=self._config.switch_penalty,
             name=self.id,
         )
-
-        # Connection convention: a_node is AC bus, b_node is EV storage (charge is a_to_b).
-        connection = Connection(
+        charge_connection = Connection(
             horizon=horizon,
-            id=f"ev_{self.id}_link",
+            id=f"ev_{self.id}_charger_link",
             a_node_id=self.switchboard.bus_id,
-            b_node_id=self.node_id,
+            b_node_id=charger_node_id,
             policies={
                 "directional_limit": DirectionalLimit(
                     max_a_to_b_kw=self._config.max_power_kw,
@@ -132,29 +138,78 @@ class EvComponent(EmsComponent[EvSolveState, LoadControlledEvComponentPlan]):
                 "charge_control": charge_control,
             },
         )
-
-        elements: list[GraphElement] = [storage, connection]
-
-        if self._config.soc_incentives:
-            elements.append(
-                EvSocIncentivesFragment(
-                    horizon=horizon,
-                    ev_id=self.id,
-                    storage=storage,
-                    initial_soc_kwh=initial_soc_kwh,
-                    capacity_kwh=self._config.energy_kwh,
-                    incentives=self._config.soc_incentives,
-                    grid_price_bias=self._grid_price_bias,
-                )
-            )
+        storages = tuple(segment.node for segment in segments)
+        elements: list[GraphElement] = [
+            charger,
+            *(segment.node for segment in segments),
+            charge_connection,
+            *(segment.connection for segment in segments),
+        ]
 
         solve_state = EvSolveState(
             connected=connected,
-            storage=storage,
-            connection=connection,
+            charger_node_id=charger_node_id,
+            charge_connection=charge_connection,
+            storages=storages,
             gate_series=gate_series,
         )
         return elements, solve_state
+
+    def _create_segmented_storage(
+        self,
+        *,
+        horizon: Horizon,
+        initial_soc_kwh: float,
+        charger_node_id: NodeId,
+    ) -> tuple[EvStorageSegment, ...]:
+        segment_specs: list[tuple[float, float, float]] = []
+        prev_target_kwh = 0.0
+        incentives = sorted(self._config.soc_incentives, key=lambda item: item.target_soc_pct)
+        for incentive in incentives:
+            target_kwh = self._config.energy_kwh * incentive.target_soc_pct / 100.0
+            if target_kwh < prev_target_kwh:
+                raise ValueError("EV incentive targets must be non-decreasing")
+            if target_kwh > prev_target_kwh:
+                segment_specs.append((prev_target_kwh, target_kwh, incentive.incentive))
+            prev_target_kwh = target_kwh
+
+        final_capacity_kwh = self._config.energy_kwh - prev_target_kwh
+        if final_capacity_kwh > 0 or not segment_specs:
+            segment_specs.append((prev_target_kwh, self._config.energy_kwh, 0.0))
+
+        segments: list[EvStorageSegment] = []
+        for idx, (start_kwh, end_kwh, incentive) in enumerate(segment_specs):
+            capacity_kwh = end_kwh - start_kwh
+            initial_segment_kwh = max(
+                0.0,
+                min(initial_soc_kwh, end_kwh) - start_kwh,
+            )
+            segment_name = str(idx)
+            node_id = NodeId(f"{self.id}_segment_{segment_name}")
+            storage = StorageNode(
+                horizon=horizon,
+                id=node_id,
+                name=f"{self.name} segment {segment_name}",
+                capacity_kwh=capacity_kwh,
+                soc_min_kwh=0.0,
+                soc_max_kwh=capacity_kwh,
+                initial_soc_kwh=initial_segment_kwh,
+                stored_energy_value_per_kwh=incentive,
+            )
+            connection = Connection(
+                horizon=horizon,
+                id=f"ev_{self.id}_segment_{segment_name}_link",
+                a_node_id=charger_node_id,
+                b_node_id=node_id,
+                policies={
+                    "directional_limit": DirectionalLimit(
+                        max_a_to_b_kw=self._config.max_power_kw,
+                        max_b_to_a_kw=0.0,
+                    ),
+                },
+            )
+            segments.append(EvStorageSegment(node=storage, connection=connection))
+        return tuple(segments)
 
     def _connected_allowance(
         self,
@@ -192,10 +247,14 @@ class EvComponent(EmsComponent[EvSolveState, LoadControlledEvComponentPlan]):
     ) -> LoadControlledEvComponentPlan:
         _ = plan_ctx
         horizon = snapshot.ctx.horizon
-        storage = solve_state.storage
-        connection = solve_state.connection
-        charge_kw = [value_of(connection.flow_into_node(self.node_id).get(t)) for t in horizon.T]
-        soc_kwh = [value_of(storage.E_by_i.get(t)) for t in range(horizon.num_intervals + 1)]
+        charge_kw = [
+            value_of(solve_state.charge_connection.flow_into_node(solve_state.charger_node_id).get(t))
+            for t in horizon.T
+        ]
+        soc_kwh = [
+            sum(value_of(storage.E_by_i.get(t)) for storage in solve_state.storages)
+            for t in range(horizon.num_intervals + 1)
+        ]
         soc_pct = [
             (value / self._config.energy_kwh) * 100.0 if self._config.energy_kwh else 0.0
             for value in soc_kwh
@@ -351,103 +410,3 @@ class EvChargeControl(Passthrough):
             return pulp.LpAffineExpression()
         switch = self._switch(connection)
         return self._switch_penalty * pulp.lpSum(switch.values())
-
-
-class EvSocIncentivesFragment:
-    def __init__(
-        self,
-        *,
-        horizon: Horizon,
-        ev_id: str,
-        storage: StorageNode,
-        initial_soc_kwh: float,
-        capacity_kwh: float,
-        incentives: list[SocIncentive],
-        grid_price_bias: float,
-    ) -> None:
-        self._horizon = horizon
-        self.ev_id = ev_id
-        self._storage = storage
-        self._initial_soc_kwh = initial_soc_kwh
-        self._capacity_kwh = capacity_kwh
-        self._incentives = list(incentives)
-        self._grid_price_bias = grid_price_bias
-
-        self._built = False
-        self._constraints: list[ConstraintSpec] = []
-        self._objective: pulp.LpAffineExpression = pulp.LpAffineExpression()
-
-    def _ensure_built(self) -> None:
-        if self._built:
-            return
-
-        horizon = self._horizon
-        node = self._storage
-        incentives = sorted(self._incentives, key=lambda item: item.target_soc_pct)
-        if not incentives:
-            self._constraints = []
-            self._objective = pulp.LpAffineExpression()
-            self._built = True
-            return
-
-        initial_soc_kwh = self._initial_soc_kwh
-        capacity_kwh = self._capacity_kwh
-        terminal_soc = node.E_by_i[int(horizon.num_intervals)]
-
-        segments: list[tuple[pulp.LpVariable, float]] = []
-        prev_target_kwh = 0.0
-        for idx, incentive in enumerate(incentives):
-            target_pct = incentive.target_soc_pct
-            incentive_value = incentive.incentive
-            target_kwh = capacity_kwh * target_pct / 100.0
-            if target_kwh < prev_target_kwh:
-                raise ValueError("EV incentive targets must be non-decreasing")
-            available = max(0.0, target_kwh - max(prev_target_kwh, initial_soc_kwh))
-            if available > 0:
-                seg = pulp.LpVariable(
-                    f"E_ev_{self.ev_id}_incentive_{idx}_kwh",
-                    lowBound=0,
-                    upBound=available,
-                )
-                segments.append((seg, incentive_value))
-            prev_target_kwh = target_kwh
-
-        final_available = max(0.0, capacity_kwh - max(prev_target_kwh, initial_soc_kwh))
-        if final_available > 0:
-            seg = pulp.LpVariable(
-                f"E_ev_{self.ev_id}_incentive_final_kwh",
-                lowBound=0,
-                upBound=final_available,
-            )
-            segments.append((seg, 0.0))
-
-        self._constraints = [
-            ConstraintSpec(
-                f"ev_incentive_total_{self.ev_id}",
-                pulp.lpSum(seg for seg, _ in segments) == terminal_soc - initial_soc_kwh,
-            )
-        ]
-
-        def _apply_export_bias(value: float) -> float:
-            bias = self._grid_price_bias
-            if bias == 0:
-                return value
-            if value >= 0:
-                return value * (1.0 - bias)
-            return value * (1.0 + bias)
-
-        objective_expr = pulp.lpSum(
-            -_apply_export_bias(incentive) * seg for seg, incentive in segments
-        )
-        self._objective = objective_expr if segments else pulp.LpAffineExpression()
-        self._built = True
-
-    @property
-    def constraints(self) -> list[ConstraintSpec]:
-        self._ensure_built()
-        return list(self._constraints)
-
-    @property
-    def objective(self) -> pulp.LpAffineExpression:
-        self._ensure_built()
-        return self._objective

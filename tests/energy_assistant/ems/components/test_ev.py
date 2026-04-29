@@ -5,10 +5,14 @@ from datetime import UTC, datetime
 import pulp
 import pytest
 
-from energy_assistant.ems.components.ev import EvChargeControl, EvComponent, EvSocIncentivesFragment
+from energy_assistant.ems.components.ev import (
+    EvChargeControl,
+    EvComponent,
+    EvStorageSegment,
+)
 from energy_assistant.ems.components.lib.time_windows import TimeWindowMatcher
 from energy_assistant.ems.components.switchboard import SwitchboardComponent
-from energy_assistant.ems.horizon import HorizonFactory
+from energy_assistant.ems.horizon import Horizon, HorizonFactory
 from energy_assistant.ems.milp.context import ModelContext, value_of
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
 from energy_assistant.ems.topology.connection import Connection
@@ -19,7 +23,6 @@ from energy_assistant.ems.topology.policies import DirectionalLimit, LinearCost
 from energy_assistant.models.plant import (
     ControlledEvComponentConfig,
     InputReference,
-    SocIncentive,
     TimeWindow,
 )
 
@@ -138,36 +141,111 @@ def test_connected_allowance_respects_grace_and_allowed_windows() -> None:
     ) == [0.0, 1.0, 1.0]
 
 
-def test_ev_soc_incentives_fragment_increases_terminal_soc() -> None:
+def _ev_segment(
+    *,
+    horizon: Horizon,
+    name: str,
+    capacity_kwh: float,
+    initial_kwh: float = 0.0,
+    value_per_kwh: float,
+) -> EvStorageSegment:
+    node_id = NodeId(f"ev_segment_{name}")
+    storage = StorageNode(
+        horizon=horizon,
+        id=node_id,
+        name=f"EV segment {name}",
+        capacity_kwh=capacity_kwh,
+        soc_min_kwh=0.0,
+        soc_max_kwh=capacity_kwh,
+        initial_soc_kwh=initial_kwh,
+        stored_energy_value_per_kwh=value_per_kwh,
+    )
+    connection = Connection(
+        horizon=horizon,
+        id=f"ev_segment_{name}_link",
+        a_node_id=NodeId("charger"),
+        b_node_id=node_id,
+        policies={
+            "directional_limit": DirectionalLimit(max_a_to_b_kw=10.0, max_b_to_a_kw=0.0),
+        },
+    )
+    return EvStorageSegment(node=storage, connection=connection)
+
+
+def test_ev_segmented_storage_incentives_increase_terminal_soc() -> None:
     horizon = HorizonFactory(timestep_minutes=60, horizon_minutes=60).build(
         now=datetime(2026, 1, 1, 0, 0, tzinfo=UTC)
     )
-    storage = StorageNode(
-        horizon=horizon,
-        id=NodeId("ev"),
-        name="EV",
-        capacity_kwh=10.0,
-        soc_min_kwh=0.0,
-        soc_max_kwh=10.0,
-        initial_soc_kwh=2.0,
-    )
-    incentives = EvSocIncentivesFragment(
-        horizon=horizon,
-        ev_id="ev1",
-        storage=storage,
-        initial_soc_kwh=2.0,
-        capacity_kwh=10.0,
-        incentives=[
-            SocIncentive(target_soc_pct=50.0, incentive=1.0),
-            SocIncentive(target_soc_pct=80.0, incentive=0.5),
-        ],
-        grid_price_bias=0.0,
+    segments = (
+        _ev_segment(
+            horizon=horizon,
+            name="0",
+            capacity_kwh=5.0,
+            initial_kwh=2.0,
+            value_per_kwh=1.0,
+        ),
+        _ev_segment(horizon=horizon, name="1", capacity_kwh=3.0, value_per_kwh=0.5),
+        _ev_segment(horizon=horizon, name="2", capacity_kwh=2.0, value_per_kwh=0.0),
     )
     graph = EnergyGraph()
-    graph.add_element(incentives)
+    graph.add_element(Node(horizon=horizon, id=NodeId("grid"), name="Grid", node_role="prosumer"))
+    graph.add_element(Node(horizon=horizon, id=NodeId("charger"), name="Charger", node_role="bus"))
+    graph.add_element(
+        Connection(
+            horizon=horizon,
+            id="charger_link",
+            a_node_id=NodeId("grid"),
+            b_node_id=NodeId("charger"),
+            policies={
+                "directional_limit": DirectionalLimit(max_a_to_b_kw=10.0, max_b_to_a_kw=0.0),
+            },
+        )
+    )
+    for segment in segments:
+        graph.add_element(segment.node)
+        graph.add_element(segment.connection)
     snapshot = ModelSnapshot(ctx=ModelContext(horizon=horizon), graph=graph)
     snapshot.problem.solve(pulp.PULP_CBC_CMD(msg=False))
 
     assert pulp.LpStatus.get(snapshot.problem.status) == "Optimal"
-    # Incentivized segments stop at 80% (final tail segment has zero incentive).
-    assert value_of(storage.E_by_i[horizon.num_intervals]) == pytest.approx(8.0)
+    # Incentivized segments stop at 80% (the tail segment has zero incentive).
+    segment_soc = sum(value_of(segment.node.E_by_i[horizon.num_intervals]) for segment in segments)
+    assert segment_soc == pytest.approx(8.0)
+
+
+def test_ev_soc_incentives_terminal_value_prefers_cheaper_later_charge() -> None:
+    horizon = HorizonFactory(timestep_minutes=60, horizon_minutes=240).build(
+        now=datetime(2026, 1, 1, 0, 0, tzinfo=UTC)
+    )
+    segment = _ev_segment(
+        horizon=horizon,
+        capacity_kwh=10.0,
+        value_per_kwh=0.12,
+        name="0",
+    )
+    graph = EnergyGraph()
+    graph.add_element(Node(horizon=horizon, id=NodeId("grid"), name="Grid", node_role="prosumer"))
+    graph.add_element(Node(horizon=horizon, id=NodeId("charger"), name="Charger", node_role="bus"))
+    graph.add_element(segment.node)
+    conn = Connection(
+        horizon=horizon,
+        id="charger_link",
+        a_node_id=NodeId("grid"),
+        b_node_id=NodeId("charger"),
+        policies={
+            "directional_limit": DirectionalLimit(max_a_to_b_kw=10.0, max_b_to_a_kw=0.0),
+            "grid_cost": LinearCost(
+                cost_a_to_b_per_kwh=[0.03, 0.01, 0.01, 0.01],
+                cost_b_to_a_per_kwh=[0.0, 0.0, 0.0, 0.0],
+                name="grid",
+            ),
+        },
+    )
+    graph.add_element(conn)
+    graph.add_element(segment.connection)
+    snapshot = ModelSnapshot(ctx=ModelContext(horizon=horizon), graph=graph)
+    snapshot.problem.solve(pulp.PULP_CBC_CMD(msg=False))
+
+    assert pulp.LpStatus.get(snapshot.problem.status) == "Optimal"
+    assert value_of(conn.flow_into_node(NodeId("charger"))[0]) == pytest.approx(0.0)
+    assert value_of(segment.node.E_by_i[horizon.num_intervals]) == pytest.approx(10.0)
