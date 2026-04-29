@@ -8,7 +8,7 @@ from energy_assistant.lib.source_resolver.hass_source import (
     HomeAssistantPercentageEntitySource,
     HomeAssistantPowerKwEntitySource,
 )
-from energy_assistant.models.plant import TimeWindow
+from energy_assistant.models.plant import EvSoftDeadline, TimeWindow
 
 
 class SocIncentive(BaseModel):
@@ -23,6 +23,10 @@ def _default_time_windows() -> list[TimeWindow]:
 
 
 def _default_soc_incentives() -> list[SocIncentive]:
+    return []
+
+
+def _default_soft_deadlines() -> list[EvSoftDeadline]:
     return []
 
 
@@ -43,6 +47,7 @@ class ControlledEvLoad(BaseModel):
     realtime_power: HomeAssistantPowerKwEntitySource
     state_of_charge_pct: HomeAssistantPercentageEntitySource
     soc_incentives: list[SocIncentive] = Field(default_factory=_default_soc_incentives)
+    soft_deadlines: list[EvSoftDeadline] = Field(default_factory=_default_soft_deadlines)
     switch_penalty: float = Field(default=0.0, ge=0)
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
@@ -58,6 +63,9 @@ class ControlledEvLoad(BaseModel):
     def _validate_power_bounds(self) -> Self:
         if self.min_power_kw > self.max_power_kw:
             raise ValueError("min_power_kw must be <= max_power_kw")
+        ordered_times = sorted(deadline.by_time for deadline in self.soft_deadlines)
+        if ordered_times != [deadline.by_time for deadline in self.soft_deadlines]:
+            raise ValueError("soft_deadlines must be sorted by by_time")
         return self
 
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 
 import pulp
 
@@ -14,6 +15,7 @@ from energy_assistant.ems.inputs.models import AppliedInputRegistry
 from energy_assistant.ems.milp.context import ConstraintSpec, value_of
 from energy_assistant.ems.milp.snapshot import ModelSnapshot
 from energy_assistant.ems.models import (
+    EvSoftDeadlinePlan,
     LoadControlledEvComponentPlan,
 )
 from energy_assistant.ems.series import bool_series, interval_series_points, state_series_points
@@ -41,6 +43,7 @@ class EvSolveState:
     charge_connection: Connection
     storages: tuple[StorageNode, ...]
     gate_series: list[float]
+    soft_deadline_fragment: EvSoftDeadlineFragment | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,11 +142,16 @@ class EvComponent(EmsComponent[EvSolveState, LoadControlledEvComponentPlan]):
             },
         )
         storages = tuple(segment.node for segment in segments)
+        soft_deadline_fragment = self._build_soft_deadline_fragment(
+            horizon=horizon,
+            storages=storages,
+        )
         elements: list[GraphElement] = [
             charger,
             *(segment.node for segment in segments),
             charge_connection,
             *(segment.connection for segment in segments),
+            *([soft_deadline_fragment] if soft_deadline_fragment is not None else []),
         ]
 
         solve_state = EvSolveState(
@@ -152,6 +160,7 @@ class EvComponent(EmsComponent[EvSolveState, LoadControlledEvComponentPlan]):
             charge_connection=charge_connection,
             storages=storages,
             gate_series=gate_series,
+            soft_deadline_fragment=soft_deadline_fragment,
         )
         return elements, solve_state
 
@@ -238,6 +247,64 @@ class EvComponent(EmsComponent[EvSolveState, LoadControlledEvComponentPlan]):
                 allowed.append(0.0)
         return allowed
 
+    def _resolve_soft_deadlines(self, *, horizon: Horizon) -> tuple[EvSoftDeadlineSpec, ...]:
+        if not self._config.soft_deadlines:
+            return ()
+        deadlines: list[EvSoftDeadlineSpec] = []
+        for configured in self._config.soft_deadlines:
+            deadline_at = self._next_deadline_datetime(
+                start=horizon.start,
+                by_time=configured.by_time,
+            )
+            deadline_index = self._deadline_state_index(
+                horizon=horizon,
+                deadline_at=deadline_at,
+            )
+            deadlines.append(
+                EvSoftDeadlineSpec(
+                    by_time=configured.by_time,
+                    deadline_at=deadline_at,
+                    deadline_index=deadline_index,
+                    target_soc_pct=configured.target_soc_pct,
+                    target_kwh=self._config.energy_kwh * configured.target_soc_pct / 100.0,
+                    shortfall_penalty=configured.shortfall_penalty,
+                )
+            )
+        return tuple(deadlines)
+
+    def _build_soft_deadline_fragment(
+        self,
+        *,
+        horizon: Horizon,
+        storages: tuple[StorageNode, ...],
+    ) -> EvSoftDeadlineFragment | None:
+        soft_deadlines = self._resolve_soft_deadlines(horizon=horizon)
+        if not soft_deadlines:
+            return None
+        return EvSoftDeadlineFragment(
+            storages=storages,
+            deadlines=soft_deadlines,
+            name=self.id,
+        )
+
+    def _next_deadline_datetime(self, *, start: datetime, by_time: str) -> datetime:
+        hour_text, minute_text = by_time.split(":")
+        candidate = start.replace(
+            hour=int(hour_text),
+            minute=int(minute_text),
+            second=0,
+            microsecond=0,
+        )
+        if candidate <= start:
+            candidate = candidate + timedelta(days=1)
+        return candidate
+
+    def _deadline_state_index(self, *, horizon: Horizon, deadline_at: datetime) -> int:
+        for idx, slot in enumerate(horizon.slots, start=1):
+            if slot.end >= deadline_at:
+                return idx
+        return horizon.num_intervals
+
     def extract_plan(
         self,
         snapshot: ModelSnapshot,
@@ -261,12 +328,33 @@ class EvComponent(EmsComponent[EvSolveState, LoadControlledEvComponentPlan]):
         ]
         connected = [bool(solve_state.connected)] * horizon.num_intervals
         charge_allowed = [value > 0 for value in solve_state.gate_series]
+        soft_deadlines: list[EvSoftDeadlinePlan] = []
+        if solve_state.soft_deadline_fragment is not None:
+            for idx, deadline in enumerate(solve_state.soft_deadline_fragment.deadlines):
+                achieved_kwh = soc_kwh[deadline.deadline_index]
+                achieved_soc_pct = (
+                    achieved_kwh / self._config.energy_kwh * 100.0
+                    if self._config.energy_kwh > 0
+                    else 0.0
+                )
+                soft_deadlines.append(
+                    EvSoftDeadlinePlan(
+                        by_time=deadline.by_time,
+                        deadline_at=deadline.deadline_at,
+                        target_soc_pct=deadline.target_soc_pct,
+                        target_kwh=deadline.target_kwh,
+                        achieved_soc_pct=achieved_soc_pct,
+                        achieved_kwh=achieved_kwh,
+                        shortfall_kwh=solve_state.soft_deadline_fragment.shortfall_value(idx),
+                    )
+                )
         return LoadControlledEvComponentPlan(
             charge_kw=interval_series_points(horizon, charge_kw),
             soc_kwh=state_series_points(horizon, soc_kwh),
             soc_pct=state_series_points(horizon, soc_pct),
             connected=interval_series_points(horizon, bool_series(connected)),
             charge_allowed=interval_series_points(horizon, bool_series(charge_allowed)),
+            soft_deadlines=soft_deadlines,
         )
 
 
@@ -410,3 +498,66 @@ class EvChargeControl(Passthrough):
             return pulp.LpAffineExpression()
         switch = self._switch(connection)
         return self._switch_penalty * pulp.lpSum(switch.values())
+
+
+@dataclass(frozen=True, slots=True)
+class EvSoftDeadlineSpec:
+    by_time: str
+    deadline_at: datetime
+    deadline_index: int
+    target_soc_pct: float
+    target_kwh: float
+    shortfall_penalty: float
+
+
+class EvSoftDeadlineFragment:
+    """Soft EV SoC lower bounds enforced with non-negative shortfall slack."""
+
+    def __init__(
+        self,
+        *,
+        storages: tuple[StorageNode, ...],
+        deadlines: tuple[EvSoftDeadlineSpec, ...],
+        name: str,
+    ) -> None:
+        self._storages = storages
+        self._deadlines = deadlines
+        self._name = name
+        self._shortfall_by_index: dict[int, pulp.LpVariable] = {
+            idx: pulp.LpVariable(
+                f"Ev_{self._name}_soft_deadline_shortfall_kwh_{idx}",
+                lowBound=0,
+            )
+            for idx, _ in enumerate(self._deadlines)
+        }
+
+    @property
+    def deadlines(self) -> tuple[EvSoftDeadlineSpec, ...]:
+        return self._deadlines
+
+    def shortfall_value(self, deadline_idx: int) -> float:
+        return value_of(self._shortfall_by_index[deadline_idx])
+
+    @property
+    def constraints(self) -> list[ConstraintSpec]:
+        constraints: list[ConstraintSpec] = []
+        for idx, deadline in enumerate(self._deadlines):
+            soc_at_deadline = pulp.lpSum(
+                storage.E_by_i[deadline.deadline_index] for storage in self._storages
+            )
+            constraints.append(
+                ConstraintSpec(
+                    f"ev_soft_deadline_{self._name}_idx{idx}",
+                    soc_at_deadline + self._shortfall_by_index[idx] >= deadline.target_kwh,
+                )
+            )
+        return constraints
+
+    @property
+    def objective(self) -> pulp.LpAffineExpression:
+        if not self._deadlines:
+            return pulp.LpAffineExpression()
+        return pulp.lpSum(
+            deadline.shortfall_penalty * self._shortfall_by_index[idx]
+            for idx, deadline in enumerate(self._deadlines)
+        )

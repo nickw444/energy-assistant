@@ -277,6 +277,10 @@ plant:
         incentive: 0.04
       - target_soc_pct: 100
         incentive: 0.0
+    soft_deadlines:
+      - by_time: "06:00"
+        target_soc_pct: 40
+        shortfall_penalty: 1.0
     switch_penalty: 0.02
 ```
 

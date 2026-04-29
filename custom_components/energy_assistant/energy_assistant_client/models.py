@@ -105,6 +105,22 @@ class BatteryComponentPlan(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class EvSoftDeadlinePlan(BaseModel):
+    by_time: str
+    deadline_at: datetime
+    target_soc_pct: float
+    target_kwh: float
+    achieved_soc_pct: float
+    achieved_kwh: float
+    shortfall_kwh: float
+
+    model_config = ConfigDict(extra="forbid")
+
+
+def _empty_ev_soft_deadline_plans() -> list[EvSoftDeadlinePlan]:
+    return []
+
+
 class LoadControlledEvComponentPlan(BaseModel):
     type: Literal["load_controlled_ev"] = "load_controlled_ev"
     charge_kw: list[EmsSeriesPoint]
@@ -112,6 +128,9 @@ class LoadControlledEvComponentPlan(BaseModel):
     soc_pct: list[EmsSeriesPoint]
     connected: list[EmsSeriesPoint]
     charge_allowed: list[EmsSeriesPoint]
+    soft_deadlines: list[EvSoftDeadlinePlan] = Field(
+        default_factory=_empty_ev_soft_deadline_plans
+    )
 
     model_config = ConfigDict(extra="forbid")
 

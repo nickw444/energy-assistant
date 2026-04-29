@@ -22,6 +22,7 @@ from energy_assistant.ems.topology.nodes import Node, StorageNode
 from energy_assistant.ems.topology.policies import DirectionalLimit, LinearCost
 from energy_assistant.models.plant import (
     ControlledEvComponentConfig,
+    EvSoftDeadline,
     InputReference,
     TimeWindow,
 )
@@ -249,3 +250,128 @@ def test_ev_soc_incentives_terminal_value_prefers_cheaper_later_charge() -> None
     assert pulp.LpStatus.get(snapshot.problem.status) == "Optimal"
     assert value_of(conn.flow_into_node(NodeId("charger"))[0]) == pytest.approx(0.0)
     assert value_of(segment.node.E_by_i[horizon.num_intervals]) == pytest.approx(10.0)
+
+
+def test_ev_soft_deadline_encourages_early_charge_when_penalty_high() -> None:
+    horizon = HorizonFactory(timestep_minutes=60, horizon_minutes=240).build(
+        now=datetime(2026, 1, 1, 0, 0, tzinfo=UTC)
+    )
+    segment = _ev_segment(
+        horizon=horizon,
+        capacity_kwh=10.0,
+        value_per_kwh=0.0,
+        name="0",
+    )
+    graph = EnergyGraph()
+    graph.add_element(Node(horizon=horizon, id=NodeId("grid"), name="Grid", node_role="prosumer"))
+    graph.add_element(Node(horizon=horizon, id=NodeId("charger"), name="Charger", node_role="bus"))
+    graph.add_element(segment.node)
+    conn = Connection(
+        horizon=horizon,
+        id="charger_link",
+        a_node_id=NodeId("grid"),
+        b_node_id=NodeId("charger"),
+        policies={
+            "directional_limit": DirectionalLimit(max_a_to_b_kw=10.0, max_b_to_a_kw=0.0),
+            "grid_cost": LinearCost(
+                cost_a_to_b_per_kwh=[0.3, 0.3, 0.01, 0.01],
+                cost_b_to_a_per_kwh=[0.0, 0.0, 0.0, 0.0],
+                name="grid",
+            ),
+        },
+    )
+    graph.add_element(conn)
+    graph.add_element(segment.connection)
+    component = EvComponent(
+        component_id="ev1",
+        switchboard=SwitchboardComponent(component_id="switchboard"),
+        load=ControlledEvComponentConfig(
+            type="load_controlled_ev",
+            connection="switchboard",
+            name="EV",
+            min_power_kw=0.0,
+            max_power_kw=10.0,
+            energy_kwh=10.0,
+            connected=InputReference(source="connected"),
+            realtime_power=InputReference(source="rt_power"),
+            state_of_charge_pct=InputReference(source="soc"),
+            soft_deadlines=[
+                EvSoftDeadline(by_time="02:00", target_soc_pct=40.0, shortfall_penalty=5.0)
+            ],
+        ),
+        grid_export_bias_pct=0.0,
+        time_window_matcher=TimeWindowMatcher(),
+    )
+    soft_fragment = component._build_soft_deadline_fragment(  # pyright: ignore[reportPrivateUsage]
+        horizon=horizon,
+        storages=(segment.node,),
+    )
+    assert soft_fragment is not None
+    graph.add_element(soft_fragment)
+    snapshot = ModelSnapshot(ctx=ModelContext(horizon=horizon), graph=graph)
+    snapshot.problem.solve(pulp.PULP_CBC_CMD(msg=False))
+
+    assert pulp.LpStatus.get(snapshot.problem.status) == "Optimal"
+    # Deadline at 02:00 corresponds to state index 2. With high penalty, early charge is preferred.
+    assert value_of(segment.node.E_by_i[2]) == pytest.approx(4.0)
+
+
+def test_ev_soft_deadline_allows_shortfall_when_unreachable() -> None:
+    horizon = HorizonFactory(timestep_minutes=60, horizon_minutes=120).build(
+        now=datetime(2026, 1, 1, 0, 0, tzinfo=UTC)
+    )
+    segment = _ev_segment(
+        horizon=horizon,
+        capacity_kwh=10.0,
+        value_per_kwh=0.0,
+        name="0",
+    )
+    graph = EnergyGraph()
+    graph.add_element(Node(horizon=horizon, id=NodeId("grid"), name="Grid", node_role="prosumer"))
+    graph.add_element(Node(horizon=horizon, id=NodeId("charger"), name="Charger", node_role="bus"))
+    graph.add_element(segment.node)
+    graph.add_element(
+        Connection(
+            horizon=horizon,
+            id="charger_link",
+            a_node_id=NodeId("grid"),
+            b_node_id=NodeId("charger"),
+            policies={
+                "directional_limit": DirectionalLimit(max_a_to_b_kw=1.0, max_b_to_a_kw=0.0),
+            },
+        )
+    )
+    graph.add_element(segment.connection)
+    component = EvComponent(
+        component_id="ev1",
+        switchboard=SwitchboardComponent(component_id="switchboard"),
+        load=ControlledEvComponentConfig(
+            type="load_controlled_ev",
+            connection="switchboard",
+            name="EV",
+            min_power_kw=0.0,
+            max_power_kw=1.0,
+            energy_kwh=10.0,
+            connected=InputReference(source="connected"),
+            realtime_power=InputReference(source="rt_power"),
+            state_of_charge_pct=InputReference(source="soc"),
+            soft_deadlines=[
+                EvSoftDeadline(by_time="01:00", target_soc_pct=40.0, shortfall_penalty=5.0)
+            ],
+        ),
+        grid_export_bias_pct=0.0,
+        time_window_matcher=TimeWindowMatcher(),
+    )
+    soft_fragment = component._build_soft_deadline_fragment(  # pyright: ignore[reportPrivateUsage]
+        horizon=horizon,
+        storages=(segment.node,),
+    )
+    assert soft_fragment is not None
+    graph.add_element(soft_fragment)
+    snapshot = ModelSnapshot(ctx=ModelContext(horizon=horizon), graph=graph)
+    snapshot.problem.solve(pulp.PULP_CBC_CMD(msg=False))
+
+    assert pulp.LpStatus.get(snapshot.problem.status) == "Optimal"
+    # Only 1 kWh can be charged by the deadline, leaving 3 kWh shortfall for a 4 kWh target.
+    assert value_of(segment.node.E_by_i[1]) == pytest.approx(1.0)
+    assert value_of(snapshot.objective) == pytest.approx(15.0)

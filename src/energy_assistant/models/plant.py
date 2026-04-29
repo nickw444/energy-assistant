@@ -323,6 +323,14 @@ class SocIncentive(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
+class EvSoftDeadline(BaseModel):
+    by_time: str = Field(pattern=r"^\d{2}:\d{2}$")
+    target_soc_pct: float = Field(ge=0, le=100)
+    shortfall_penalty: float = Field(ge=0)
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+
 class ControlledEvComponentConfig(BaseModel):
     type: Literal["load_controlled_ev"]
     connection: str = Field(min_length=1)
@@ -337,6 +345,7 @@ class ControlledEvComponentConfig(BaseModel):
     realtime_power: InputReference
     state_of_charge_pct: InputReference
     soc_incentives: list[SocIncentive] = []
+    soft_deadlines: list[EvSoftDeadline] = []
     switch_penalty: float = Field(default=0.0, ge=0)
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
@@ -350,6 +359,9 @@ class ControlledEvComponentConfig(BaseModel):
     def _validate_power_bounds(self) -> Self:
         if self.min_power_kw > self.max_power_kw:
             raise ValueError("min_power_kw must be <= max_power_kw")
+        ordered_times = sorted(deadline.by_time for deadline in self.soft_deadlines)
+        if ordered_times != [deadline.by_time for deadline in self.soft_deadlines]:
+            raise ValueError("soft_deadlines must be sorted by by_time")
         return self
 
     def input_requirements(self) -> tuple[InputRequirement, ...]:
